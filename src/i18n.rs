@@ -18,10 +18,10 @@ impl Language {
             Language::En,
             Language::Es,
             Language::Cs,
+            Language::De,
+            Language::Fr,
             Language::Zh,
             Language::Ar,
-            Language::Fr,
-            Language::De,
             Language::Pt,
             Language::Hi,
             Language::Ja,
@@ -96,7 +96,7 @@ impl Language {
             "cs" => Some(Language::Cs),
             "fr" => Some(Language::Fr),
             "de" => Some(Language::De),
-            
+
             "zh" => Some(Language::Zh),
             "ar" => Some(Language::Ar),
             "pt" => Some(Language::Pt),
