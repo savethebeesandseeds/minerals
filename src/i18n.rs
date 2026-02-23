@@ -94,10 +94,11 @@ impl Language {
             "en" => Some(Language::En),
             "es" => Some(Language::Es),
             "cs" => Some(Language::Cs),
-            "zh" => Some(Language::Zh),
-            "ar" => Some(Language::Ar),
             "fr" => Some(Language::Fr),
             "de" => Some(Language::De),
+            
+            "zh" => Some(Language::Zh),
+            "ar" => Some(Language::Ar),
             "pt" => Some(Language::Pt),
             "hi" => Some(Language::Hi),
             "ja" => Some(Language::Ja),
