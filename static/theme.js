@@ -1,7 +1,6 @@
 (() => {
   const storageKey = "minerals.theme";
   const root = document.documentElement;
-  const media = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
 
   const normalize = (value) => (value === "dark" ? "dark" : "light");
 
@@ -48,8 +47,7 @@
 
   const initialize = () => {
     const stored = readStoredTheme();
-    const preferred = media && media.matches ? "dark" : "light";
-    applyTheme(stored ? stored : preferred, false);
+    applyTheme(stored ? stored : "light", false);
 
     getToggleButtons().forEach((button) => {
       button.addEventListener("click", () => {
@@ -59,14 +57,6 @@
       });
     });
 
-    if (media && typeof media.addEventListener === "function") {
-      media.addEventListener("change", (event) => {
-        if (readStoredTheme()) {
-          return;
-        }
-        applyTheme(event.matches ? "dark" : "light", false);
-      });
-    }
   };
 
   if (document.readyState === "loading") {
