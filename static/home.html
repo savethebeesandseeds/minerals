@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="{{ lang_code }}" dir="{{ lang_dir }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ txt.home_title }}</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="stylesheet" href="/static/app.css" />
+  <script src="/static/theme.js" defer></script>
+  <style>
+    body {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 100vh;
+    }
+
+    .home-shell {
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      padding: 0.06rem 0.74rem 0.04rem;
+    }
+
+    .home-card {
+      width: min(1120px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      background: var(--surface-2);
+      box-shadow: var(--shadow);
+      padding: 0.42rem 0.52rem 0.38rem;
+      text-align: center;
+      position: relative;
+
+      /* Tuning variables for language orbit layout */
+      --lang-orbit-scale: 0.5;
+      --lang-orbit-radius: 320px;
+      --lang-orbit-top-bottom-gap: 96px;
+    }
+
+    .lang-form {
+      margin-top: 0.04rem;
+      width: 100%;
+      position: relative;
+      min-height: calc(((var(--lang-orbit-radius) * var(--lang-orbit-scale)) * 2) + 0.46rem);
+    }
+
+    .orbit-stage {
+      position: relative;
+      min-height: calc(((var(--lang-orbit-radius) * var(--lang-orbit-scale)) * 2) + 0.08rem);
+      margin-top: 0.02rem;
+    }
+
+    .logo-core {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: min(calc(520px * var(--lang-orbit-scale)), 70%);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .logo {
+      width: 100%;
+      height: auto;
+      display: block;
+      object-fit: contain;
+      filter: drop-shadow(0 5px 10px rgba(10, 34, 58, 0.08));
+    }
+
+    .lang-node {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      min-width: clamp(80px, calc(120px * var(--lang-orbit-scale)), 120px);
+      padding:
+        clamp(0.18rem, calc(0.32rem * var(--lang-orbit-scale)), 0.32rem)
+        clamp(0.26rem, calc(0.5rem * var(--lang-orbit-scale)), 0.5rem);
+      font-size: clamp(0.64rem, calc(0.78rem * var(--lang-orbit-scale)), 0.78rem);
+      box-shadow: none;
+      cursor: pointer;
+      transition: 130ms ease;
+      text-transform: uppercase;
+      line-height: 1.1;
+    }
+
+    .lang-node:hover {
+      border-color: var(--brand);
+      background: var(--surface-2);
+    }
+
+    .lang-node.current {
+      color: #ffffff;
+      border-color: var(--brand-2);
+      background: linear-gradient(180deg, var(--brand), var(--brand-2));
+      box-shadow: none;
+    }
+
+    .fallback {
+      margin: 0.5rem auto 0;
+      max-width: 360px;
+      display: grid;
+      gap: 0.28rem;
+      text-align: left;
+    }
+
+    .fallback select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      background: var(--surface);
+      color: var(--ink);
+      padding: 0.34rem 0.4rem;
+      font: inherit;
+    }
+
+    .market-tagline {
+      margin: -0.06rem 0 0;
+      color: #5f7082;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      text-transform: lowercase;
+    }
+
+    .market-tagline + .market-tagline {
+      margin-top: 0.06rem;
+    }
+
+    .market-tagline a {
+      color: #1f4a73;
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .market-tagline a:hover {
+      text-decoration: underline;
+    }
+
+    @media (max-width: 960px) {
+      .home-card {
+        --lang-orbit-scale: 0.56;
+      }
+    }
+
+    @media (max-width: 700px) {
+      .home-card {
+        --lang-orbit-scale: 0.62;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Main">
+    <div class="topbar-inner">
+      <a class="brand" href="/" aria-label="Minerals Home">
+        <img
+          src="/static/logo_transparent.png"
+          alt="Minerals logo"
+          data-logo-light="/static/logo_transparent.png"
+          data-logo-dark="/static/logo_transparent_dark.png"
+        />
+        <span>MINERALS</span>
+      </a>
+      <a class="menu active" href="/">{{ txt.nav_home }}</a>
+      <a class="menu" href="/minerals">{{ txt.nav_all_minerals }}</a>
+      <div class="top-tools">
+        <a class="login-link" href="/admin">login</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">◐</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="home-shell">
+    <section class="home-card">
+      <h1>Minerals</h1>
+
+      <form class="lang-form" method="post" action="/language">
+        <div class="orbit-stage" id="language-orbit">
+          <div class="logo-core" aria-hidden="true">
+            <img
+              class="logo"
+              src="/static/logo_transparent.png"
+              alt="Minerals logo"
+              data-logo-light="/static/logo_transparent.png"
+              data-logo-dark="/static/logo_transparent_dark.png"
+            />
+          </div>
+
+          {% for option in language_options %}
+          <button
+            type="submit"
+            class="lang-node{% if option.code == current_lang_code %} current{% endif %}"
+            name="lang"
+            value="{{ option.code }}"
+            data-side="{% if loop.index0 < 5 %}left{% else %}right{% endif %}"
+          >
+            {{ option.label }}
+          </button>
+          {% endfor %}
+        </div>
+        <p class="market-tagline">world's first mineral blockchain market</p>
+        <p class="market-tagline">
+          <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a>
+        </p>
+
+        <noscript>
+          <div class="fallback">
+            <select id="lang-fallback" name="lang" aria-label="{{ txt.home_select_language }}" required>
+              {% for option in language_options %}
+              <option value="{{ option.code }}"{% if option.code == current_lang_code %} selected{% endif %}>{{ option.label }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit">{{ txt.home_continue }}</button>
+          </div>
+        </noscript>
+      </form>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-grid" aria-label="Footer">
+        <section class="footer-col">
+          <h4 class="footer-col-title">Contact</h4>
+          <div class="footer-col-links">
+            <a href="/pages/contact-us">contact us</a>
+            <a href="/pages/support">support</a>
+            <a href="/pages/work-with-us">work with us</a>
+            <a href="/pages/account">account</a>
+          </div>
+        </section>
+        <section class="footer-col">
+          <h4 class="footer-col-title">Legal</h4>
+          <div class="footer-col-links">
+            <a href="/pages/legal">legal</a>
+            <a href="/pages/privacy-policy">privacy policy</a>
+            <a href="/pages/terms-of-service">terms of service</a>
+            <a href="/pages/returns-and-refunds">returns and refunds</a>
+            <a href="/pages/shipping">shipping</a>
+          </div>
+        </section>
+        <section class="footer-col">
+          <h4 class="footer-col-title">Mission</h4>
+          <div class="footer-col-links">
+            <a href="/about">about us</a>
+            <a href="/pages/conflict-free-minerals">conflict free minerals</a>
+            <a href="/pages/frequently-asked-questions">frequently asked questions</a>
+          </div>
+        </section>
+      </div>
+      <p class="footer-note">powered trust by <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
+    </div>
+  </footer>
+  <script>
+    (() => {
+      const card = document.querySelector(".home-card");
+      const stage = document.getElementById("language-orbit");
+      if (!card || !stage) return;
+
+      const nodes = Array.from(stage.querySelectorAll(".lang-node"));
+      if (nodes.length === 0) return;
+
+      const positionNodes = () => {
+        const style = getComputedStyle(card);
+        const baseRadius = parseFloat(style.getPropertyValue("--lang-orbit-radius")) || 320;
+        const baseTopBottomGap = parseFloat(style.getPropertyValue("--lang-orbit-top-bottom-gap")) || 96;
+        const orbitScale = parseFloat(style.getPropertyValue("--lang-orbit-scale")) || 1;
+        const radius = baseRadius * orbitScale;
+        const topBottomGap = baseTopBottomGap * orbitScale;
+        const yLimit = Math.max(24, radius - topBottomGap);
+
+        const cx = stage.clientWidth / 2;
+        const cy = stage.clientHeight / 2;
+
+        const left = nodes.filter((node) => node.dataset.side === "left");
+        const right = nodes.filter((node) => node.dataset.side === "right");
+
+        const placeSide = (sideNodes, sign) => {
+          const count = sideNodes.length;
+          if (count === 0) return;
+
+          sideNodes.forEach((node, index) => {
+            const t = count === 1 ? 0 : (index / (count - 1)) * 2 - 1;
+            const y = t * yLimit;
+            const x = sign * Math.sqrt(Math.max(0, (radius * radius) - (y * y)));
+
+            node.style.left = `${cx + x}px`;
+            node.style.top = `${cy + y}px`;
+          });
+        };
+
+        placeSide(left, -1);
+        placeSide(right, 1);
+      };
+
+      positionNodes();
+      window.addEventListener("resize", positionNodes);
+    })();
+  </script>
+</body>
+</html>

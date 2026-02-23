@@ -1,0 +1,22 @@
+{
+  "common_name": "Chrysocolla",
+  "description": "Blue-green, earthy to slightly waxy copper-bearing silicate coating and filling vugs on a brown, iron-oxide-rich host rock. The massive, porous texture and turquoise-green coloration are consistent with chrysocolla commonly formed in the oxidized zone of copper deposits, sometimes intergrown with quartz/opal and minor malachite.",
+  "mineral_family": "Silicates",
+  "formula": "(Cu,Al)2H2Si2O5(OH)4·nH2O",
+  "hardness_mohs": 2.5,
+  "density_g_cm3": 2.2,
+  "crystal_system": "Microcrystalline",
+  "color": "blue-green to green with brown host rock",
+  "streak": "White to pale blue-green",
+  "luster": "Dull to waxy/earthy",
+  "major_elements_pct": {
+    "Al": 2.0,
+    "Cu": 16.0,
+    "Fe": 9.0,
+    "H": 3.0,
+    "O": 52.0,
+    "Si": 18.0
+  },
+  "notes": "Chrysocolla is compositionally variable and often mixed with quartz/opal; hardness can range ~2–4 depending on silica content. Brown areas likely limonite/goethite or iron-stained rock; green may include minor malachite. Streak typically pale blue-green to white.",
+  "image_file": "image.jpg"
+}

@@ -1,0 +1,86 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{array}
+\usepackage{lmodern}
+\usepackage{hyperref}
+\usepackage{graphicx}
+
+\hypersetup{colorlinks=true, linkcolor=black, urlcolor=blue}
+
+\begin{document}
+
+\begin{center}
+{\LARGE \textbf{ {{ txt.report_title_suffix }} }} \\
+\vspace{0.4em}
+{\Large {{ mineral_name }}} \\
+\vspace{0.2em}
+{{ txt.label_generated_utc }}: {{ generated_utc }}
+\end{center}
+
+\vspace{1em}
+{% match image_file %}
+{% when Some with (file) %}
+\begin{center}
+\includegraphics[width=0.36\textwidth]{ {{ file }} }
+\end{center}
+\vspace{0.6em}
+{% when None %}
+{% endmatch %}
+
+\section*{ {{ txt.context_heading }} }
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.28\textwidth} p{0.67\textwidth}}
+\textbf{ {{ txt.label_audience }} } & {{ audience }} \\
+\textbf{ {{ txt.label_purpose }} } & {{ purpose }} \\
+\textbf{ {{ txt.label_site_context }} } & {{ site_context }} \\
+\end{tabular}
+
+\section*{ {{ txt.snapshot_heading }} }
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.28\textwidth} p{0.67\textwidth}}
+\textbf{ {{ txt.label_family }} } & {{ mineral_family }} \\
+\textbf{ {{ txt.label_description }} } & {{ description }} \\
+\textbf{ {{ txt.label_formula }} } & {{ formula }} \\
+\textbf{ {{ txt.label_hardness }} } & {{ hardness_mohs }} \\
+\textbf{ {{ txt.label_hardness_band }} } & {{ hardness_band }} \\
+\textbf{ {{ txt.label_density }} } & {{ density_g_cm3 }} \\
+\textbf{ {{ txt.label_density_band }} } & {{ density_band }} \\
+\textbf{ {{ txt.label_crystal_system }} } & {{ crystal_system }} \\
+\textbf{ {{ txt.label_color }} } & {{ color }} \\
+\textbf{ {{ txt.label_streak }} } & {{ streak }} \\
+\textbf{ {{ txt.label_luster }} } & {{ luster }} \\
+\textbf{ {{ txt.label_dominant_element }} } & {{ dominant_element }} ({{ dominant_element_pct }} wt\%) \\
+\end{tabular}
+
+\vspace{0.8em}
+\textbf{ {{ txt.summary_heading }} }
+\begin{quote}
+{{ summary }}
+\end{quote}
+
+\section*{ {{ txt.major_elements_heading }} }
+\begin{longtable}{p{0.42\textwidth} p{0.42\textwidth}}
+\toprule
+\textbf{ {{ txt.major_elements_heading }} } & \textbf{ {{ txt.label_weight_pct }} } \\
+\midrule
+\endhead
+{% for element in element_breakdown %}
+{{ element.name }} & {{ element.percent }} \\
+{% endfor %}
+\bottomrule
+\end{longtable}
+
+\section*{ {{ txt.recommendations_heading }} }
+\begin{enumerate}
+{% for recommendation in recommendations %}
+\item {{ recommendation }}
+{% endfor %}
+\end{enumerate}
+
+\section*{ {{ txt.notes_heading }} }
+{{ notes }}
+
+\end{document}

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="{{ lang_code }}" dir="{{ lang_dir }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ mineral.common_name }} | Minerals</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="stylesheet" href="/static/app.css" />
+  <script src="/static/theme.js" defer></script>
+  <style>
+    .layout {
+      display: grid;
+      grid-template-columns: 1.16fr 1fr;
+      gap: 0.58rem;
+    }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    .header-panel {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.46rem;
+      flex-wrap: wrap;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin: 0.08rem 0 0;
+    }
+
+    .image {
+      margin-top: 0.42rem;
+      max-width: 100%;
+      max-height: 280px;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      background: var(--surface-2);
+      display: block;
+    }
+
+    .elements {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.38rem;
+      font-size: 0.82rem;
+    }
+
+    .elements th,
+    .elements td {
+      border: 1px solid var(--line);
+      padding: 0.22rem 0.26rem;
+      text-align: left;
+    }
+
+    .elements th {
+      background: var(--surface-2);
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .summary {
+      font-size: 0.82rem;
+      line-height: 1.3;
+      color: var(--ink);
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      padding: 0.44rem;
+    }
+
+    .list {
+      margin: 0.32rem 0 0;
+      padding-left: 1rem;
+      display: grid;
+      gap: 0.18rem;
+      color: var(--ink);
+      font-size: 0.8rem;
+    }
+
+    .links a {
+      color: var(--brand);
+      font-weight: 700;
+      text-decoration: none;
+      margin-right: 0.44rem;
+      font-size: 0.76rem;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Main">
+    <div class="topbar-inner">
+      <a class="brand" href="/" aria-label="Minerals Home">
+        <img
+          src="/static/logo_transparent.png"
+          alt="Minerals logo"
+          data-logo-light="/static/logo_transparent.png"
+          data-logo-dark="/static/logo_transparent_dark.png"
+        />
+        <span>MINERALS</span>
+      </a>
+      <a class="menu" href="/">{{ txt.nav_home }}</a>
+      <a class="menu" href="/minerals">{{ txt.nav_all_minerals }}</a>
+      <a class="menu active" href="/minerals/{{ mineral.slug }}">{{ txt.nav_current_mineral }}</a>
+      <div class="top-tools">
+        <a class="login-link" href="/admin">login</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">◐</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page layout">
+    <header class="panel header-panel">
+      <div>
+        <h1>{{ mineral.common_name }}</h1>
+        <p class="subtle">Record ID: {{ mineral.slug }}</p>
+      </div>
+      <a class="menu" href="/minerals">{{ txt.nav_all_minerals }}</a>
+    </header>
+
+    <section class="panel">
+      <h2 style="font-size:0.92rem;">{{ txt.mineral_profile }}</h2>
+      <table class="table" aria-label="mineral statistics" style="margin-top:0.28rem;">
+        <tbody>
+          <tr><th>{{ txt.label_family }}</th><td>{{ mineral.mineral_family }}</td></tr>
+          <tr><th>{{ txt.label_description }}</th><td>{{ mineral.description }}</td></tr>
+          <tr><th>{{ txt.label_formula }}</th><td>{{ mineral.formula }}</td></tr>
+          <tr><th>{{ txt.label_hardness }}</th><td>{{ mineral.hardness_mohs }}</td></tr>
+          <tr><th>{{ txt.label_density }}</th><td>{{ mineral.density_g_cm3 }}</td></tr>
+          <tr><th>{{ txt.label_crystal_system }}</th><td>{{ mineral.crystal_system }}</td></tr>
+          <tr><th>{{ txt.label_color }}</th><td>{{ mineral.color }}</td></tr>
+          <tr><th>{{ txt.label_streak }}</th><td>{{ mineral.streak }}</td></tr>
+          <tr><th>{{ txt.label_luster }}</th><td>{{ mineral.luster }}</td></tr>
+          <tr><th>{{ txt.label_notes }}</th><td>{{ mineral.notes }}</td></tr>
+        </tbody>
+      </table>
+
+      {% match mineral.image_path %}
+      {% when Some with (image_path) %}
+      <img class="image" src="{{ image_path }}" alt="{{ mineral.common_name }}" />
+      {% when None %}
+      {% endmatch %}
+
+      <h3 style="margin-top:0.48rem; font-size:0.84rem;">{{ txt.major_composition }}</h3>
+      <table class="elements" aria-label="major elements">
+        <thead>
+          <tr><th>{{ txt.major_elements_heading }}</th><th>{{ txt.label_weight_pct }}</th></tr>
+        </thead>
+        <tbody>
+        {% for item in report.element_breakdown %}
+          <tr>
+            <td>{{ item.name }}</td>
+            <td>{{ item.percent }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+
+      <h3 style="margin-top:0.48rem; font-size:0.84rem;">{{ txt.computed_classification }}</h3>
+      <table class="table" aria-label="derived classification" style="margin-top:0.22rem;">
+        <tbody>
+          <tr><th>{{ txt.label_hardness_band }}</th><td>{{ report.hardness_band }}</td></tr>
+          <tr><th>{{ txt.label_density_band }}</th><td>{{ report.density_band }}</td></tr>
+          <tr><th>{{ txt.label_dominant_element }}</th><td>{{ report.dominant_element }} ({{ report.dominant_element_pct }} wt%)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2 style="font-size:0.92rem;">{{ txt.report_builder }}</h2>
+      <p class="subtle" style="margin-top:0.14rem;">
+        {{ txt.report_builder_subtitle }}
+      </p>
+
+      <form method="post" action="/minerals/{{ mineral.slug }}/pdf" style="margin-top:0.32rem; display:grid; gap:0.4rem;">
+        <label>
+          {{ txt.label_audience }}
+          <input name="audience" value="{{ request.audience }}" required />
+        </label>
+
+        <label>
+          {{ txt.label_purpose }}
+          <input name="purpose" value="{{ request.purpose }}" required />
+        </label>
+
+        <label>
+          {{ txt.label_site_context }}
+          <textarea name="site_context" required>{{ request.site_context }}</textarea>
+        </label>
+
+        <button type="submit">{{ txt.generate_pdf }}</button>
+      </form>
+
+      {% match generated_pdf_path %}
+      {% when Some with (path) %}
+      <div class="status ok" style="margin-top:0.36rem;">
+        <span class="links">
+          {{ txt.status_pdf }}: <a href="{{ path }}" target="_blank" rel="noopener">{{ path }}</a>
+          {% match generated_html_path %}
+          {% when Some with (html_path) %}
+          {{ txt.status_html }}: <a href="{{ html_path }}" target="_blank" rel="noopener">{{ html_path }}</a>
+          {% when None %}
+          {% endmatch %}
+        </span>
+      </div>
+      {% when None %}
+      {% endmatch %}
+
+      {% match generation_error %}
+      {% when Some with (error) %}
+      <div class="status warn" style="margin-top:0.36rem;">{{ txt.status_pdf_failed }}
+{{ error }}</div>
+      {% when None %}
+      {% endmatch %}
+
+      <h3 style="margin-top:0.5rem; font-size:0.84rem;">{{ txt.current_chain_output }}</h3>
+      <div class="summary" style="margin-top:0.22rem;">{{ report.summary }}</div>
+      <h3 style="margin-top:0.5rem; font-size:0.84rem;">{{ txt.recommendations_heading }}</h3>
+      <ul class="list">
+        {% for recommendation in report.recommendations %}
+        <li>{{ recommendation }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-grid" aria-label="Footer">
+        <section class="footer-col">
+          <h4 class="footer-col-title">Contact</h4>
+          <div class="footer-col-links">
+            <a href="/pages/contact-us">contact us</a>
+            <a href="/pages/support">support</a>
+            <a href="/pages/work-with-us">work with us</a>
+            <a href="/pages/account">account</a>
+          </div>
+        </section>
+        <section class="footer-col">
+          <h4 class="footer-col-title">Legal</h4>
+          <div class="footer-col-links">
+            <a href="/pages/legal">legal</a>
+            <a href="/pages/privacy-policy">privacy policy</a>
+            <a href="/pages/terms-of-service">terms of service</a>
+            <a href="/pages/returns-and-refunds">returns and refunds</a>
+            <a href="/pages/shipping">shipping</a>
+          </div>
+        </section>
+        <section class="footer-col">
+          <h4 class="footer-col-title">Mission</h4>
+          <div class="footer-col-links">
+            <a href="/about">about us</a>
+            <a href="/pages/conflict-free-minerals">conflict free minerals</a>
+            <a href="/pages/frequently-asked-questions">frequently asked questions</a>
+          </div>
+        </section>
+      </div>
+      <p class="footer-note">powered trust by <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
+    </div>
+  </footer>
+</body>
+</html>

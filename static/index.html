@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="{{ lang_code }}" dir="{{ lang_dir }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ txt.catalog_title }}</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="stylesheet" href="/static/app.css" />
+  <script src="/static/theme.js" defer></script>
+  <style>
+    .hero { margin-bottom: 0.6rem; }
+
+    .list-scroll {
+      margin-top: 0.42rem;
+      overflow-x: auto;
+    }
+
+    .catalog-list {
+      min-width: 1220px;
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      background: var(--surface);
+    }
+
+    .list-head,
+    .list-row {
+      display: grid;
+      grid-template-columns: 372px minmax(200px, 1.6fr) minmax(140px, 0.9fr) minmax(160px, 1fr) 78px;
+      align-items: center;
+      column-gap: 0.48rem;
+      padding: 0.24rem 0.34rem;
+    }
+
+    .list-head {
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-2);
+      font-size: 0.66rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .list-row {
+      border-bottom: 1px solid var(--line);
+      font-size: 0.78rem;
+      color: var(--ink);
+      min-height: 104px;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .list-row:hover {
+      background: var(--surface-2);
+    }
+
+    .list-row:last-child {
+      border-bottom: 0;
+    }
+
+    .image-cell {
+      width: 100%;
+      display: grid;
+      place-items: center;
+    }
+
+    .thumb {
+      width: 336px;
+      height: 92px;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      background: var(--surface-2);
+      display: block;
+    }
+
+    .thumb-fallback {
+      width: 336px;
+      height: 92px;
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 0.7rem;
+      background: var(--surface-2);
+    }
+
+    .name-cell {
+      display: grid;
+      gap: 0.05rem;
+      min-width: 0;
+    }
+
+    .name-text {
+      color: var(--ink);
+      font-weight: 700;
+      font-size: 0.78rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      line-height: 1.15;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .row-id {
+      color: var(--muted);
+      font-size: 0.64rem;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cell {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--ink);
+      font-size: 0.76rem;
+      line-height: 1.2;
+    }
+
+    .cell-muted {
+      color: var(--muted);
+    }
+
+    .formula {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: 1px;
+      background: var(--surface-2);
+      padding: 0.54rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      padding: 0.05rem 0.2rem;
+      color: var(--ink);
+      font-size: 0.76rem;
+    }
+
+    @media (max-width: 860px) {
+      .catalog-list {
+        min-width: 1100px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Main">
+    <div class="topbar-inner">
+      <a class="brand" href="/" aria-label="Minerals Home">
+        <img
+          src="/static/logo_transparent.png"
+          alt="Minerals logo"
+          data-logo-light="/static/logo_transparent.png"
+          data-logo-dark="/static/logo_transparent_dark.png"
+        />
+        <span>MINERALS</span>
+      </a>
+      <a class="menu" href="/">{{ txt.nav_home }}</a>
+      <a class="menu active" href="/minerals">{{ txt.nav_all_minerals }}</a>
+      <a class="menu" href="/about">{{ txt.nav_about }}</a>
+      <div class="top-tools">
+        <a class="login-link" href="/admin">login</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">◐</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page">
+    <section class="hero">
+      <h1>{{ txt.catalog_title }}</h1>
+      <p class="lead">{{ txt.catalog_subtitle }}</p>
+      <p class="lead" style="margin-top:0.16rem;">
+        <span class="code">data/minerals/mineral.&lt;family&gt;.0x&lt;id&gt;</span>
+      </p>
+    </section>
+
+    {% if minerals.is_empty() %}
+    <section class="empty">
+      {{ txt.no_minerals }}
+    </section>
+    {% else %}
+    <section class="list-scroll">
+      <div class="catalog-list" role="table" aria-label="{{ txt.catalog_title }}">
+        <div class="list-head" role="row">
+          <span>image</span>
+          <span>{{ txt.nav_current_mineral }}</span>
+          <span>{{ txt.label_family }}</span>
+          <span>{{ txt.label_formula }}</span>
+          <span>{{ txt.label_hardness }}</span>
+        </div>
+        {% for mineral in minerals %}
+        <a class="list-row" role="row" href="/minerals/{{ mineral.slug }}">
+          <div class="image-cell">
+            {% match mineral.image_path %}
+            {% when Some with (image_path) %}
+            <img class="thumb" src="{{ image_path }}" alt="{{ mineral.common_name }}" />
+            {% when None %}
+            <span class="thumb-fallback">[ ]</span>
+            {% endmatch %}
+          </div>
+          <div class="name-cell">
+            <span class="name-text">{{ mineral.common_name }}</span>
+            <span class="row-id">{{ mineral.slug }}</span>
+          </div>
+          <span class="cell">{{ mineral.mineral_family }}</span>
+          <span class="cell formula">{{ mineral.formula }}</span>
+          <span class="cell cell-muted">{{ mineral.hardness_mohs }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </main>
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-grid" aria-label="Footer">
+        <section class="footer-col">
+          <h4 class="footer-col-title">Contact</h4>
+          <div class="footer-col-links">
+            <a href="/pages/contact-us">contact us</a>
+            <a href="/pages/support">support</a>
+            <a href="/pages/work-with-us">work with us</a>
+            <a href="/pages/account">account</a>
+          </div>
+        </section>
+        <section class="footer-col">
+          <h4 class="footer-col-title">Legal</h4>
+          <div class="footer-col-links">
+            <a href="/pages/legal">legal</a>
+            <a href="/pages/privacy-policy">privacy policy</a>
+            <a href="/pages/terms-of-service">terms of service</a>
+            <a href="/pages/returns-and-refunds">returns and refunds</a>
+            <a href="/pages/shipping">shipping</a>
+          </div>
+        </section>
+        <section class="footer-col">
+          <h4 class="footer-col-title">Mission</h4>
+          <div class="footer-col-links">
+            <a href="/about">about us</a>
+            <a href="/pages/conflict-free-minerals">conflict free minerals</a>
+            <a href="/pages/frequently-asked-questions">frequently asked questions</a>
+          </div>
+        </section>
+      </div>
+      <p class="footer-note">powered trust by <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="{{ lang_code }}" dir="{{ lang_dir }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin | Minerals</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="stylesheet" href="/static/app.css" />
+  <script src="/static/theme.js" defer></script>
+  <style>
+    body {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      background:
+        radial-gradient(800px 260px at 80% -15%, #274b3b 0%, transparent 56%),
+        #0b0f0e;
+      color: #d8e2ec;
+    }
+
+    .topbar {
+      border-bottom: 1px solid #334b42;
+      background: rgba(11, 15, 14, 0.96);
+    }
+
+    .menu {
+      color: #c4d3cc;
+      border-color: #4a6258;
+      background: #151d1a;
+    }
+
+    .menu.active {
+      border-color: #3a6d57;
+      background: linear-gradient(180deg, #4a8c6f, #3a6d57);
+    }
+
+    .login-link {
+      color: #c4d3cc;
+    }
+
+    .login-link:hover {
+      color: #e2ede7;
+    }
+
+    .panel {
+      border-color: #3b5047;
+      background: #121816;
+      box-shadow: none;
+    }
+
+    label { color: #c4d2de; }
+
+    input, textarea {
+      border-color: #405264;
+      background: #0d151c;
+      color: #d8e5f0;
+    }
+
+    .status.ok {
+      background: #10291d;
+      border-color: #2f7050;
+      color: #b4e3c9;
+    }
+
+    .status.warn {
+      background: #2b1c18;
+      border-color: #8e5f53;
+      color: #f2c2b9;
+    }
+
+    button {
+      border-color: #3a6d57;
+      background: linear-gradient(180deg, #4a8c6f, #3a6d57);
+      letter-spacing: 0.02em;
+      border-radius: 1px;
+    }
+
+    .theme-toggle {
+      border: 0;
+      border-radius: 0;
+      min-width: 0;
+      width: auto;
+      height: auto;
+      padding: 0;
+      background: transparent;
+      color: #c4d3cc;
+      letter-spacing: 0;
+      line-height: 1;
+    }
+
+    .theme-toggle:hover {
+      background: transparent;
+      color: #e2ede7;
+      text-decoration: underline;
+    }
+
+    .theme-toggle[aria-pressed="true"] {
+      color: #89c1a6;
+    }
+
+    .ghost {
+      border-color: #4a6258;
+      background: #151d1a;
+      color: #c4d3cc;
+      border-radius: 1px;
+      text-decoration: none;
+    }
+
+    .auth-wrap {
+      max-width: 520px;
+      margin: 1.2rem auto 0;
+      border: 1px solid #4a6258;
+      background: #121816;
+      border-radius: 1px;
+      padding: 0.58rem;
+      box-shadow: none;
+    }
+
+    .auth-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.38rem;
+      align-items: baseline;
+      padding-bottom: 0.3rem;
+      margin-bottom: 0.36rem;
+      border-bottom: 1px dashed #405263;
+    }
+
+    .auth-tag {
+      font-size: 0.66rem;
+      color: #9db1c2;
+      border: 1px solid #4a6258;
+      border-radius: 1px;
+      padding: 0.08rem 0.24rem;
+      background: #12202d;
+    }
+
+    .hint {
+      color: #97a9ba;
+      line-height: 1.3;
+      font-size: 0.78rem;
+      margin: 0.08rem 0 0.38rem;
+    }
+
+    .layout {
+      display: grid;
+      gap: 0.58rem;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+
+    @media (max-width: 840px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .preview {
+      max-width: 180px;
+      max-height: 180px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border: 1px solid #4a6258;
+      border-radius: 1px;
+      background: #0d151c;
+      display: block;
+      margin: 0.2rem 0 0.4rem;
+    }
+
+    .code {
+      font-family: inherit;
+      font-size: 0.76rem;
+      color: #9db2c7;
+      margin-top: 0.08rem;
+    }
+
+    .site-footer {
+      border-top: 1px solid #334b42;
+      background: rgba(11, 15, 14, 0.96);
+    }
+
+    .footer-col-title {
+      color: #9db1c2;
+    }
+
+    .footer-col-links a {
+      color: #c4d2de;
+    }
+
+    .footer-col-links a:hover {
+      color: #e2edf7;
+    }
+
+    .footer-note {
+      color: #8fa1b1;
+    }
+
+    .footer-note a {
+      color: #c7daec;
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Main">
+    <div class="topbar-inner">
+      <a class="brand" href="/" aria-label="Minerals Home">
+        <img
+          src="/static/logo_transparent.png"
+          alt="Minerals logo"
+          data-logo-light="/static/logo_transparent.png"
+          data-logo-dark="/static/logo_transparent_dark.png"
+        />
+        <span>MINERALS</span>
+      </a>
+      <a class="menu" href="/">{{ txt.nav_home }}</a>
+      <a class="menu" href="/minerals">{{ txt.nav_all_minerals }}</a>
+      <div class="top-tools">
+        <a class="login-link" href="/admin">login</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">◐</button>
+      </div>
+    </div>
+  </nav>
+
+  {% if !has_admin_session %}
+  <main class="page">
+    <section class="auth-wrap" aria-label="admin authentication">
+      <div class="auth-head">
+        <h1 style="font-size:1.04rem; margin:0; color:#edf4fa; letter-spacing:0.04em; text-transform:uppercase;">Admin Access</h1>
+        <span class="auth-tag">HARDENED AUTH</span>
+      </div>
+
+      {% match error_message %}
+      {% when Some with (msg) %}
+      <div class="status warn">{{ msg }}</div>
+      {% when None %}
+      {% endmatch %}
+
+      {% match success_message %}
+      {% when Some with (msg) %}
+      <div class="status ok">{{ msg }}</div>
+      {% when None %}
+      {% endmatch %}
+
+      <p class="hint">
+        Single control point. Password is sourced from server environment and never exposed in the interface.
+      </p>
+
+      <form method="post" action="/admin/login" style="display:grid; gap:0.42rem;">
+        <label>
+          ADMIN_PASSWORD
+          <input type="password" name="password" autocomplete="current-password" required />
+        </label>
+        <div style="display:flex; gap:0.32rem; align-items:center; flex-wrap:wrap;">
+          <button type="submit">Authenticate Session</button>
+          <a class="ghost" href="/about" style="padding:0.3rem 0.46rem;">Security Notes</a>
+        </div>
+      </form>
+    </section>
+  </main>
+  {% else %}
+  <main class="page layout">
+    <section class="panel">
+      <div style="display:flex; justify-content:space-between; gap:0.38rem; align-items:baseline; flex-wrap:wrap;">
+        <h1 style="font-size:1.02rem; letter-spacing:0.04em; text-transform:uppercase;">Admin Control Plane</h1>
+        <form method="post" action="/admin/logout" style="margin:0;">
+          <button class="ghost" type="submit">End Session</button>
+        </form>
+      </div>
+      <p class="code">Controlled publishing workflow for mineral records.</p>
+
+      {% match success_message %}
+      {% when Some with (msg) %}
+      <div class="status ok">{{ msg }}</div>
+      {% when None %}
+      {% endmatch %}
+
+      {% match error_message %}
+      {% when Some with (msg) %}
+      <div class="status warn">{{ msg }}</div>
+      {% when None %}
+      {% endmatch %}
+    </section>
+
+    <section class="panel">
+      <h2 style="font-size:0.9rem;">1. AI Draft</h2>
+      <p class="hint">Upload a mineral image. Optional context can influence AI naming and technical inference.</p>
+
+      <form method="post" action="/admin/minerals/suggest" enctype="multipart/form-data" style="display:grid; gap:0.42rem;">
+        <label>
+          Optional Context
+          <textarea name="suggestion_context">{{ draft_form.suggestion_context }}</textarea>
+        </label>
+
+        <label>
+          Mineral Image
+          <input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" required />
+        </label>
+
+        <div>
+          <button type="submit">Suggest Fields With OpenAI</button>
+        </div>
+      </form>
+    </section>
+
+    {% if has_suggestion %}
+    <section class="panel">
+      <h2 style="font-size:0.9rem;">2. Review And Publish</h2>
+      <p class="hint">Review generated values, apply edits, then publish.</p>
+
+      {% if !draft_form.preview_image_data_url.is_empty() %}
+      <img class="preview" src="{{ draft_form.preview_image_data_url }}" alt="mineral preview" />
+      {% endif %}
+
+      <form method="post" action="/admin/minerals/publish" style="display:grid; gap:0.42rem;">
+        {% match draft_form.draft_id %}
+        {% when Some with (id) %}
+        <input type="hidden" name="draft_id" value="{{ id }}" />
+        {% when None %}
+        {% endmatch %}
+
+        <div class="grid-2">
+          <label>
+            Common Name
+            <input name="common_name" value="{{ draft_form.common_name }}" required />
+          </label>
+
+          <label>
+            Mineral Family
+            <input name="mineral_family" value="{{ draft_form.mineral_family }}" required />
+          </label>
+        </div>
+
+        <label>
+          Description
+          <textarea name="description" required>{{ draft_form.description }}</textarea>
+        </label>
+
+        <div class="grid-2">
+          <label>
+            Formula
+            <input name="formula" value="{{ draft_form.formula }}" required />
+          </label>
+
+          <label>
+            Crystal System
+            <input name="crystal_system" value="{{ draft_form.crystal_system }}" required />
+          </label>
+        </div>
+
+        <div class="grid-2">
+          <label>
+            Hardness (Mohs)
+            <input name="hardness_mohs" value="{{ draft_form.hardness_mohs }}" required />
+          </label>
+
+          <label>
+            Density (g/cm3)
+            <input name="density_g_cm3" value="{{ draft_form.density_g_cm3 }}" required />
+          </label>
+        </div>
+
+        <div class="grid-2">
+          <label>
+            Color
+            <input name="color" value="{{ draft_form.color }}" required />
+          </label>
+
+          <label>
+            Streak
+            <input name="streak" value="{{ draft_form.streak }}" required />
+          </label>
+        </div>
+
+        <label>
+          Luster
+          <input name="luster" value="{{ draft_form.luster }}" required />
+        </label>
+
+        <label>
+          Major Elements (%), one per line (e.g. <code>Si=46.7</code>)
+          <textarea name="major_elements_pct_text">{{ draft_form.major_elements_pct_text }}</textarea>
+        </label>
+
+        <label>
+          Notes
+          <textarea name="notes" required>{{ draft_form.notes }}</textarea>
+        </label>
+
+        <div>
+          <button type="submit">Publish Mineral</button>
+        </div>
+      </form>
+    </section>
+    {% endif %}
+  </main>
+  {% endif %}
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-grid" aria-label="Footer">
+        <section class="footer-col">
+          <h4 class="footer-col-title">Contact</h4>
+          <div class="footer-col-links">
+            <a href="/pages/contact-us">contact us</a>
+            <a href="/pages/support">support</a>
+            <a href="/pages/work-with-us">work with us</a>
+            <a href="/pages/account">account</a>
+          </div>
+        </section>
+        <section class="footer-col">
+          <h4 class="footer-col-title">Legal</h4>
+          <div class="footer-col-links">
+            <a href="/pages/legal">legal</a>
+            <a href="/pages/privacy-policy">privacy policy</a>
+            <a href="/pages/terms-of-service">terms of service</a>
+            <a href="/pages/returns-and-refunds">returns and refunds</a>
+            <a href="/pages/shipping">shipping</a>
+          </div>
+        </section>
+        <section class="footer-col">
+          <h4 class="footer-col-title">Mission</h4>
+          <div class="footer-col-links">
+            <a href="/about">about us</a>
+            <a href="/pages/conflict-free-minerals">conflict free minerals</a>
+            <a href="/pages/frequently-asked-questions">frequently asked questions</a>
+          </div>
+        </section>
+      </div>
+      <p class="footer-note">powered trust by <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
+    </div>
+  </footer>
+</body>
+</html>

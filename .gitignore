@@ -1,0 +1,7 @@
+/target
+.env.local
+.env.*.local
+**/*.aux
+**/*.fdb_latexmk
+**/*.fls
+**/*.log
