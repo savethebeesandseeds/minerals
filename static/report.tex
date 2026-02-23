@@ -1,14 +1,36 @@
 \documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\usepackage{polyglossia}
 \usepackage{booktabs}
 \usepackage{longtable}
 \usepackage{xcolor}
 \usepackage{array}
-\usepackage{lmodern}
 \usepackage{hyperref}
 \usepackage{graphicx}
+
+\setmainfont{Noto Serif}
+\setsansfont{Noto Sans}
+\setmonofont{Noto Sans Mono}
+\newfontfamily\arabicfont[Script=Arabic,Scale=MatchLowercase]{Noto Naskh Arabic}
+\newfontfamily\hindifont[Script=Devanagari,Scale=MatchLowercase]{Noto Serif Devanagari}
+\newfontfamily\devanagarifont[Script=Devanagari,Scale=MatchLowercase]{Noto Serif Devanagari}
+{% if lang_code == "ja" %}
+\setCJKmainfont{Noto Serif CJK JP}
+\setCJKsansfont{Noto Sans CJK JP}
+{% else %}
+\setCJKmainfont{Noto Serif CJK SC}
+\setCJKsansfont{Noto Sans CJK SC}
+{% endif %}
+
+{% if lang_code == "ar" %}
+\setdefaultlanguage{arabic}
+{% else if lang_code == "hi" %}
+\setdefaultlanguage{hindi}
+{% else %}
+\setdefaultlanguage{english}
+{% endif %}
 
 \hypersetup{colorlinks=true, linkcolor=black, urlcolor=blue}
 

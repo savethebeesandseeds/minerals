@@ -14,7 +14,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use axum::{
-    extract::{Multipart, Path as AxumPath, State},
+    extract::{DefaultBodyLimit, Multipart, Path as AxumPath, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
@@ -159,6 +159,11 @@ struct PublishMineralRequest {
     notes: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct DeleteMineralRequest {
+    slug: String,
+}
+
 #[derive(Debug, Default)]
 struct NewMineralDraft {
     common_name: String,
@@ -183,6 +188,9 @@ struct SuggestInput {
     image_bytes: Vec<u8>,
     image_ext: String,
 }
+
+const ADMIN_UPLOAD_MAX_MB: usize = 20;
+const ADMIN_UPLOAD_MAX_BYTES: usize = ADMIN_UPLOAD_MAX_MB * 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 struct AiMineralSuggestion {
@@ -348,8 +356,12 @@ async fn main() -> Result<()> {
         .route("/admin", get(admin_page))
         .route("/admin/login", post(admin_login))
         .route("/admin/logout", post(admin_logout))
-        .route("/admin/minerals/suggest", post(admin_suggest_mineral))
+        .route(
+            "/admin/minerals/suggest",
+            post(admin_suggest_mineral).layer(DefaultBodyLimit::max(ADMIN_UPLOAD_MAX_BYTES)),
+        )
         .route("/admin/minerals/publish", post(admin_publish_mineral))
+        .route("/admin/minerals/delete", post(admin_delete_mineral))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/data", ServeDir::new("data"))
         .with_state(state);
@@ -454,8 +466,8 @@ async fn mineral_page(
 ) -> Result<TemplateResponse<MineralTemplate>, AppError> {
     let language = resolve_language(&state, &headers);
     let mineral = get_mineral(&state, language, &slug)?;
-    let request = ReportRequest::default();
-    let report = run_agentic_chain(&mineral, &request);
+    let request = default_report_request(language);
+    let report = run_agentic_chain(&mineral, &request, language);
 
     Ok(TemplateResponse(MineralTemplate {
         lang_code: language.code().to_string(),
@@ -478,7 +490,7 @@ async fn generate_pdf_form(
 ) -> Result<TemplateResponse<MineralTemplate>, AppError> {
     let language = resolve_language(&state, &headers);
     let mineral = get_mineral(&state, language, &slug)?;
-    let report = run_agentic_chain(&mineral, &request);
+    let report = run_agentic_chain(&mineral, &request, language);
 
     let (artifacts, generation_error): (Option<GeneratedArtifacts>, Option<String>) =
         match state.pdf_generator.generate_pdf(&report, language).await {
@@ -507,7 +519,7 @@ async fn generate_pdf_api(
 ) -> Result<Json<PdfApiResponse>, AppError> {
     let language = resolve_language(&state, &headers);
     let mineral = get_mineral(&state, language, &slug)?;
-    let report = run_agentic_chain(&mineral, &request);
+    let report = run_agentic_chain(&mineral, &request, language);
     let artifacts = state
         .pdf_generator
         .generate_pdf(&report, language)
@@ -535,6 +547,7 @@ async fn admin_page(
         success_message: None,
         draft_form: MineralFormData::default(),
         has_suggestion: false,
+        admin_minerals: admin_minerals_for_ui(&state, language),
     })
 }
 
@@ -554,6 +567,7 @@ async fn admin_login(
             success_message: None,
             draft_form: MineralFormData::default(),
             has_suggestion: false,
+            admin_minerals: admin_minerals_for_ui(&state, language),
         })
         .into_response());
     }
@@ -576,6 +590,7 @@ async fn admin_login(
         success_message: Some("Admin session created.".to_string()),
         draft_form: MineralFormData::default(),
         has_suggestion: false,
+        admin_minerals: admin_minerals_for_ui(&state, language),
     })
     .into_response();
 
@@ -615,6 +630,7 @@ async fn admin_logout(
         success_message: Some("Admin session closed.".to_string()),
         draft_form: MineralFormData::default(),
         has_suggestion: false,
+        admin_minerals: admin_minerals_for_ui(&state, language),
     })
     .into_response();
 
@@ -655,6 +671,7 @@ async fn admin_suggest_mineral(
                     ..MineralFormData::default()
                 },
                 has_suggestion: false,
+                admin_minerals: admin_minerals_for_ui(&state, language),
             }));
         }
     };
@@ -709,6 +726,7 @@ async fn admin_suggest_mineral(
         success_message: Some("AI suggestion generated. Review and publish.".to_string()),
         draft_form: form,
         has_suggestion: true,
+        admin_minerals: admin_minerals_for_ui(&state, language),
     }))
 }
 
@@ -768,6 +786,7 @@ async fn admin_publish_mineral(
                 success_message: None,
                 draft_form: form,
                 has_suggestion: true,
+                admin_minerals: admin_minerals_for_ui(&state, language),
             }));
         }
     };
@@ -800,6 +819,117 @@ async fn admin_publish_mineral(
         success_message: Some(success_message),
         draft_form: MineralFormData::default(),
         has_suggestion: false,
+        admin_minerals: admin_minerals_for_ui(&state, language),
+    }))
+}
+
+async fn admin_delete_mineral(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Form(request): Form<DeleteMineralRequest>,
+) -> Result<TemplateResponse<AdminTemplate>, AppError> {
+    let language = resolve_language(&state, &headers);
+    if !has_admin_session(&state, &headers) {
+        return Err(AppError::Unauthorized(
+            "Admin session required. Log in at /admin.".to_string(),
+        ));
+    }
+
+    let slug = required_string(&request.slug, "slug")?;
+    let mineral = match catalog_for_language(&state, language)?
+        .by_slug
+        .get(&slug)
+        .cloned()
+    {
+        Some(value) => value,
+        None => {
+            return Ok(TemplateResponse(AdminTemplate {
+                lang_code: language.code().to_string(),
+                lang_dir: language.dir().to_string(),
+                txt: ui_text(language),
+                has_admin_session: true,
+                error_message: Some(format!("mineral '{slug}' not found")),
+                success_message: None,
+                draft_form: MineralFormData::default(),
+                has_suggestion: false,
+                admin_minerals: admin_minerals_for_ui(&state, language),
+            }));
+        }
+    };
+    let folder_name = mineral.folder_name;
+    if !is_valid_mineral_folder_name(&folder_name) {
+        return Ok(TemplateResponse(AdminTemplate {
+            lang_code: language.code().to_string(),
+            lang_dir: language.dir().to_string(),
+            txt: ui_text(language),
+            has_admin_session: true,
+            error_message: Some(format!("invalid mineral folder name: {folder_name}")),
+            success_message: None,
+            draft_form: MineralFormData::default(),
+            has_suggestion: false,
+            admin_minerals: admin_minerals_for_ui(&state, language),
+        }));
+    }
+
+    let folder_path = state.data_root.join("minerals").join(&folder_name);
+
+    let metadata = match fs::metadata(&folder_path).await {
+        Ok(metadata) => metadata,
+        Err(_) => {
+            return Ok(TemplateResponse(AdminTemplate {
+                lang_code: language.code().to_string(),
+                lang_dir: language.dir().to_string(),
+                txt: ui_text(language),
+                has_admin_session: true,
+                error_message: Some(format!("mineral folder not found: {folder_name}")),
+                success_message: None,
+                draft_form: MineralFormData::default(),
+                has_suggestion: false,
+                admin_minerals: admin_minerals_for_ui(&state, language),
+            }));
+        }
+    };
+    if !metadata.is_dir() {
+        return Ok(TemplateResponse(AdminTemplate {
+            lang_code: language.code().to_string(),
+            lang_dir: language.dir().to_string(),
+            txt: ui_text(language),
+            has_admin_session: true,
+            error_message: Some(format!("mineral path is not a directory: {folder_name}")),
+            success_message: None,
+            draft_form: MineralFormData::default(),
+            has_suggestion: false,
+            admin_minerals: admin_minerals_for_ui(&state, language),
+        }));
+    }
+
+    if let Err(err) = fs::remove_dir_all(&folder_path).await {
+        return Ok(TemplateResponse(AdminTemplate {
+            lang_code: language.code().to_string(),
+            lang_dir: language.dir().to_string(),
+            txt: ui_text(language),
+            has_admin_session: true,
+            error_message: Some(format!("failed to delete {}: {err}", folder_path.display())),
+            success_message: None,
+            draft_form: MineralFormData::default(),
+            has_suggestion: false,
+            admin_minerals: admin_minerals_for_ui(&state, language),
+        }));
+    }
+
+    reload_catalog(&state)?;
+    let success_message = format!("Mineral deleted: {slug}");
+
+    Ok(TemplateResponse(AdminTemplate {
+        lang_code: language.code().to_string(),
+        lang_dir: language.dir().to_string(),
+        txt: ui_text(language),
+        has_admin_session: true,
+        error_message: None,
+        success_message: Some(success_message),
+        draft_form: MineralFormData::default(),
+        has_suggestion: false,
+        admin_minerals: admin_minerals_for_ui(&state, language),
     }))
 }
 
@@ -845,11 +975,16 @@ async fn parse_suggest_multipart(multipart: &mut Multipart) -> Result<SuggestInp
     let mut image_bytes: Option<Vec<u8>> = None;
     let mut image_ext: Option<String> = None;
 
-    while let Some(field) = multipart
-        .next_field()
-        .await
-        .map_err(|err| AppError::BadRequest(format!("invalid multipart payload: {err}")))?
-    {
+    while let Some(field) = multipart.next_field().await.map_err(|err| {
+        let message = err.to_string();
+        if is_request_too_large_error(&message) {
+            AppError::BadRequest(format!(
+                "image upload too large; keep file under {ADMIN_UPLOAD_MAX_MB} MB"
+            ))
+        } else {
+            AppError::BadRequest(format!("invalid multipart payload: {message}"))
+        }
+    })? {
         let name = field.name().unwrap_or_default().to_string();
         if name.is_empty() {
             continue;
@@ -858,10 +993,22 @@ async fn parse_suggest_multipart(multipart: &mut Multipart) -> Result<SuggestInp
         if name == "image" {
             let ext = detect_image_extension(&field)?;
             let bytes = field.bytes().await.map_err(|err| {
-                AppError::BadRequest(format!("failed to read image field: {err}"))
+                let message = err.to_string();
+                if is_request_too_large_error(&message) {
+                    AppError::BadRequest(format!(
+                        "image upload too large; keep file under {ADMIN_UPLOAD_MAX_MB} MB"
+                    ))
+                } else {
+                    AppError::BadRequest(format!("failed to read image field: {message}"))
+                }
             })?;
             if bytes.is_empty() {
                 return Err(AppError::BadRequest("image upload is required".to_string()));
+            }
+            if bytes.len() > ADMIN_UPLOAD_MAX_BYTES {
+                return Err(AppError::BadRequest(format!(
+                    "image upload too large; keep file under {ADMIN_UPLOAD_MAX_MB} MB"
+                )));
             }
             image_ext = Some(ext);
             image_bytes = Some(bytes.to_vec());
@@ -886,6 +1033,13 @@ async fn parse_suggest_multipart(multipart: &mut Multipart) -> Result<SuggestInp
         image_ext: image_ext
             .ok_or_else(|| AppError::BadRequest("unable to determine image format".to_string()))?,
     })
+}
+
+fn is_request_too_large_error(message: &str) -> bool {
+    let normalized = message.to_ascii_lowercase();
+    normalized.contains("body too large")
+        || normalized.contains("maximum size")
+        || normalized.contains("length limit")
 }
 
 async fn request_openai_suggestion(
@@ -1055,6 +1209,16 @@ fn catalog_for_language(state: &AppState, language: Language) -> Result<MineralC
     Ok(loaded)
 }
 
+fn admin_minerals_for_ui(state: &AppState, language: Language) -> Vec<Mineral> {
+    match catalog_for_language(state, language) {
+        Ok(catalog) => catalog.ordered,
+        Err(err) => {
+            error!("failed to load admin mineral list: {err:#}");
+            Vec::new()
+        }
+    }
+}
+
 fn get_mineral(state: &AppState, language: Language, slug: &str) -> Result<Mineral, AppError> {
     catalog_for_language(state, language)?
         .by_slug
@@ -1093,6 +1257,57 @@ fn resolve_language(state: &AppState, headers: &HeaderMap) -> Language {
     cookie_value(headers, "lang")
         .and_then(|raw| Language::from_code(&raw))
         .unwrap_or(state.default_language)
+}
+
+fn default_report_request(language: Language) -> ReportRequest {
+    match language {
+        Language::En => ReportRequest::default(),
+        Language::Es => ReportRequest {
+            audience: "geologo tecnico".to_string(),
+            purpose: "briefing de exploracion".to_string(),
+            site_context: "campana piloto de perforacion".to_string(),
+        },
+        Language::Cs => ReportRequest {
+            audience: "technicky geolog".to_string(),
+            purpose: "pruzkumny briefing".to_string(),
+            site_context: "pilotni vrtna kampan".to_string(),
+        },
+        Language::Zh => ReportRequest {
+            audience: "技术地质人员".to_string(),
+            purpose: "勘查简报".to_string(),
+            site_context: "试点钻探活动".to_string(),
+        },
+        Language::Ar => ReportRequest {
+            audience: "جيولوجي تقني".to_string(),
+            purpose: "احاطة استكشافية".to_string(),
+            site_context: "حملة حفر تجريبية".to_string(),
+        },
+        Language::Fr => ReportRequest {
+            audience: "geologue technique".to_string(),
+            purpose: "briefing d'exploration".to_string(),
+            site_context: "campagne pilote de forage".to_string(),
+        },
+        Language::De => ReportRequest {
+            audience: "technischer geologe".to_string(),
+            purpose: "explorations briefing".to_string(),
+            site_context: "pilotbohrkampagne".to_string(),
+        },
+        Language::Pt => ReportRequest {
+            audience: "geologo tecnico".to_string(),
+            purpose: "briefing de exploracao".to_string(),
+            site_context: "campanha piloto de perfuracao".to_string(),
+        },
+        Language::Hi => ReportRequest {
+            audience: "takniki bhugarbha vaigyanik".to_string(),
+            purpose: "anveshan briefing".to_string(),
+            site_context: "pilot drilling abhiyan".to_string(),
+        },
+        Language::Ja => ReportRequest {
+            audience: "技術地質担当者".to_string(),
+            purpose: "探査ブリーフィング".to_string(),
+            site_context: "パイロット掘削キャンペーン".to_string(),
+        },
+    }
 }
 
 fn cookie_value(headers: &HeaderMap, key: &str) -> Option<String> {
@@ -1137,6 +1352,12 @@ fn detect_image_extension(field: &axum::extract::multipart::Field<'_>) -> Result
     if let Some(file_name) = field.file_name() {
         if let Some(ext) = file_name.rsplit('.').next() {
             let normalized = ext.to_ascii_lowercase();
+            if ["heic", "heif"].contains(&normalized.as_str()) {
+                return Err(AppError::BadRequest(
+                    "HEIC/HEIF photos are not supported yet; upload png, jpg, webp, or gif"
+                        .to_string(),
+                ));
+            }
             if ["png", "jpg", "jpeg", "webp", "gif"].contains(&normalized.as_str()) {
                 return Ok(if normalized == "jpeg" {
                     "jpg".to_string()
@@ -1151,8 +1372,12 @@ fn detect_image_extension(field: &axum::extract::multipart::Field<'_>) -> Result
         return match content_type {
             "image/png" => Ok("png".to_string()),
             "image/jpeg" => Ok("jpg".to_string()),
+            "image/jpg" => Ok("jpg".to_string()),
             "image/webp" => Ok("webp".to_string()),
             "image/gif" => Ok("gif".to_string()),
+            "image/heic" | "image/heif" => Err(AppError::BadRequest(
+                "HEIC/HEIF photos are not supported yet; upload png, jpg, webp, or gif".to_string(),
+            )),
             _ => Err(AppError::BadRequest(
                 "unsupported image type; use png, jpg, webp, or gif".to_string(),
             )),

@@ -1,0 +1,109 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\usepackage{polyglossia}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{array}
+\usepackage{hyperref}
+\usepackage{graphicx}
+
+\setmainfont{Noto Serif}
+\setsansfont{Noto Sans}
+\setmonofont{Noto Sans Mono}
+\newfontfamily\arabicfont[Script=Arabic,Scale=MatchLowercase]{Noto Naskh Arabic}
+\newfontfamily\hindifont[Script=Devanagari,Scale=MatchLowercase]{Noto Serif Devanagari}
+\newfontfamily\devanagarifont[Script=Devanagari,Scale=MatchLowercase]{Noto Serif Devanagari}
+
+\setCJKmainfont{Noto Serif CJK SC}
+\setCJKsansfont{Noto Sans CJK SC}
+
+
+
+\setdefaultlanguage{english}
+
+
+\hypersetup{colorlinks=true, linkcolor=black, urlcolor=blue}
+
+\begin{document}
+
+\begin{center}
+{\LARGE \textbf{ 矿物报告 }} \\
+\vspace{0.4em}
+{\Large 硅铍石} \\
+\vspace{0.2em}
+生成时间 (UTC): 2026-02-23T23:27:30.480610142+00:00
+\end{center}
+
+\vspace{1em}
+
+\begin{center}
+\includegraphics[width=0.36\textwidth]{ image.jpg }
+\end{center}
+\vspace{0.6em}
+
+
+\section*{ 上下文 }
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.28\textwidth} p{0.67\textwidth}}
+\textbf{ 受众 } & 技术地质人员 \\
+\textbf{ 目的 } & 勘查简报 \\
+\textbf{ 现场背景 } & 试点钻探活动 \\
+\end{tabular}
+
+\section*{ 物理与化学概览 }
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.28\textwidth} p{0.67\textwidth}}
+\textbf{ 族 } & 硅酸盐 \\
+\textbf{ 描述 } & 半透明白色至无色的硅铍石，呈块状、柱状晶形，具细微纵向条纹，光泽为玻璃光泽至略带油脂光泽。硅铍石为铍硅酸盐，常产于花岗伟晶岩与热液脉中；当晶面不完整时，标本可呈块状或短柱状。 \\
+\textbf{ 化学式 } & Be2SiO4 \\
+\textbf{ 硬度 (Mohs) } & 7.50 \\
+\textbf{ 硬度等级 } & 很硬 \\
+\textbf{ 密度 (g/cm3) } & 2.97 \\
+\textbf{ 密度等级 } & 中等 \\
+\textbf{ 晶系 } & 三方晶系 \\
+\textbf{ 颜色 } & 无色至白色（半透明） \\
+\textbf{ 条痕 } & 白色 \\
+\textbf{ 光泽 } & 玻璃光泽至略带油脂光泽 \\
+\textbf{ 主导元素 } & O (48.8 wt\%) \\
+\end{tabular}
+
+\vspace{0.8em}
+\textbf{ 解释性总结 }
+\begin{quote}
+面向技术地质人员并结合试点钻探活动场景，硅铍石被判定为很硬，密度表现为中等。其化学组成以O为主（48.8 wt\%），可支持勘查简报相关决策。
+\end{quote}
+
+\section*{ 主要元素 }
+\begin{longtable}{p{0.42\textwidth} p{0.42\textwidth}}
+\toprule
+\textbf{ 主要元素 } & \textbf{ 质量百分比 } \\
+\midrule
+\endhead
+
+O & 48.80 \\
+
+Si & 31.30 \\
+
+Be & 19.90 \\
+
+\bottomrule
+\end{longtable}
+
+\section*{ 建议 }
+\begin{enumerate}
+
+\item 优先采集 硅铍石 中 O 富集最明显的样品。
+
+\item 使用耐磨工具，并上调粉碎能耗估算。
+
+\item 将 XRD 与地球化学结合，避免过度依赖基于密度的分选。
+
+\item 请将本报告归档到“勘查简报”目标下，以保留可复现的决策记录。
+
+\end{enumerate}
+
+\section*{ 备注 }
+鉴定基于用户提供的背景与一般外观；许多白色半透明矿物在照片中外观相近。建议通过硬度（应能刻划石英）、无解理（贝壳状/不平坦断口）及比重约\textasciitilde{}3.0进行确认。
+
+\end{document}

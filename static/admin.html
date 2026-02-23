@@ -104,6 +104,39 @@
       text-decoration: none;
     }
 
+    .danger {
+      border-color: #7a3e38;
+      background: linear-gradient(180deg, #8f4a43, #7a3e38);
+      color: #ffe8e4;
+      border-radius: 1px;
+    }
+
+    .mineral-delete-list {
+      display: grid;
+      gap: 0.38rem;
+    }
+
+    .mineral-delete-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.42rem;
+      align-items: center;
+      padding: 0.34rem 0.4rem;
+      border: 1px solid #3b5047;
+      background: #0d151c;
+    }
+
+    .mineral-delete-name {
+      font-size: 0.84rem;
+      color: #d8e2ec;
+    }
+
+    .mineral-delete-meta {
+      font-size: 0.72rem;
+      color: #9db1c2;
+      margin-top: 0.12rem;
+    }
+
     .auth-wrap {
       max-width: 520px;
       margin: 1.2rem auto 0;
@@ -153,6 +186,14 @@
 
     @media (max-width: 840px) {
       .grid-2 { grid-template-columns: 1fr; }
+
+      .mineral-delete-item {
+        grid-template-columns: 1fr;
+      }
+
+      .mineral-delete-item button {
+        width: 100%;
+      }
     }
 
     .preview {
@@ -382,7 +423,7 @@
 
     <section class="panel">
       <h2 style="font-size:0.9rem;">1. AI Draft</h2>
-      <p class="hint">Upload a mineral image. Optional context can influence AI naming and technical inference.</p>
+      <p class="hint">Upload a mineral image (up to 20 MB). Optional context can influence AI naming and technical inference.</p>
 
       <form method="post" action="/admin/minerals/suggest" enctype="multipart/form-data" style="display:grid; gap:0.42rem;">
         <label>
@@ -392,7 +433,7 @@
 
         <label>
           Mineral Image
-          <input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" required />
+          <input type="file" name="image" accept="image/*" required />
         </label>
 
         <div>
@@ -491,6 +532,28 @@
       </form>
     </section>
     {% endif %}
+
+    <section class="panel">
+      <h2 style="font-size:0.9rem;">3. Delete Minerals</h2>
+      <p class="hint">Permanently removes mineral folders, localized files, and generated reports from this server.</p>
+
+      <div class="mineral-delete-list">
+        {% for mineral in admin_minerals %}
+        <div class="mineral-delete-item">
+          <div>
+            <div class="mineral-delete-name">{{ mineral.common_name }}</div>
+            <div class="mineral-delete-meta">{{ mineral.mineral_family }} · {{ mineral.folder_name }}</div>
+          </div>
+          <form method="post" action="/admin/minerals/delete" style="margin:0;" data-delete-form>
+            <input type="hidden" name="slug" value="{{ mineral.slug }}" />
+            <button class="danger" type="submit" data-mineral-name="{{ mineral.common_name }}">Delete</button>
+          </form>
+        </div>
+        {% else %}
+        <div class="status warn">No minerals available to delete.</div>
+        {% endfor %}
+      </div>
+    </section>
   </main>
   {% endif %}
   <div class="loading-overlay" id="publish-loading-overlay" aria-hidden="true">
@@ -541,18 +604,36 @@
     (() => {
       const publishForm = document.querySelector("form[data-publish-form]");
       const overlay = document.getElementById("publish-loading-overlay");
-      if (!publishForm || !overlay) return;
+      if (publishForm && overlay) {
+        const submitButton = publishForm.querySelector("button[type=\"submit\"]");
 
-      const submitButton = publishForm.querySelector("button[type=\"submit\"]");
+        publishForm.addEventListener("submit", () => {
+          if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = "Publishing...";
+          }
 
-      publishForm.addEventListener("submit", () => {
-        if (submitButton) {
-          submitButton.disabled = true;
-          submitButton.textContent = "Publishing...";
-        }
+          overlay.classList.add("is-visible");
+          overlay.setAttribute("aria-hidden", "false");
+        });
+      }
 
-        overlay.classList.add("is-visible");
-        overlay.setAttribute("aria-hidden", "false");
+      const deleteForms = document.querySelectorAll("form[data-delete-form]");
+      deleteForms.forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          const submit = form.querySelector("button[type=\"submit\"]");
+          const mineralName = submit?.dataset.mineralName || "this mineral";
+          const confirmed = window.confirm(`Delete ${mineralName}? This cannot be undone.`);
+          if (!confirmed) {
+            event.preventDefault();
+            return;
+          }
+
+          if (submit) {
+            submit.disabled = true;
+            submit.textContent = "Deleting...";
+          }
+        });
       });
     })();
   </script>

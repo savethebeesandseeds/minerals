@@ -72,6 +72,7 @@ pub struct AdminTemplate {
     pub success_message: Option<String>,
     pub draft_form: MineralFormData,
     pub has_suggestion: bool,
+    pub admin_minerals: Vec<Mineral>,
 }
 
 #[derive(Template)]

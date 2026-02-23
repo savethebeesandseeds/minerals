@@ -28,10 +28,16 @@ Inside the container:
 cd /minerals
 apt-get update
 apt-get install -y ca-certificates openssl update-ca-certificates
-apt-get install -y curl ca-certificates build-essential pkg-config libssl-dev latexmk texlive-latex-extra texlive-fonts-recommended
+apt-get install -y \
+  curl ca-certificates build-essential pkg-config libssl-dev \
+  latexmk texlive-xetex texlive-latex-extra texlive-fonts-recommended \
+  texlive-lang-arabic texlive-lang-cjk texlive-lang-chinese texlive-lang-japanese texlive-lang-other \
+  fonts-noto-core fonts-noto-cjk fonts-noto-extra
 curl https://sh.rustup.rs -sSf | sh -s -- -y
 . "$HOME/.cargo/env"
 ```
+
+PDF reports are rendered with `xelatex` (via `latexmk`) so non-Roman scripts (`zh`, `ja`, `ar`, `hi`) compile correctly. Missing TeX language packs or Noto fonts can cause Unicode/font errors during PDF generation.
 
 ## Build and run
 

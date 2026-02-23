@@ -48,14 +48,16 @@ impl PdfGenerator {
             .with_context(|| format!("failed to write {}", tex_file.display()))?;
 
         let output = Command::new("latexmk")
-            .arg("-pdf")
+            .arg("-xelatex")
             .arg("-interaction=nonstopmode")
             .arg("-halt-on-error")
             .arg("report.tex")
             .current_dir(&run_dir)
             .output()
             .await
-            .with_context(|| "failed to execute 'latexmk'; install latexmk + a TeX distribution")?;
+            .with_context(|| {
+                "failed to execute 'latexmk'; install latexmk + XeLaTeX + required fonts"
+            })?;
 
         if !output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -98,6 +100,7 @@ struct HtmlElementShare {
 #[derive(Template)]
 #[template(path = "report.tex", escape = "none")]
 struct ReportTexTemplate {
+    lang_code: String,
     txt: UiText,
     generated_utc: String,
     mineral_name: String,
@@ -159,6 +162,7 @@ impl ReportTexTemplate {
     fn from_report(report: &MineralReport, language: Language) -> Self {
         let txt = ui_text(language);
         Self {
+            lang_code: language.code().to_string(),
             txt,
             generated_utc: latex_escape(&report.generated_utc),
             mineral_name: latex_escape(&report.mineral.common_name),
