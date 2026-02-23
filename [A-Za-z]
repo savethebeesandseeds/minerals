@@ -1,0 +1,23 @@
+static/home.html:228:          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
+static/home.html:237:          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
+static/home.html:247:          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>
+static/app.css:380:.footer-col-title {
+static/info.html:45:          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
+static/info.html:54:          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
+static/info.html:64:          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>
+static/about.html:80:          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
+static/about.html:89:          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
+static/about.html:99:          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>
+static/admin.html:183:    .footer-col-title {
+static/admin.html:510:          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
+static/admin.html:519:          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
+static/admin.html:529:          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>
+static/index.html:241:          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
+static/index.html:250:          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
+static/index.html:260:          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>
+static/mineral.html:237:          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
+static/mineral.html:246:          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
+static/mineral.html:256:          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>
+static/report.html:158:          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
+static/report.html:167:          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
+static/report.html:177:          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>

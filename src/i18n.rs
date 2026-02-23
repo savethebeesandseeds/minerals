@@ -128,6 +128,7 @@ pub struct UiText {
     pub nav_all_minerals: &'static str,
     pub nav_about: &'static str,
     pub nav_admin: &'static str,
+    pub nav_login: &'static str,
     pub nav_current_mineral: &'static str,
     pub nav_report: &'static str,
     pub session_admin_active: &'static str,
@@ -182,6 +183,23 @@ pub struct UiText {
     pub about_operating_body: &'static str,
     pub about_path_note: &'static str,
 
+    pub footer_contact: &'static str,
+    pub footer_legal: &'static str,
+    pub footer_mission: &'static str,
+    pub footer_contact_us: &'static str,
+    pub footer_support: &'static str,
+    pub footer_work_with_us: &'static str,
+    pub footer_account: &'static str,
+    pub footer_legal_link: &'static str,
+    pub footer_privacy_policy: &'static str,
+    pub footer_terms_of_service: &'static str,
+    pub footer_returns_and_refunds: &'static str,
+    pub footer_shipping: &'static str,
+    pub footer_about_us: &'static str,
+    pub footer_conflict_free_minerals: &'static str,
+    pub footer_faq: &'static str,
+    pub footer_powered_trust_by: &'static str,
+
     pub report_title_suffix: &'static str,
     pub context_heading: &'static str,
     pub snapshot_heading: &'static str,
@@ -196,6 +214,7 @@ fn en_text() -> UiText {
         nav_all_minerals: "All Minerals",
         nav_about: "About",
         nav_admin: "Admin",
+        nav_login: "login",
         nav_current_mineral: "Current Mineral",
         nav_report: "Report",
         session_admin_active: "Admin session active",
@@ -250,6 +269,23 @@ fn en_text() -> UiText {
         about_operating_body: "Each mineral is stored as a standalone folder record. Admin operators create and review drafts before publishing.",
         about_path_note: "Path convention: data/minerals/mineral.<family>.0x<id>",
 
+        footer_contact: "Contact",
+        footer_legal: "Legal",
+        footer_mission: "Mission",
+        footer_contact_us: "contact us",
+        footer_support: "support",
+        footer_work_with_us: "work with us",
+        footer_account: "account",
+        footer_legal_link: "legal",
+        footer_privacy_policy: "privacy policy",
+        footer_terms_of_service: "terms of service",
+        footer_returns_and_refunds: "returns and refunds",
+        footer_shipping: "shipping",
+        footer_about_us: "about us",
+        footer_conflict_free_minerals: "conflict free minerals",
+        footer_faq: "frequently asked questions",
+        footer_powered_trust_by: "powered trust by",
+
         report_title_suffix: "Mineral Report",
         context_heading: "Context",
         snapshot_heading: "Physical and Chemical Snapshot",
@@ -269,6 +305,7 @@ pub fn ui_text(lang: Language) -> UiText {
             t.nav_all_minerals = "Todos los minerales";
             t.nav_about = "Acerca de";
             t.nav_admin = "Admin";
+            t.nav_login = "iniciar sesión";
             t.nav_current_mineral = "Mineral actual";
             t.nav_report = "Informe";
             t.session_admin_active = "Sesión de admin activa";
@@ -311,6 +348,22 @@ pub fn ui_text(lang: Language) -> UiText {
             t.about_operating_model = "Modelo operativo";
             t.about_operating_body = "Cada mineral se guarda como carpeta independiente. Los administradores revisan antes de publicar.";
             t.about_path_note = "Convención de ruta: data/minerals/mineral.<family>.0x<id>";
+            t.footer_contact = "Contacto";
+            t.footer_legal = "Legal";
+            t.footer_mission = "Misión";
+            t.footer_contact_us = "contáctanos";
+            t.footer_support = "soporte";
+            t.footer_work_with_us = "trabaja con nosotros";
+            t.footer_account = "cuenta";
+            t.footer_legal_link = "aviso legal";
+            t.footer_privacy_policy = "política de privacidad";
+            t.footer_terms_of_service = "términos de servicio";
+            t.footer_returns_and_refunds = "devoluciones y reembolsos";
+            t.footer_shipping = "envíos";
+            t.footer_about_us = "sobre nosotros";
+            t.footer_conflict_free_minerals = "minerales libres de conflicto";
+            t.footer_faq = "preguntas frecuentes";
+            t.footer_powered_trust_by = "impulsado por";
             t.report_title_suffix = "Informe mineral";
             t.context_heading = "Contexto";
             t.snapshot_heading = "Resumen físico y químico";
@@ -321,6 +374,7 @@ pub fn ui_text(lang: Language) -> UiText {
             t.nav_home = "Domů";
             t.nav_all_minerals = "Všechny minerály";
             t.nav_about = "O aplikaci";
+            t.nav_login = "přihlásit se";
             t.session_public_mode = "Veřejný režim";
             t.home_title = "Minerály";
             t.home_subtitle = "Vyberte jazyk a pokračujte do katalogu minerálů.";
@@ -345,6 +399,22 @@ pub fn ui_text(lang: Language) -> UiText {
             t.about_title = "O Minerals";
             t.about_subtitle =
                 "Katalog a reporty se zaměřením na dohledatelnost a kontrolované publikování.";
+            t.footer_contact = "Kontakt";
+            t.footer_legal = "Právní";
+            t.footer_mission = "Mise";
+            t.footer_contact_us = "kontaktujte nás";
+            t.footer_support = "podpora";
+            t.footer_work_with_us = "pracujte s námi";
+            t.footer_account = "účet";
+            t.footer_legal_link = "právní informace";
+            t.footer_privacy_policy = "zásady ochrany osobních údajů";
+            t.footer_terms_of_service = "podmínky služby";
+            t.footer_returns_and_refunds = "vrácení a refundace";
+            t.footer_shipping = "doprava";
+            t.footer_about_us = "o nás";
+            t.footer_conflict_free_minerals = "minerály bez konfliktu";
+            t.footer_faq = "často kladené dotazy";
+            t.footer_powered_trust_by = "s důvěrou provozuje";
             t.report_title_suffix = "Report minerálu";
             t.context_heading = "Kontext";
             t.snapshot_heading = "Fyzikální a chemický přehled";
@@ -356,6 +426,7 @@ pub fn ui_text(lang: Language) -> UiText {
             t.nav_all_minerals = "全部矿物";
             t.nav_about = "关于";
             t.nav_admin = "管理";
+            t.nav_login = "登录";
             t.nav_current_mineral = "当前矿物";
             t.nav_report = "报告";
             t.session_admin_active = "管理员会话已启用";
@@ -404,6 +475,22 @@ pub fn ui_text(lang: Language) -> UiText {
             t.about_operating_model = "运行模式";
             t.about_operating_body = "每个矿物保存为独立目录。管理员先创建并审核草稿，再发布。";
             t.about_path_note = "路径规范：data/minerals/mineral.<family>.0x<id>";
+            t.footer_contact = "联系";
+            t.footer_legal = "法律";
+            t.footer_mission = "使命";
+            t.footer_contact_us = "联系我们";
+            t.footer_support = "支持";
+            t.footer_work_with_us = "与我们合作";
+            t.footer_account = "账户";
+            t.footer_legal_link = "法律声明";
+            t.footer_privacy_policy = "隐私政策";
+            t.footer_terms_of_service = "服务条款";
+            t.footer_returns_and_refunds = "退货与退款";
+            t.footer_shipping = "配送";
+            t.footer_about_us = "关于我们";
+            t.footer_conflict_free_minerals = "无冲突矿产";
+            t.footer_faq = "常见问题";
+            t.footer_powered_trust_by = "技术支持";
             t.report_title_suffix = "矿物报告";
             t.context_heading = "上下文";
             t.snapshot_heading = "物理与化学概览";
@@ -416,6 +503,7 @@ pub fn ui_text(lang: Language) -> UiText {
             t.nav_all_minerals = "كل المعادن";
             t.nav_about = "حول";
             t.nav_admin = "الإدارة";
+            t.nav_login = "تسجيل الدخول";
             t.nav_current_mineral = "المعدن الحالي";
             t.nav_report = "تقرير";
             t.session_admin_active = "جلسة الإدارة نشطة";
@@ -465,6 +553,22 @@ pub fn ui_text(lang: Language) -> UiText {
             t.about_operating_body =
                 "يُحفظ كل معدن في مجلد مستقل. ينشئ المسؤولون المسودات ويراجعونها قبل النشر.";
             t.about_path_note = "نمط المسار: data/minerals/mineral.<family>.0x<id>";
+            t.footer_contact = "اتصل بنا";
+            t.footer_legal = "قانوني";
+            t.footer_mission = "المهمة";
+            t.footer_contact_us = "اتصل بنا";
+            t.footer_support = "الدعم";
+            t.footer_work_with_us = "اعمل معنا";
+            t.footer_account = "الحساب";
+            t.footer_legal_link = "الشؤون القانونية";
+            t.footer_privacy_policy = "سياسة الخصوصية";
+            t.footer_terms_of_service = "شروط الخدمة";
+            t.footer_returns_and_refunds = "الإرجاع والاسترداد";
+            t.footer_shipping = "الشحن";
+            t.footer_about_us = "من نحن";
+            t.footer_conflict_free_minerals = "معادن خالية من النزاعات";
+            t.footer_faq = "الأسئلة الشائعة";
+            t.footer_powered_trust_by = "بدعم موثوق من";
             t.report_title_suffix = "تقرير المعدن";
             t.context_heading = "السياق";
             t.snapshot_heading = "الملخص الفيزيائي والكيميائي";
@@ -476,6 +580,7 @@ pub fn ui_text(lang: Language) -> UiText {
             t.nav_home = "Accueil";
             t.nav_all_minerals = "Tous les minéraux";
             t.nav_about = "À propos";
+            t.nav_login = "connexion";
             t.session_public_mode = "Mode public";
             t.home_title = "Minéraux";
             t.home_subtitle = "Choisissez la langue puis ouvrez le catalogue.";
@@ -500,6 +605,22 @@ pub fn ui_text(lang: Language) -> UiText {
             t.recommendations_heading = "Recommandations";
             t.about_title = "À propos de Minerals";
             t.about_subtitle = "Plateforme de catalogue et de rapports axée sur la traçabilité.";
+            t.footer_contact = "Contact";
+            t.footer_legal = "Mentions légales";
+            t.footer_mission = "Mission";
+            t.footer_contact_us = "contactez-nous";
+            t.footer_support = "support";
+            t.footer_work_with_us = "travaillez avec nous";
+            t.footer_account = "compte";
+            t.footer_legal_link = "mentions légales";
+            t.footer_privacy_policy = "politique de confidentialité";
+            t.footer_terms_of_service = "conditions d'utilisation";
+            t.footer_returns_and_refunds = "retours et remboursements";
+            t.footer_shipping = "livraison";
+            t.footer_about_us = "à propos de nous";
+            t.footer_conflict_free_minerals = "minéraux sans conflit";
+            t.footer_faq = "questions fréquentes";
+            t.footer_powered_trust_by = "propulsé par";
             t.report_title_suffix = "Rapport minéral";
             t.context_heading = "Contexte";
             t.snapshot_heading = "Aperçu physique et chimique";
@@ -510,6 +631,7 @@ pub fn ui_text(lang: Language) -> UiText {
             t.nav_home = "Start";
             t.nav_all_minerals = "Alle Minerale";
             t.nav_about = "Über uns";
+            t.nav_login = "anmelden";
             t.home_title = "Minerale";
             t.home_subtitle = "Sprache wählen und zum Mineralkatalog wechseln.";
             t.home_select_language = "Sprache";
@@ -529,6 +651,22 @@ pub fn ui_text(lang: Language) -> UiText {
             t.status_pdf_failed = "PDF-Erzeugung fehlgeschlagen.";
             t.recommendations_heading = "Empfehlungen";
             t.about_title = "Über Minerals";
+            t.footer_contact = "Kontakt";
+            t.footer_legal = "Rechtliches";
+            t.footer_mission = "Mission";
+            t.footer_contact_us = "kontakt";
+            t.footer_support = "support";
+            t.footer_work_with_us = "arbeite mit uns";
+            t.footer_account = "konto";
+            t.footer_legal_link = "rechtliches";
+            t.footer_privacy_policy = "datenschutz";
+            t.footer_terms_of_service = "nutzungsbedingungen";
+            t.footer_returns_and_refunds = "rückgabe und erstattung";
+            t.footer_shipping = "versand";
+            t.footer_about_us = "über uns";
+            t.footer_conflict_free_minerals = "konfliktfreie mineralien";
+            t.footer_faq = "häufige fragen";
+            t.footer_powered_trust_by = "bereitgestellt von";
             t.report_title_suffix = "Mineralbericht";
             t.context_heading = "Kontext";
             t.snapshot_heading = "Physikalisch-chemische Übersicht";
@@ -539,6 +677,7 @@ pub fn ui_text(lang: Language) -> UiText {
             t.nav_home = "Início";
             t.nav_all_minerals = "Todos os minerais";
             t.nav_about = "Sobre";
+            t.nav_login = "entrar";
             t.home_title = "Minerais";
             t.home_subtitle = "Selecione o idioma e continue para o catálogo.";
             t.home_select_language = "Idioma";
@@ -557,6 +696,22 @@ pub fn ui_text(lang: Language) -> UiText {
             t.status_pdf_failed = "Falha ao gerar PDF.";
             t.recommendations_heading = "Recomendações";
             t.about_title = "Sobre o Minerals";
+            t.footer_contact = "Contato";
+            t.footer_legal = "Jurídico";
+            t.footer_mission = "Missão";
+            t.footer_contact_us = "fale conosco";
+            t.footer_support = "suporte";
+            t.footer_work_with_us = "trabalhe conosco";
+            t.footer_account = "conta";
+            t.footer_legal_link = "jurídico";
+            t.footer_privacy_policy = "política de privacidade";
+            t.footer_terms_of_service = "termos de serviço";
+            t.footer_returns_and_refunds = "devoluções e reembolsos";
+            t.footer_shipping = "envio";
+            t.footer_about_us = "sobre nós";
+            t.footer_conflict_free_minerals = "minerais livres de conflito";
+            t.footer_faq = "perguntas frequentes";
+            t.footer_powered_trust_by = "com confiança por";
             t.report_title_suffix = "Relatório mineral";
             t.context_heading = "Contexto";
             t.snapshot_heading = "Resumo físico e químico";
@@ -567,6 +722,7 @@ pub fn ui_text(lang: Language) -> UiText {
             t.nav_home = "होम";
             t.nav_all_minerals = "सभी खनिज";
             t.nav_about = "परिचय";
+            t.nav_login = "लॉगिन";
             t.home_title = "मिनरल्स";
             t.home_subtitle = "भाषा चुनें और खनिज कैटलॉग में जाएँ।";
             t.home_select_language = "भाषा";
@@ -587,6 +743,22 @@ pub fn ui_text(lang: Language) -> UiText {
             t.current_chain_output = "वर्तमान आउटपुट";
             t.recommendations_heading = "सिफारिशें";
             t.about_title = "Minerals के बारे में";
+            t.footer_contact = "संपर्क";
+            t.footer_legal = "कानूनी";
+            t.footer_mission = "मिशन";
+            t.footer_contact_us = "हमसे संपर्क करें";
+            t.footer_support = "सहायता";
+            t.footer_work_with_us = "हमारे साथ काम करें";
+            t.footer_account = "खाता";
+            t.footer_legal_link = "कानूनी";
+            t.footer_privacy_policy = "गोपनीयता नीति";
+            t.footer_terms_of_service = "सेवा की शर्तें";
+            t.footer_returns_and_refunds = "रिटर्न और रिफंड";
+            t.footer_shipping = "शिपिंग";
+            t.footer_about_us = "हमारे बारे में";
+            t.footer_conflict_free_minerals = "संघर्ष-मुक्त खनिज";
+            t.footer_faq = "अक्सर पूछे जाने वाले प्रश्न";
+            t.footer_powered_trust_by = "विश्वसनीय साझेदार";
             t.report_title_suffix = "खनिज रिपोर्ट";
             t.context_heading = "संदर्भ";
             t.snapshot_heading = "भौतिक और रासायनिक सारांश";
@@ -597,6 +769,7 @@ pub fn ui_text(lang: Language) -> UiText {
             t.nav_home = "ホーム";
             t.nav_all_minerals = "全鉱物";
             t.nav_about = "概要";
+            t.nav_login = "ログイン";
             t.home_title = "ミネラル";
             t.home_subtitle = "言語を選択して鉱物カタログへ進みます。";
             t.home_select_language = "言語";
@@ -618,6 +791,22 @@ pub fn ui_text(lang: Language) -> UiText {
             t.current_chain_output = "現在の出力";
             t.recommendations_heading = "推奨事項";
             t.about_title = "Minerals について";
+            t.footer_contact = "お問い合わせ";
+            t.footer_legal = "法務";
+            t.footer_mission = "ミッション";
+            t.footer_contact_us = "お問い合わせ";
+            t.footer_support = "サポート";
+            t.footer_work_with_us = "採用情報";
+            t.footer_account = "アカウント";
+            t.footer_legal_link = "法務情報";
+            t.footer_privacy_policy = "プライバシーポリシー";
+            t.footer_terms_of_service = "利用規約";
+            t.footer_returns_and_refunds = "返品・返金";
+            t.footer_shipping = "配送";
+            t.footer_about_us = "私たちについて";
+            t.footer_conflict_free_minerals = "紛争鉱物フリー";
+            t.footer_faq = "よくある質問";
+            t.footer_powered_trust_by = "提供";
             t.report_title_suffix = "鉱物レポート";
             t.context_heading = "コンテキスト";
             t.snapshot_heading = "物理・化学スナップショット";
