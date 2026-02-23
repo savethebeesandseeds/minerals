@@ -1,0 +1,19 @@
+{
+  "common_name": "Phenakite",
+  "description": "Translucent white to colorless phenakite showing a blocky, prismatic habit with subtle longitudinal striations and a vitreous to slightly greasy luster. Phenakite is a beryllium silicate typically occurring in granitic pegmatites and hydrothermal veins; pieces may appear massive or as short prisms when crystal faces are incomplete.",
+  "mineral_family": "Silicates",
+  "formula": "Be2SiO4",
+  "hardness_mohs": 7.5,
+  "density_g_cm3": 2.97,
+  "crystal_system": "trigonal",
+  "color": "colorless to white (translucent)",
+  "streak": "white",
+  "luster": "vitreous to slightly greasy",
+  "major_elements_pct": {
+    "Be": 19.9,
+    "O": 48.8,
+    "Si": 31.3
+  },
+  "notes": "ID is based on user context and general appearance; many white translucent minerals can look similar in photos. Confirm with hardness (should scratch quartz), lack of cleavage (conchoidal/uneven fracture), and specific gravity near ~3.0.",
+  "image_file": "image.jpg"
+}

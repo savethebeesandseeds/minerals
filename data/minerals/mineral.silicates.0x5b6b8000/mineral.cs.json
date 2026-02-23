@@ -1,0 +1,19 @@
+{
+  "common_name": "Fenakit",
+  "description": "Průsvitný bílý až bezbarvý fenakit s blokovitým, prizmatickým habitem, jemnými podélnými rýhami a skelným až mírně mastným leskem. Fenakit je berylnatý křemičitan, typicky se vyskytuje v granitických pegmatitech a hydrotermálních žilách; vzorky mohou být masivní nebo tvořit krátké prizmy při neúplně vyvinutých krystalových plochách.",
+  "mineral_family": "Silikáty",
+  "formula": "Be2SiO4",
+  "hardness_mohs": 7.5,
+  "density_g_cm3": 2.97,
+  "crystal_system": "trigonální",
+  "color": "bezbarvý až bílý (průsvitný)",
+  "streak": "bílý",
+  "luster": "skelný až mírně mastný",
+  "major_elements_pct": {
+    "Be": 19.9,
+    "O": 48.8,
+    "Si": 31.3
+  },
+  "notes": "Určení vychází z kontextu uživatele a celkového vzhledu; mnoho bílých průsvitných minerálů může na fotografiích vypadat podobně. Ověřte tvrdostí (měl by rýpat křemen), absencí štěpnosti (lasturnatý/nerovný lom) a měrnou hmotností kolem ~3.0.",
+  "image_file": "image.jpg"
+}

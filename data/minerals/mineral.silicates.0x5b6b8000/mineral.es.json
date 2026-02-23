@@ -1,0 +1,19 @@
+{
+  "common_name": "Fenakita",
+  "description": "Fenakita translúcida, blanca a incolora, con hábito prismático y robusto, sutiles estriaciones longitudinales y brillo vítreo a ligeramente graso. La fenakita es un silicato de berilio que suele presentarse en pegmatitas graníticas y vetas hidrotermales; las piezas pueden verse masivas o como prismas cortos cuando las caras cristalinas están incompletas.",
+  "mineral_family": "Silicatos",
+  "formula": "Be2SiO4",
+  "hardness_mohs": 7.5,
+  "density_g_cm3": 2.97,
+  "crystal_system": "trigonal",
+  "color": "incoloro a blanco (translúcido)",
+  "streak": "blanco",
+  "luster": "vítreo a ligeramente graso",
+  "major_elements_pct": {
+    "Be": 19.9,
+    "O": 48.8,
+    "Si": 31.3
+  },
+  "notes": "La identificación se basa en el contexto del usuario y el aspecto general; muchos minerales blancos translúcidos pueden parecerse en fotos. Confirmar con dureza (debe rayar el cuarzo), ausencia de exfoliación (fractura concoidea/irregular) y gravedad específica cercana a ~3.0.",
+  "image_file": "image.jpg"
+}

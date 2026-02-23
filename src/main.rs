@@ -54,6 +54,7 @@ struct AppState {
     admin_password: Arc<String>,
     openai_api_key: Arc<Option<String>>,
     openai_model: Arc<String>,
+    openai_translation_model: Arc<String>,
     default_language: Language,
     http_client: Arc<Client>,
 }
@@ -313,6 +314,10 @@ async fn main() -> Result<()> {
         Err(_) => Language::En,
     };
 
+    let openai_model = std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+    let openai_translation_model =
+        std::env::var("OPENAI_TRANSLATION_MODEL").unwrap_or_else(|_| openai_model.clone());
+
     let state = AppState {
         catalogs_by_lang: Arc::new(RwLock::new(HashMap::new())),
         admin_sessions: Arc::new(Mutex::new(HashSet::new())),
@@ -321,9 +326,8 @@ async fn main() -> Result<()> {
         data_root: Arc::new(data_root),
         admin_password: Arc::new(admin_password),
         openai_api_key: Arc::new(std::env::var("OPENAI_API_KEY").ok()),
-        openai_model: Arc::new(
-            std::env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string()),
-        ),
+        openai_model: Arc::new(openai_model),
+        openai_translation_model: Arc::new(openai_translation_model),
         default_language,
         http_client: Arc::new(
             Client::builder()
@@ -404,7 +408,6 @@ async fn index(
     headers: HeaderMap,
 ) -> Result<TemplateResponse<IndexTemplate>, AppError> {
     let language = resolve_language(&state, &headers);
-    let has_admin_session = has_admin_session(&state, &headers);
     let minerals = catalog_for_language(&state, language)?.ordered;
 
     Ok(TemplateResponse(IndexTemplate {
@@ -412,7 +415,6 @@ async fn index(
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
         minerals,
-        has_admin_session,
     }))
 }
 
@@ -425,7 +427,6 @@ async fn about_page(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
-        has_admin_session: has_admin_session(&state, &headers),
     })
 }
 
@@ -441,7 +442,6 @@ async fn info_page(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
-        has_admin_session: has_admin_session(&state, &headers),
         page_title: page_title.to_string(),
         page_body: page_body.to_string(),
     })
@@ -461,7 +461,6 @@ async fn mineral_page(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
-        has_admin_session: has_admin_session(&state, &headers),
         mineral,
         request,
         report,
@@ -491,7 +490,6 @@ async fn generate_pdf_form(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
-        has_admin_session: has_admin_session(&state, &headers),
         mineral,
         request,
         report,
@@ -1349,7 +1347,7 @@ Use concise professional wording. Preserve chemical formulas and symbols exactly
     );
 
     let request = ChatCompletionsRequest {
-        model: (*state.openai_model).clone(),
+        model: (*state.openai_translation_model).clone(),
         messages: vec![
             ChatMessage {
                 role: "system".to_string(),

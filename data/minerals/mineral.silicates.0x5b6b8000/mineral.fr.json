@@ -1,0 +1,19 @@
+{
+  "common_name": "Phénakite",
+  "description": "Phénakite translucide, blanche à incolore, présentant un habitus trapu et prismatique avec de fines stries longitudinales et un éclat vitreux à légèrement gras. La phénakite est un silicate de béryllium se rencontrant typiquement dans les pegmatites granitiques et les veines hydrothermales ; les échantillons peuvent être massifs ou en prismes courts lorsque les faces cristallines sont incomplètes.",
+  "mineral_family": "Silicates",
+  "formula": "Be2SiO4",
+  "hardness_mohs": 7.5,
+  "density_g_cm3": 2.97,
+  "crystal_system": "trigonal",
+  "color": "incolore à blanc (translucide)",
+  "streak": "blanc",
+  "luster": "vitreux à légèrement gras",
+  "major_elements_pct": {
+    "Be": 19.9,
+    "O": 48.8,
+    "Si": 31.3
+  },
+  "notes": "L’identification est basée sur le contexte fourni par l’utilisateur et l’aspect général ; de nombreux minéraux blancs translucides peuvent se ressembler en photo. Confirmer par la dureté (doit rayer le quartz), l’absence de clivage (fracture conchoïdale/irrégulière) et une densité relative proche de ~3,0.",
+  "image_file": "image.jpg"
+}

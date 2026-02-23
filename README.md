@@ -54,6 +54,7 @@ Current variables:
 - `DEFAULT_LANG` (default UI language code; fallback when no `lang` cookie is present)
 - `ADMIN_PASSWORD` (required)
 - `OPENAI_MODEL`
+- `OPENAI_TRANSLATION_MODEL` (optional override for translation calls; defaults to `OPENAI_MODEL`)
 - `OPENAI_API_KEY` (set in `.env.local`)
 
 ## Web usage

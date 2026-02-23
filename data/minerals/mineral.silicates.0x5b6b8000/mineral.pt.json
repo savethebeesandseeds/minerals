@@ -1,0 +1,19 @@
+{
+  "common_name": "Fenakita",
+  "description": "Fenakita translúcida, branca a incolor, exibindo hábito blocoso a prismático, com discretas estriações longitudinais e brilho vítreo a ligeiramente gorduroso. A fenakita é um silicato de berílio que ocorre tipicamente em pegmatitos graníticos e veios hidrotermais; as amostras podem ser maciças ou formar prismas curtos quando as faces cristalinas estão incompletas.",
+  "mineral_family": "Silicatos",
+  "formula": "Be2SiO4",
+  "hardness_mohs": 7.5,
+  "density_g_cm3": 2.97,
+  "crystal_system": "trigonal",
+  "color": "incolor a branco (translúcido)",
+  "streak": "branco",
+  "luster": "vítreo a ligeiramente gorduroso",
+  "major_elements_pct": {
+    "Be": 19.9,
+    "O": 48.8,
+    "Si": 31.3
+  },
+  "notes": "A identificação baseia-se no contexto do utilizador e no aspeto geral; muitos minerais brancos translúcidos podem parecer semelhantes em fotografias. Confirmar com dureza (deve riscar quartzo), ausência de clivagem (fratura concoidal/irregular) e densidade relativa próxima de ~3.0.",
+  "image_file": "image.jpg"
+}

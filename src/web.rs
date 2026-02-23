@@ -45,7 +45,6 @@ pub struct IndexTemplate {
     pub lang_dir: String,
     pub txt: UiText,
     pub minerals: Vec<Mineral>,
-    pub has_admin_session: bool,
 }
 
 #[derive(Template)]
@@ -54,7 +53,6 @@ pub struct MineralTemplate {
     pub lang_code: String,
     pub lang_dir: String,
     pub txt: UiText,
-    pub has_admin_session: bool,
     pub mineral: Mineral,
     pub request: ReportRequest,
     pub report: MineralReport,
@@ -82,7 +80,6 @@ pub struct AboutTemplate {
     pub lang_code: String,
     pub lang_dir: String,
     pub txt: UiText,
-    pub has_admin_session: bool,
 }
 
 #[derive(Template)]
@@ -91,7 +88,6 @@ pub struct InfoTemplate {
     pub lang_code: String,
     pub lang_dir: String,
     pub txt: UiText,
-    pub has_admin_session: bool,
     pub page_title: String,
     pub page_body: String,
 }

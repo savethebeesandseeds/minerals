@@ -1,0 +1,19 @@
+{
+  "common_name": "Phenakit",
+  "description": "Durchscheinender weißer bis farbloser Phenakit mit blockigem, prismatischem Habitus, feinen Längsstreifungen und glasigem bis leicht fettigem Glanz. Phenakit ist ein Beryllium-Silikat, das typischerweise in granitischen Pegmatiten und hydrothermalen Gängen vorkommt; Stücke können massig erscheinen oder als kurze Prismen, wenn Kristallflächen unvollständig ausgebildet sind.",
+  "mineral_family": "Silikate",
+  "formula": "Be2SiO4",
+  "hardness_mohs": 7.5,
+  "density_g_cm3": 2.97,
+  "crystal_system": "trigonal",
+  "color": "farblos bis weiß (durchscheinend)",
+  "streak": "weiß",
+  "luster": "glasig bis leicht fettig",
+  "major_elements_pct": {
+    "Be": 19.9,
+    "O": 48.8,
+    "Si": 31.3
+  },
+  "notes": "Die Bestimmung basiert auf Nutzerkontext und allgemeinem Erscheinungsbild; viele weiße, durchscheinende Minerale können auf Fotos ähnlich wirken. Bestätigung durch Härte (sollte Quarz ritzen), fehlende Spaltbarkeit (muscheliger/uneinheitlicher Bruch) und eine Dichte nahe ~3,0.",
+  "image_file": "image.jpg"
+}

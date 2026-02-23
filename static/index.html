@@ -13,10 +13,12 @@
     .list-scroll {
       margin-top: 0.42rem;
       overflow-x: auto;
+      overflow-y: hidden;
     }
 
     .catalog-list {
-      min-width: 1220px;
+      width: 100%;
+      min-width: 760px;
       border: 1px solid var(--line);
       border-radius: 1px;
       background: var(--surface);
@@ -25,7 +27,12 @@
     .list-head,
     .list-row {
       display: grid;
-      grid-template-columns: 372px minmax(200px, 1.6fr) minmax(140px, 0.9fr) minmax(160px, 1fr) 78px;
+      grid-template-columns:
+        minmax(230px, 1.5fr)
+        minmax(170px, 1.25fr)
+        minmax(125px, 0.9fr)
+        minmax(130px, 1fr)
+        minmax(64px, 0.45fr);
       align-items: center;
       column-gap: 0.48rem;
       padding: 0.24rem 0.34rem;
@@ -45,7 +52,7 @@
       border-bottom: 1px solid var(--line);
       font-size: 0.78rem;
       color: var(--ink);
-      min-height: 104px;
+      min-height: 98px;
       text-decoration: none;
       cursor: pointer;
     }
@@ -60,30 +67,33 @@
 
     .image-cell {
       width: 100%;
-      display: grid;
-      place-items: center;
+      min-width: 0;
+      display: block;
     }
 
-    .thumb {
-      width: 336px;
-      height: 92px;
-      object-fit: contain;
+    .thumb-frame {
+      width: 100%;
       border: 1px solid var(--line);
       border-radius: 1px;
       background: var(--surface-2);
       display: block;
+      padding: 0.12rem;
+    }
+
+    .thumb {
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+      object-position: center;
+      display: block;
     }
 
     .thumb-fallback {
-      width: 336px;
-      height: 92px;
-      border: 1px solid var(--line);
-      border-radius: 1px;
       display: grid;
       place-items: center;
+      min-height: 86px;
       color: var(--muted);
       font-size: 0.7rem;
-      background: var(--surface-2);
     }
 
     .name-cell {
@@ -153,11 +163,6 @@
       font-size: 0.76rem;
     }
 
-    @media (max-width: 860px) {
-      .catalog-list {
-        min-width: 1100px;
-      }
-    }
   </style>
 </head>
 <body>
@@ -174,7 +179,6 @@
       </a>
       <a class="menu" href="/">{{ txt.nav_home }}</a>
       <a class="menu active" href="/minerals">{{ txt.nav_all_minerals }}</a>
-      <a class="menu" href="/about">{{ txt.nav_about }}</a>
       <div class="top-tools">
         <a class="login-link" href="/admin">login</a>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">◐</button>
@@ -210,9 +214,11 @@
           <div class="image-cell">
             {% match mineral.image_path %}
             {% when Some with (image_path) %}
-            <img class="thumb" src="{{ image_path }}" alt="{{ mineral.common_name }}" />
+            <div class="thumb-frame">
+              <img class="thumb" src="{{ image_path }}" alt="{{ mineral.common_name }}" loading="lazy" decoding="async" />
+            </div>
             {% when None %}
-            <span class="thumb-fallback">[ ]</span>
+            <span class="thumb-frame thumb-fallback">[ ]</span>
             {% endmatch %}
           </div>
           <div class="name-cell">

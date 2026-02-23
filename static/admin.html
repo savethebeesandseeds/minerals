@@ -199,6 +199,104 @@
     .footer-note a {
       color: #c7daec;
     }
+
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 1200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 0.8rem;
+      background: rgba(7, 10, 9, 0.82);
+    }
+
+    .loading-overlay.is-visible {
+      display: flex;
+    }
+
+    .loading-dialog {
+      width: min(420px, 100%);
+      border: 1px solid #4a6258;
+      background: #121816;
+      border-radius: 1px;
+      padding: 0.62rem;
+      display: grid;
+      gap: 0.38rem;
+      justify-items: center;
+      text-align: center;
+      box-shadow: none;
+    }
+
+    .loading-title {
+      margin: 0;
+      color: #e3edf6;
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .loading-image-stack {
+      width: min(100%, 276px);
+      border: 1px solid #4a6258;
+      border-radius: 1px;
+      background: #0d151c;
+      padding: 0.2rem;
+      display: grid;
+      animation: loading-float 2.2s ease-in-out infinite;
+    }
+
+    .loading-frame {
+      grid-area: 1 / 1;
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .loading-frame-1 {
+      animation: loading-frame-1 3.8s steps(1, end) infinite;
+    }
+
+    .loading-frame-2 {
+      animation: loading-frame-2 3.8s steps(1, end) infinite;
+    }
+
+    .loading-caption {
+      margin: 0;
+      color: #9db1c2;
+      font-size: 0.76rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .loading-dots::after {
+      content: "...";
+      display: inline-block;
+      width: 0ch;
+      overflow: hidden;
+      vertical-align: bottom;
+      animation: loading-dots 1.2s steps(4, end) infinite;
+    }
+
+    @keyframes loading-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    @keyframes loading-dots {
+      to { width: 3ch; }
+    }
+
+    @keyframes loading-frame-1 {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+
+    @keyframes loading-frame-2 {
+      0%, 49% { opacity: 0; }
+      50%, 100% { opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -298,7 +396,7 @@
         </label>
 
         <div>
-          <button type="submit">Suggest Fields With OpenAI</button>
+          <button type="submit">Suggest Fields</button>
         </div>
       </form>
     </section>
@@ -312,7 +410,7 @@
       <img class="preview" src="{{ draft_form.preview_image_data_url }}" alt="mineral preview" />
       {% endif %}
 
-      <form method="post" action="/admin/minerals/publish" style="display:grid; gap:0.42rem;">
+      <form method="post" action="/admin/minerals/publish" style="display:grid; gap:0.42rem;" data-publish-form>
         {% match draft_form.draft_id %}
         {% when Some with (id) %}
         <input type="hidden" name="draft_id" value="{{ id }}" />
@@ -395,6 +493,16 @@
     {% endif %}
   </main>
   {% endif %}
+  <div class="loading-overlay" id="publish-loading-overlay" aria-hidden="true">
+    <div class="loading-dialog" role="status" aria-live="polite" aria-atomic="true">
+      <p class="loading-title">Publishing Mineral</p>
+      <div class="loading-image-stack" aria-hidden="true">
+        <img class="loading-frame loading-frame-1" src="/static/loading_1.png" alt="" />
+        <img class="loading-frame loading-frame-2" src="/static/loading_2.png" alt="" />
+      </div>
+      <p class="loading-caption">Loading<span class="loading-dots" aria-hidden="true"></span></p>
+    </div>
+  </div>
   <footer class="site-footer">
     <div class="footer-inner">
       <div class="footer-grid" aria-label="Footer">
@@ -429,5 +537,24 @@
       <p class="footer-note">powered trust by <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
     </div>
   </footer>
+  <script>
+    (() => {
+      const publishForm = document.querySelector("form[data-publish-form]");
+      const overlay = document.getElementById("publish-loading-overlay");
+      if (!publishForm || !overlay) return;
+
+      const submitButton = publishForm.querySelector("button[type=\"submit\"]");
+
+      publishForm.addEventListener("submit", () => {
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent = "Publishing...";
+        }
+
+        overlay.classList.add("is-visible");
+        overlay.setAttribute("aria-hidden", "false");
+      });
+    })();
+  </script>
 </body>
 </html>
