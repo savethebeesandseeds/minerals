@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="{{ lang_code }}" dir="{{ lang_dir }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ txt.nav_all_minerals }} | Minerals</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="stylesheet" href="/static/app.css" />
+  <script src="/static/theme.js" defer></script>
+  <style>
+    .layout {
+      display: grid;
+      gap: 0.58rem;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(180px, 1fr));
+      gap: 0.46rem;
+      margin-top: 0.46rem;
+      max-width: 640px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: 1px;
+      padding: 0.36rem 0.42rem;
+      display: grid;
+      gap: 0.1rem;
+    }
+
+    .metric-label {
+      font-size: 0.68rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .metric-value {
+      font-size: 1rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 0.4rem;
+      align-items: end;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.24rem;
+      justify-content: flex-end;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      background: var(--surface-2);
+      color: var(--ink);
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 0.16rem 0.3rem;
+      cursor: pointer;
+    }
+
+    .chip.active {
+      color: #fff;
+      border-color: var(--brand-2);
+      background: linear-gradient(180deg, var(--brand), var(--brand-2));
+    }
+
+    .results {
+      border: 1px solid var(--line);
+      border-radius: 1px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .results-head,
+    .result-row {
+      display: grid;
+      grid-template-columns: minmax(180px, 1.35fr) minmax(140px, 1fr) minmax(110px, 0.85fr) minmax(98px, 0.7fr);
+      column-gap: 0.42rem;
+      align-items: center;
+      padding: 0.24rem 0.34rem;
+    }
+
+    .results-head {
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-2);
+      font-size: 0.66rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .result-row {
+      border-bottom: 1px solid var(--line);
+      font-size: 0.78rem;
+      color: var(--ink);
+      text-decoration: none;
+      min-height: 44px;
+    }
+
+    .result-row:last-child {
+      border-bottom: 0;
+    }
+
+    .result-row:hover {
+      background: var(--surface-2);
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.03em;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 0.74rem;
+    }
+
+    .note {
+      border: 1px dashed var(--line);
+      border-radius: 1px;
+      background: var(--surface-2);
+      color: var(--muted);
+      padding: 0.34rem 0.4rem;
+      font-size: 0.76rem;
+    }
+
+    @media (max-width: 900px) {
+      .filters {
+        grid-template-columns: 1fr;
+      }
+
+      .chips {
+        justify-content: flex-start;
+      }
+
+      .results {
+        overflow-x: auto;
+      }
+
+      .results-head,
+      .result-row {
+        min-width: 620px;
+      }
+
+      .metrics {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Main">
+    <div class="topbar-inner">
+      <a class="brand" href="/" aria-label="Minerals Home">
+        <img
+          src="/static/logo_transparent.png"
+          alt="Minerals logo"
+          data-logo-light="/static/logo_transparent.png"
+          data-logo-dark="/static/logo_transparent_dark.png"
+        />
+        <span>MINERALS</span>
+      </a>
+      <a class="menu" href="/">{{ txt.nav_home }}</a>
+      <a class="menu active" href="/minerals">{{ txt.nav_all_minerals }}</a>
+      <a class="menu" href="/catalog">{{ txt.nav_catalog }}</a>
+      <div class="top-tools">
+        <a class="login-link" href="/admin">{% if has_admin_session %}admin{% else %}{{ txt.nav_login }}{% endif %}</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">◐</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page layout">
+    <section class="hero">
+      <h1>{{ txt.all_minerals_title }}</h1>
+      <p class="lead">{{ txt.all_minerals_subtitle }}</p>
+      <div class="metrics">
+        <div class="metric">
+          <span class="metric-label">{{ txt.all_minerals_published_label }}</span>
+          <span class="metric-value" id="published-count">{{ published_count }}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">{{ txt.all_minerals_estimated_label }}</span>
+          <span class="metric-value" id="estimated-count">{{ estimated_total }}+</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel filters">
+      <label>
+        Search by name / formula
+        <input id="mineral-search" type="search" placeholder="quartz, fe2o3, silicate" autocomplete="off" />
+      </label>
+      <div class="chips" id="family-filters" aria-label="Family filters">
+        <button class="chip active" type="button" data-family="all">All</button>
+        <button class="chip" type="button" data-family="silicates">Silicates</button>
+        <button class="chip" type="button" data-family="oxides">Oxides</button>
+        <button class="chip" type="button" data-family="sulfides">Sulfides</button>
+        <button class="chip" type="button" data-family="carbonates">Carbonates</button>
+      </div>
+    </section>
+
+    <section class="results" aria-label="Estimated all-minerals list">
+      <div class="results-head" role="row">
+        <span>Name</span>
+        <span>Family</span>
+        <span>Formula</span>
+        <span>Source</span>
+      </div>
+      <div id="all-minerals-rows"></div>
+    </section>
+
+    <section class="note">
+      {{ txt.all_minerals_disclaimer }}
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <div class="footer-grid" aria-label="Footer">
+        <section class="footer-col">
+          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
+          <div class="footer-col-links">
+            <a href="/pages/contact-us">{{ txt.footer_contact_us }}</a>
+            <a href="/pages/support">{{ txt.footer_support }}</a>
+            <a href="/pages/work-with-us">{{ txt.footer_work_with_us }}</a>
+            <a href="/pages/account">{{ txt.footer_account }}</a>
+          </div>
+        </section>
+        <section class="footer-col">
+          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
+          <div class="footer-col-links">
+            <a href="/pages/legal">{{ txt.footer_legal_link }}</a>
+            <a href="/pages/privacy-policy">{{ txt.footer_privacy_policy }}</a>
+            <a href="/pages/terms-of-service">{{ txt.footer_terms_of_service }}</a>
+            <a href="/pages/returns-and-refunds">{{ txt.footer_returns_and_refunds }}</a>
+            <a href="/pages/shipping">{{ txt.footer_shipping }}</a>
+          </div>
+        </section>
+        <section class="footer-col">
+          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>
+          <div class="footer-col-links">
+            <a href="/about">{{ txt.footer_about_us }}</a>
+            <a href="/pages/conflict-free-minerals">{{ txt.footer_conflict_free_minerals }}</a>
+            <a href="/pages/frequently-asked-questions">{{ txt.footer_faq }}</a>
+          </div>
+        </section>
+      </div>
+      <p class="footer-note">{{ txt.footer_powered_trust_by }} <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
+    </div>
+  </footer>
+
+  <script id="all-minerals-data" type="application/json">{{ all_minerals_json|safe }}</script>
+  <script>
+    (() => {
+      const rows = document.getElementById("all-minerals-rows");
+      const searchInput = document.getElementById("mineral-search");
+      const familyFilters = document.getElementById("family-filters");
+      const dataNode = document.getElementById("all-minerals-data");
+      const data = (() => {
+        if (!dataNode) {
+          return [];
+        }
+        try {
+          const parsed = JSON.parse(dataNode.textContent || "[]");
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+          return [];
+        }
+      })();
+      let activeFamily = "all";
+      let chips = [];
+
+      function renderFamilyChips() {
+        const families = Array.from(
+          new Set(
+            data
+              .map((item) => String(item.family || "").trim().toLowerCase())
+              .filter((value) => value.length > 0),
+          ),
+        ).sort((a, b) => a.localeCompare(b));
+
+        familyFilters.innerHTML = "";
+        const allChip = document.createElement("button");
+        allChip.className = "chip active";
+        allChip.type = "button";
+        allChip.dataset.family = "all";
+        allChip.textContent = "All";
+        familyFilters.appendChild(allChip);
+
+        families.forEach((family) => {
+          const chip = document.createElement("button");
+          chip.className = "chip";
+          chip.type = "button";
+          chip.dataset.family = family;
+          chip.textContent = family;
+          familyFilters.appendChild(chip);
+        });
+
+        chips = Array.from(familyFilters.querySelectorAll(".chip"));
+        chips.forEach((chip) => {
+          chip.addEventListener("click", () => {
+            chips.forEach((value) => value.classList.remove("active"));
+            chip.classList.add("active");
+            activeFamily = chip.dataset.family || "all";
+            render();
+          });
+        });
+      }
+
+      function render() {
+        const query = searchInput.value.trim().toLowerCase();
+        const filtered = data.filter((item) => {
+          if (activeFamily !== "all" && item.family !== activeFamily) {
+            return false;
+          }
+
+          if (!query) {
+            return true;
+          }
+
+          const blob = `${item.name} ${item.family} ${item.formula}`.toLowerCase();
+          return blob.includes(query);
+        });
+
+        if (filtered.length === 0) {
+          rows.innerHTML = '<div class="result-row"><span class="muted">No minerals found.</span><span></span><span></span><span></span></div>';
+          return;
+        }
+
+        rows.innerHTML = filtered
+          .slice(0, 300)
+          .map((item) => `
+            <a class="result-row" href="/minerals/${encodeURIComponent(item.slug || "")}">
+              <span>${item.name || ""}</span>
+              <span class="muted">${item.family || ""}</span>
+              <span class="mono">${item.formula || ""}</span>
+              <span class="muted">${item.source || "database"}</span>
+            </a>
+          `)
+          .join("");
+      }
+
+      searchInput.addEventListener("input", render);
+      renderFamilyChips();
+      render();
+    })();
+  </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use askama::Template;
@@ -35,13 +35,17 @@ impl PdfGenerator {
             .await
             .with_context(|| format!("failed to create output directory {}", run_dir.display()))?;
 
+        let staged_image_file =
+            stage_image_for_latex(&run_dir, &report.mineral.image_path, &self.minerals_root)
+                .await?;
+
         let html = ReportHtmlTemplate::from_report(report, language).render()?;
         let html_file = run_dir.join("report.html");
         fs::write(&html_file, html)
             .await
             .with_context(|| format!("failed to write {}", html_file.display()))?;
 
-        let tex = ReportTexTemplate::from_report(report, language).render()?;
+        let tex = ReportTexTemplate::from_report(report, language, staged_image_file).render()?;
         let tex_file = run_dir.join("report.tex");
         fs::write(&tex_file, tex)
             .await
@@ -159,7 +163,11 @@ struct ReportHtmlTemplate {
 }
 
 impl ReportTexTemplate {
-    fn from_report(report: &MineralReport, language: Language) -> Self {
+    fn from_report(
+        report: &MineralReport,
+        language: Language,
+        staged_image_file: Option<String>,
+    ) -> Self {
         let txt = ui_text(language);
         Self {
             lang_code: language.code().to_string(),
@@ -184,7 +192,7 @@ impl ReportTexTemplate {
             site_context: latex_escape(&report.site_context),
             summary: latex_escape(&report.summary),
             notes: latex_escape(&report.mineral.notes),
-            image_file: image_file_name(&report.mineral.image_path),
+            image_file: staged_image_file,
             recommendations: report
                 .recommendations
                 .iter()
@@ -233,11 +241,56 @@ impl ReportHtmlTemplate {
     }
 }
 
-fn image_file_name(path: &Option<String>) -> Option<String> {
-    path.as_ref()
-        .and_then(|value| value.rsplit('/').next())
-        .map(str::to_string)
-        .filter(|value| !value.is_empty())
+async fn stage_image_for_latex(
+    run_dir: &Path,
+    image_path: &Option<String>,
+    minerals_root: &Path,
+) -> Result<Option<String>> {
+    let Some(image_path) = image_path.as_ref() else {
+        return Ok(None);
+    };
+
+    let data_root = minerals_root
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("data"));
+
+    let relative = match image_path.strip_prefix("/data/") {
+        Some(value) => value,
+        None => {
+            let file_name = image_path
+                .rsplit('/')
+                .next()
+                .map(str::to_string)
+                .filter(|value| !value.is_empty());
+            return Ok(file_name);
+        }
+    };
+
+    let source_path = data_root.join(relative);
+    if !source_path.exists() {
+        return Ok(None);
+    }
+
+    let file_name = match source_path.file_name().and_then(|name| name.to_str()) {
+        Some(value) if !value.is_empty() => value.to_string(),
+        _ => return Ok(None),
+    };
+
+    let target_path = run_dir.join(&file_name);
+    if source_path != target_path {
+        fs::copy(&source_path, &target_path)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to stage image for latex {} -> {}",
+                    source_path.display(),
+                    target_path.display()
+                )
+            })?;
+    }
+
+    Ok(Some(file_name))
 }
 
 fn to_latex_share(elem: &ElementShare) -> LatexElementShare {

@@ -127,6 +127,7 @@ pub fn language_options() -> Vec<LanguageOption> {
 pub struct UiText {
     pub nav_home: &'static str,
     pub nav_all_minerals: &'static str,
+    pub nav_catalog: &'static str,
     pub nav_about: &'static str,
     pub nav_admin: &'static str,
     pub nav_login: &'static str,
@@ -146,6 +147,11 @@ pub struct UiText {
     pub catalog_subtitle: &'static str,
     pub no_minerals: &'static str,
     pub open_mineral: &'static str,
+    pub all_minerals_title: &'static str,
+    pub all_minerals_subtitle: &'static str,
+    pub all_minerals_published_label: &'static str,
+    pub all_minerals_estimated_label: &'static str,
+    pub all_minerals_disclaimer: &'static str,
 
     pub label_family: &'static str,
     pub label_formula: &'static str,
@@ -213,6 +219,7 @@ fn en_text() -> UiText {
     UiText {
         nav_home: "Home",
         nav_all_minerals: "All Minerals",
+        nav_catalog: "Catalog",
         nav_about: "About",
         nav_admin: "Admin",
         nav_login: "login",
@@ -224,14 +231,22 @@ fn en_text() -> UiText {
         session_auth_required: "Authentication required",
 
         home_title: "Minerals",
-        home_subtitle: "Select your language and continue to the mineral catalog.",
+        home_subtitle: "Select your language and continue to the mineral sections.",
         home_select_language: "Language",
         home_continue: "Continue",
 
         catalog_title: "Minerals Catalog",
-        catalog_subtitle: "Structured mineral records with reproducible HTML/PDF reporting.",
+        catalog_subtitle:
+            "Published mineral records stored in local SQLite metadata.",
         no_minerals: "No minerals currently published. Open /admin to create the first entry.",
         open_mineral: "Open Mineral",
+        all_minerals_title: "All Minerals (Global Estimate)",
+        all_minerals_subtitle:
+            "Rendering sketch for a large world-scale mineral list with search, filtering, and progressive loading.",
+        all_minerals_published_label: "Published in catalog",
+        all_minerals_estimated_label: "Estimated worldwide minerals",
+        all_minerals_disclaimer:
+            "This page is an exploration scaffold. Results include seeded examples and placeholders.",
 
         label_family: "Family",
         label_formula: "Formula",
@@ -265,10 +280,12 @@ fn en_text() -> UiText {
         recommendations_heading: "Recommendations",
 
         about_title: "About Minerals",
-        about_subtitle: "Folder-backed catalog and report platform focused on traceability and controlled publishing.",
+        about_subtitle: "Database-backed catalog and report platform focused on traceability and controlled publishing.",
         about_operating_model: "Operating Model",
-        about_operating_body: "Each mineral is stored as a standalone folder record. Admin operators create and review drafts before publishing.",
-        about_path_note: "Path convention: data/minerals/mineral.<family>.0x<id>",
+        about_operating_body:
+            "Mineral metadata is stored in local SQLite tables. Admin operators create and review drafts before publishing.",
+        about_path_note:
+            "Metadata database: data/minerals.db · images: data/images · artifacts: data/minerals/<slug>",
 
         footer_contact: "Contact",
         footer_legal: "Legal",
@@ -304,6 +321,7 @@ pub fn ui_text(lang: Language) -> UiText {
         Language::Es => {
             t.nav_home = "Inicio";
             t.nav_all_minerals = "Todos los minerales";
+            t.nav_catalog = "Catálogo";
             t.nav_about = "Acerca de";
             t.nav_admin = "Admin";
             t.nav_login = "iniciar sesión";
@@ -345,10 +363,11 @@ pub fn ui_text(lang: Language) -> UiText {
             t.recommendations_heading = "Recomendaciones";
             t.about_title = "Acerca de Minerals";
             t.about_subtitle =
-                "Plataforma de catálogo e informes con trazabilidad y publicación controlada.";
+                "Plataforma de catálogo e informes basada en base de datos con trazabilidad y publicación controlada.";
             t.about_operating_model = "Modelo operativo";
-            t.about_operating_body = "Cada mineral se guarda como carpeta independiente. Los administradores revisan antes de publicar.";
-            t.about_path_note = "Convención de ruta: data/minerals/mineral.<family>.0x<id>";
+            t.about_operating_body = "Los metadatos de cada mineral se guardan en una base de datos local de archivo único. Los administradores revisan antes de publicar.";
+            t.about_path_note =
+                "Base de metadatos: data/minerals.db · imágenes: data/images · artefactos: data/minerals/<slug>";
             t.footer_contact = "Contacto";
             t.footer_legal = "Legal";
             t.footer_mission = "Misión";
@@ -374,6 +393,7 @@ pub fn ui_text(lang: Language) -> UiText {
         Language::Cs => {
             t.nav_home = "Domů";
             t.nav_all_minerals = "Všechny minerály";
+            t.nav_catalog = "Katalog";
             t.nav_about = "O aplikaci";
             t.nav_login = "přihlásit se";
             t.session_public_mode = "Veřejný režim";
@@ -425,6 +445,7 @@ pub fn ui_text(lang: Language) -> UiText {
         Language::Zh => {
             t.nav_home = "首页";
             t.nav_all_minerals = "全部矿物";
+            t.nav_catalog = "目录";
             t.nav_about = "关于";
             t.nav_admin = "管理";
             t.nav_login = "登录";
@@ -472,10 +493,12 @@ pub fn ui_text(lang: Language) -> UiText {
             t.current_chain_output = "当前分析输出";
             t.recommendations_heading = "建议";
             t.about_title = "关于 Minerals";
-            t.about_subtitle = "基于文件夹的矿物目录与报告平台，强调可追溯和受控发布。";
+            t.about_subtitle = "基于数据库的矿物目录与报告平台，强调可追溯和受控发布。";
             t.about_operating_model = "运行模式";
-            t.about_operating_body = "每个矿物保存为独立目录。管理员先创建并审核草稿，再发布。";
-            t.about_path_note = "路径规范：data/minerals/mineral.<family>.0x<id>";
+            t.about_operating_body =
+                "矿物元数据保存在本地单文件数据库。管理员先创建并审核草稿，再发布。";
+            t.about_path_note =
+                "元数据数据库：data/minerals.db · 图片目录：data/images · 制品目录：data/minerals/<slug>";
             t.footer_contact = "联系";
             t.footer_legal = "法律";
             t.footer_mission = "使命";
@@ -502,6 +525,7 @@ pub fn ui_text(lang: Language) -> UiText {
         Language::Ar => {
             t.nav_home = "الرئيسية";
             t.nav_all_minerals = "كل المعادن";
+            t.nav_catalog = "الكتالوج";
             t.nav_about = "حول";
             t.nav_admin = "الإدارة";
             t.nav_login = "تسجيل الدخول";
@@ -549,11 +573,12 @@ pub fn ui_text(lang: Language) -> UiText {
             t.current_chain_output = "المخرجات الحالية";
             t.recommendations_heading = "التوصيات";
             t.about_title = "حول Minerals";
-            t.about_subtitle = "منصة فهرسة وتقارير قائمة على المجلدات مع تتبع ونشر مضبوط.";
+            t.about_subtitle = "منصة فهرسة وتقارير قائمة على قاعدة بيانات مع تتبع ونشر مضبوط.";
             t.about_operating_model = "نموذج التشغيل";
             t.about_operating_body =
-                "يُحفظ كل معدن في مجلد مستقل. ينشئ المسؤولون المسودات ويراجعونها قبل النشر.";
-            t.about_path_note = "نمط المسار: data/minerals/mineral.<family>.0x<id>";
+                "تُحفظ بيانات كل معدن في قاعدة بيانات محلية بملف واحد. ينشئ المسؤولون المسودات ويراجعونها قبل النشر.";
+            t.about_path_note =
+                "قاعدة البيانات: data/minerals.db · الصور: data/images · ملفات المخرجات: data/minerals/<slug>";
             t.footer_contact = "اتصل بنا";
             t.footer_legal = "قانوني";
             t.footer_mission = "المهمة";
@@ -580,6 +605,7 @@ pub fn ui_text(lang: Language) -> UiText {
         Language::Fr => {
             t.nav_home = "Accueil";
             t.nav_all_minerals = "Tous les minéraux";
+            t.nav_catalog = "Catalogue";
             t.nav_about = "À propos";
             t.nav_login = "connexion";
             t.session_public_mode = "Mode public";
@@ -631,6 +657,7 @@ pub fn ui_text(lang: Language) -> UiText {
         Language::De => {
             t.nav_home = "Start";
             t.nav_all_minerals = "Alle Minerale";
+            t.nav_catalog = "Katalog";
             t.nav_about = "Über uns";
             t.nav_login = "anmelden";
             t.home_title = "Minerale";
@@ -677,6 +704,7 @@ pub fn ui_text(lang: Language) -> UiText {
         Language::Pt => {
             t.nav_home = "Início";
             t.nav_all_minerals = "Todos os minerais";
+            t.nav_catalog = "Catálogo";
             t.nav_about = "Sobre";
             t.nav_login = "entrar";
             t.home_title = "Minerais";
@@ -722,6 +750,7 @@ pub fn ui_text(lang: Language) -> UiText {
         Language::Hi => {
             t.nav_home = "होम";
             t.nav_all_minerals = "सभी खनिज";
+            t.nav_catalog = "कैटलॉग";
             t.nav_about = "परिचय";
             t.nav_login = "लॉगिन";
             t.home_title = "मिनरल्स";
@@ -769,6 +798,7 @@ pub fn ui_text(lang: Language) -> UiText {
         Language::Ja => {
             t.nav_home = "ホーム";
             t.nav_all_minerals = "全鉱物";
+            t.nav_catalog = "カタログ";
             t.nav_about = "概要";
             t.nav_login = "ログイン";
             t.home_title = "ミネラル";

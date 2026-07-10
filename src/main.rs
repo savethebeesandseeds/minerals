@@ -8,7 +8,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     io::Read,
     net::SocketAddr,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Arc, Mutex, RwLock},
 };
 
@@ -23,8 +23,10 @@ use axum::{
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use i18n::{language_options, ui_text, Language};
 use models::{
-    is_valid_mineral_folder_name, load_minerals, major_elements_to_text, parse_major_elements,
-    Mineral, MineralDiskRecord, MineralFormData, ReportRequest,
+    delete_mineral_records, execute_admin_sql, init_minerals_database,
+    is_valid_mineral_folder_name, load_minerals, major_elements_to_text, mineral_slug_exists,
+    parse_major_elements, save_localized_mineral_records, Mineral, MineralDiskRecord,
+    MineralFormData, NewImageRecord, ReportRequest,
 };
 use pdf::GeneratedArtifacts;
 use reqwest::Client;
@@ -39,8 +41,8 @@ use crate::{
     agent::run_agentic_chain,
     pdf::PdfGenerator,
     web::{
-        AboutTemplate, AdminTemplate, HomeTemplate, IndexTemplate, InfoTemplate, MineralTemplate,
-        TemplateResponse,
+        AboutTemplate, AdminTemplate, AllMineralsTemplate, HomeTemplate, IndexTemplate,
+        InfoTemplate, MineralTemplate, TemplateResponse,
     },
 };
 
@@ -137,6 +139,15 @@ struct PdfApiResponse {
     summary: String,
 }
 
+#[derive(Debug, Serialize)]
+struct AllMineralListItem {
+    slug: String,
+    name: String,
+    family: String,
+    formula: String,
+    source: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct AdminLoginRequest {
     password: String,
@@ -162,6 +173,22 @@ struct PublishMineralRequest {
 #[derive(Debug, Deserialize)]
 struct DeleteMineralRequest {
     slug: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AdminDbQueryRequest {
+    sql: String,
+}
+
+#[derive(Debug, Serialize)]
+struct AdminDbQueryResponse {
+    statement_type: String,
+    columns: Vec<String>,
+    rows: Vec<Vec<String>>,
+    row_count: usize,
+    affected_rows: usize,
+    truncated: bool,
+    message: String,
 }
 
 #[derive(Debug, Default)]
@@ -191,6 +218,7 @@ struct SuggestInput {
 
 const ADMIN_UPLOAD_MAX_MB: usize = 20;
 const ADMIN_UPLOAD_MAX_BYTES: usize = ADMIN_UPLOAD_MAX_MB * 1024 * 1024;
+const ESTIMATED_GLOBAL_MINERAL_COUNT: usize = 6200;
 
 #[derive(Debug, Deserialize)]
 struct AiMineralSuggestion {
@@ -303,6 +331,7 @@ async fn main() -> Result<()> {
     fs::create_dir_all(data_root.join("minerals"))
         .await
         .context("failed to create data/minerals directory")?;
+    init_minerals_database(&data_root).context("failed to initialize data/minerals.db")?;
 
     let admin_password = std::env::var("ADMIN_PASSWORD")
         .context("ADMIN_PASSWORD is required. Set it in .env.local (or env) before starting.")?;
@@ -347,7 +376,8 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/", get(home_page))
         .route("/language", post(set_language))
-        .route("/minerals", get(index))
+        .route("/minerals", get(all_minerals_page))
+        .route("/catalog", get(catalog_page))
         .route("/about", get(about_page))
         .route("/pages/:slug", get(info_page))
         .route("/minerals/:slug", get(mineral_page))
@@ -362,6 +392,7 @@ async fn main() -> Result<()> {
         )
         .route("/admin/minerals/publish", post(admin_publish_mineral))
         .route("/admin/minerals/delete", post(admin_delete_mineral))
+        .route("/admin/db/query", post(admin_db_query))
         .nest_service("/static", ServeDir::new("static"))
         .nest_service("/data", ServeDir::new("data"))
         .with_state(state);
@@ -389,11 +420,13 @@ async fn home_page(
     headers: HeaderMap,
 ) -> TemplateResponse<HomeTemplate> {
     let language = resolve_language(&state, &headers);
+    let has_admin = has_admin_session(&state, &headers);
 
     TemplateResponse(HomeTemplate {
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        has_admin_session: has_admin,
         language_options: language_options(),
         current_lang_code: language.code(),
     })
@@ -415,17 +448,51 @@ async fn set_language(
     Ok(response)
 }
 
-async fn index(
+async fn all_minerals_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<TemplateResponse<AllMineralsTemplate>, AppError> {
+    let language = resolve_language(&state, &headers);
+    let has_admin = has_admin_session(&state, &headers);
+    let minerals = catalog_for_language(&state, language)?.ordered;
+    let published_count = minerals.len();
+    let all_rows = minerals
+        .into_iter()
+        .map(|mineral| AllMineralListItem {
+            slug: mineral.slug,
+            name: mineral.common_name,
+            family: mineral.mineral_family,
+            formula: mineral.formula,
+            source: "database".to_string(),
+        })
+        .collect::<Vec<_>>();
+    let all_minerals_json =
+        serde_json::to_string(&all_rows).map_err(|err| AppError::Internal(anyhow!(err)))?;
+
+    Ok(TemplateResponse(AllMineralsTemplate {
+        lang_code: language.code().to_string(),
+        lang_dir: language.dir().to_string(),
+        txt: ui_text(language),
+        has_admin_session: has_admin,
+        published_count,
+        estimated_total: ESTIMATED_GLOBAL_MINERAL_COUNT,
+        all_minerals_json,
+    }))
+}
+
+async fn catalog_page(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<TemplateResponse<IndexTemplate>, AppError> {
     let language = resolve_language(&state, &headers);
+    let has_admin = has_admin_session(&state, &headers);
     let minerals = catalog_for_language(&state, language)?.ordered;
 
     Ok(TemplateResponse(IndexTemplate {
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        has_admin_session: has_admin,
         minerals,
     }))
 }
@@ -435,10 +502,12 @@ async fn about_page(
     headers: HeaderMap,
 ) -> TemplateResponse<AboutTemplate> {
     let language = resolve_language(&state, &headers);
+    let has_admin = has_admin_session(&state, &headers);
     TemplateResponse(AboutTemplate {
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        has_admin_session: has_admin,
     })
 }
 
@@ -448,12 +517,14 @@ async fn info_page(
     AxumPath(slug): AxumPath<String>,
 ) -> TemplateResponse<InfoTemplate> {
     let language = resolve_language(&state, &headers);
+    let has_admin = has_admin_session(&state, &headers);
     let (page_title, page_body) = footer_page_content(&slug);
 
     TemplateResponse(InfoTemplate {
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        has_admin_session: has_admin,
         page_title: page_title.to_string(),
         page_body: page_body.to_string(),
     })
@@ -465,6 +536,7 @@ async fn mineral_page(
     AxumPath(slug): AxumPath<String>,
 ) -> Result<TemplateResponse<MineralTemplate>, AppError> {
     let language = resolve_language(&state, &headers);
+    let has_admin = has_admin_session(&state, &headers);
     let mineral = get_mineral(&state, language, &slug)?;
     let request = default_report_request(language);
     let report = run_agentic_chain(&mineral, &request, language);
@@ -473,6 +545,7 @@ async fn mineral_page(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        has_admin_session: has_admin,
         mineral,
         request,
         report,
@@ -489,6 +562,7 @@ async fn generate_pdf_form(
     Form(request): Form<ReportRequest>,
 ) -> Result<TemplateResponse<MineralTemplate>, AppError> {
     let language = resolve_language(&state, &headers);
+    let has_admin = has_admin_session(&state, &headers);
     let mineral = get_mineral(&state, language, &slug)?;
     let report = run_agentic_chain(&mineral, &request, language);
 
@@ -502,6 +576,7 @@ async fn generate_pdf_form(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        has_admin_session: has_admin,
         mineral,
         request,
         report,
@@ -791,7 +866,7 @@ async fn admin_publish_mineral(
         }
     };
 
-    let (folder_name, translation_stats) = create_mineral_folder(&state, parsed_draft).await?;
+    let (slug, translation_stats) = create_mineral_record(&state, parsed_draft).await?;
     {
         let mut drafts = state
             .admin_drafts
@@ -802,8 +877,8 @@ async fn admin_publish_mineral(
     reload_catalog(&state)?;
 
     let mut success_message = format!(
-        "Mineral published: {}. Localized files: {} translated.",
-        folder_name, translation_stats.translated_count
+        "Mineral published: {}. Localized records: {} translated.",
+        slug, translation_stats.translated_count
     );
     if !translation_stats.fallback_lang_codes.is_empty() {
         success_message.push_str(" Fallback used for: ");
@@ -857,68 +932,57 @@ async fn admin_delete_mineral(
         }
     };
     let folder_name = mineral.folder_name;
-    if !is_valid_mineral_folder_name(&folder_name) {
-        return Ok(TemplateResponse(AdminTemplate {
-            lang_code: language.code().to_string(),
-            lang_dir: language.dir().to_string(),
-            txt: ui_text(language),
-            has_admin_session: true,
-            error_message: Some(format!("invalid mineral folder name: {folder_name}")),
-            success_message: None,
-            draft_form: MineralFormData::default(),
-            has_suggestion: false,
-            admin_minerals: admin_minerals_for_ui(&state, language),
-        }));
-    }
 
-    let folder_path = state.data_root.join("minerals").join(&folder_name);
+    let mut artifacts_removed = false;
+    if is_valid_mineral_folder_name(&folder_name) {
+        let folder_path = state.data_root.join("minerals").join(&folder_name);
 
-    let metadata = match fs::metadata(&folder_path).await {
-        Ok(metadata) => metadata,
-        Err(_) => {
-            return Ok(TemplateResponse(AdminTemplate {
-                lang_code: language.code().to_string(),
-                lang_dir: language.dir().to_string(),
-                txt: ui_text(language),
-                has_admin_session: true,
-                error_message: Some(format!("mineral folder not found: {folder_name}")),
-                success_message: None,
-                draft_form: MineralFormData::default(),
-                has_suggestion: false,
-                admin_minerals: admin_minerals_for_ui(&state, language),
-            }));
+        if let Ok(metadata) = fs::metadata(&folder_path).await {
+            if !metadata.is_dir() {
+                return Ok(TemplateResponse(AdminTemplate {
+                    lang_code: language.code().to_string(),
+                    lang_dir: language.dir().to_string(),
+                    txt: ui_text(language),
+                    has_admin_session: true,
+                    error_message: Some(format!(
+                        "artifact path is not a directory: {}",
+                        folder_path.display()
+                    )),
+                    success_message: None,
+                    draft_form: MineralFormData::default(),
+                    has_suggestion: false,
+                    admin_minerals: admin_minerals_for_ui(&state, language),
+                }));
+            }
+
+            if let Err(err) = fs::remove_dir_all(&folder_path).await {
+                return Ok(TemplateResponse(AdminTemplate {
+                    lang_code: language.code().to_string(),
+                    lang_dir: language.dir().to_string(),
+                    txt: ui_text(language),
+                    has_admin_session: true,
+                    error_message: Some(format!(
+                        "failed to delete artifact directory {}: {err}",
+                        folder_path.display()
+                    )),
+                    success_message: None,
+                    draft_form: MineralFormData::default(),
+                    has_suggestion: false,
+                    admin_minerals: admin_minerals_for_ui(&state, language),
+                }));
+            }
+
+            artifacts_removed = true;
         }
-    };
-    if !metadata.is_dir() {
-        return Ok(TemplateResponse(AdminTemplate {
-            lang_code: language.code().to_string(),
-            lang_dir: language.dir().to_string(),
-            txt: ui_text(language),
-            has_admin_session: true,
-            error_message: Some(format!("mineral path is not a directory: {folder_name}")),
-            success_message: None,
-            draft_form: MineralFormData::default(),
-            has_suggestion: false,
-            admin_minerals: admin_minerals_for_ui(&state, language),
-        }));
     }
 
-    if let Err(err) = fs::remove_dir_all(&folder_path).await {
-        return Ok(TemplateResponse(AdminTemplate {
-            lang_code: language.code().to_string(),
-            lang_dir: language.dir().to_string(),
-            txt: ui_text(language),
-            has_admin_session: true,
-            error_message: Some(format!("failed to delete {}: {err}", folder_path.display())),
-            success_message: None,
-            draft_form: MineralFormData::default(),
-            has_suggestion: false,
-            admin_minerals: admin_minerals_for_ui(&state, language),
-        }));
-    }
-
+    delete_mineral_records(state.data_root.as_path(), &slug)?;
     reload_catalog(&state)?;
-    let success_message = format!("Mineral deleted: {slug}");
+    let success_message = if artifacts_removed {
+        format!("Mineral deleted: {slug}. Metadata, orphaned images, and artifact files removed.")
+    } else {
+        format!("Mineral deleted: {slug}. Metadata removed and orphaned images cleaned.")
+    };
 
     Ok(TemplateResponse(AdminTemplate {
         lang_code: language.code().to_string(),
@@ -930,6 +994,47 @@ async fn admin_delete_mineral(
         draft_form: MineralFormData::default(),
         has_suggestion: false,
         admin_minerals: admin_minerals_for_ui(&state, language),
+    }))
+}
+
+async fn admin_db_query(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<AdminDbQueryRequest>,
+) -> Result<Json<AdminDbQueryResponse>, AppError> {
+    if !has_admin_session(&state, &headers) {
+        return Err(AppError::Unauthorized(
+            "Admin session required. Log in at /admin.".to_string(),
+        ));
+    }
+
+    let sql = required_string(&request.sql, "sql")?;
+    let execution = execute_admin_sql(state.data_root.as_path(), &sql)
+        .map_err(|err| AppError::BadRequest(err.to_string()))?;
+
+    let message = if execution.columns.is_empty() {
+        reload_catalog(&state)?;
+        format!(
+            "Statement executed. {} row(s) affected.",
+            execution.affected_rows
+        )
+    } else if execution.truncated {
+        format!(
+            "Query executed. Showing {} row(s) (truncated to server limit).",
+            execution.row_count
+        )
+    } else {
+        format!("Query executed. {} row(s) returned.", execution.row_count)
+    };
+
+    Ok(Json(AdminDbQueryResponse {
+        statement_type: execution.statement_type,
+        columns: execution.columns,
+        rows: execution.rows,
+        row_count: execution.row_count,
+        affected_rows: execution.affected_rows,
+        truncated: execution.truncated,
+        message,
     }))
 }
 
@@ -1398,30 +1503,21 @@ fn content_type_from_ext(ext: &str) -> &'static str {
     }
 }
 
-async fn create_mineral_folder(
+async fn create_mineral_record(
     state: &AppState,
     draft: NewMineralDraft,
 ) -> Result<(String, TranslationStats), AppError> {
     let family_slug = slugify_family(&draft.mineral_family);
-    let minerals_root = state.data_root.join("minerals");
 
-    let folder_name = create_unique_folder_name(&minerals_root, &family_slug)?;
-    if !is_valid_mineral_folder_name(&folder_name) {
+    let slug = create_unique_slug(state, &family_slug)?;
+    if !is_valid_mineral_folder_name(&slug) {
         return Err(AppError::Internal(anyhow!(
-            "generated invalid mineral folder name: {folder_name}"
+            "generated invalid mineral slug: {slug}"
         )));
     }
 
-    let folder_path = minerals_root.join(&folder_name);
-    fs::create_dir_all(&folder_path)
-        .await
-        .with_context(|| format!("failed to create {}", folder_path.display()))?;
-
-    let image_file = format!("image.{}", draft.image_ext);
-    let image_path = folder_path.join(&image_file);
-    fs::write(&image_path, draft.image_bytes)
-        .await
-        .with_context(|| format!("failed to write {}", image_path.display()))?;
+    let folder_name = slug.clone();
+    let image_file = format!("source.{}", draft.image_ext);
 
     let metadata = MineralDiskRecord {
         common_name: draft.common_name,
@@ -1436,33 +1532,23 @@ async fn create_mineral_folder(
         luster: draft.luster,
         major_elements_pct: draft.major_elements_pct,
         notes: draft.notes,
-        image_file: Some(image_file),
+        image_file: Some(image_file.clone()),
     };
 
     let (localized_records, translation_stats) = build_localized_metadata(state, &metadata).await;
-    for (lang_code, localized) in &localized_records {
-        let metadata_path = folder_path.join(format!("mineral.{lang_code}.json"));
-        write_metadata_file(&metadata_path, localized).await?;
-    }
+    save_localized_mineral_records(
+        state.data_root.as_path(),
+        &slug,
+        &folder_name,
+        &localized_records,
+        NewImageRecord {
+            bytes: &draft.image_bytes,
+            ext: &draft.image_ext,
+            original_name: Some(&image_file),
+        },
+    )?;
 
-    let fallback_english = localized_records
-        .get(Language::En.code())
-        .cloned()
-        .unwrap_or(metadata);
-    write_metadata_file(&folder_path.join("mineral.json"), &fallback_english).await?;
-
-    Ok((folder_name, translation_stats))
-}
-
-async fn write_metadata_file(path: &Path, metadata: &MineralDiskRecord) -> Result<(), AppError> {
-    let metadata_json = serde_json::to_string_pretty(metadata).map_err(|err| {
-        AppError::Internal(anyhow!("failed to serialize mineral metadata: {err}"))
-    })?;
-
-    fs::write(path, metadata_json)
-        .await
-        .with_context(|| format!("failed to write {}", path.display()))?;
-    Ok(())
+    Ok((slug, translation_stats))
 }
 
 async fn build_localized_metadata(
@@ -1700,11 +1786,11 @@ fn footer_page_content(slug: &str) -> (&'static str, &'static str) {
     }
 }
 
-fn create_unique_folder_name(minerals_root: &Path, family_slug: &str) -> Result<String, AppError> {
+fn create_unique_slug(state: &AppState, family_slug: &str) -> Result<String, AppError> {
     for _ in 0..16 {
         let id = generate_secure_hex(4)?;
         let candidate = format!("mineral.{family_slug}.0x{id}");
-        if !minerals_root.join(&candidate).exists() {
+        if !mineral_slug_exists(state.data_root.as_path(), &candidate)? {
             return Ok(candidate);
         }
     }

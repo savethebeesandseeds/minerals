@@ -1,20 +1,90 @@
-# Minerals Folder Builder (Rust + HTML + LaTeX)
+# Minerals Catalog (Rust + SQLite + HTML + LaTeX)
 
-This project serves minerals from a folder-first structure and generates report artifacts per mineral.
+This project serves minerals from a local SQLite database and generates report artifacts per catalog item.
 
-## Folder model
+## Storage model
 
-Each mineral lives in:
+### Metadata database
 
-`data/minerals/mineral.<family>.0x<short-hex-id>/`
+Database file:
 
-The folder contains at minimum:
+`data/minerals.db`
 
-- `mineral.en.json` (authoritative English metadata)
-- `mineral.<lang>.json` localized metadata files (`en`, `es`, `cs`, `zh`, `ar`, `fr`, `de`, `pt`, `hi`, `ja`)
-- `mineral.json` (legacy fallback copy, currently aligned to English)
-- `image.<ext>` (uploaded via admin)
-- generated artifacts: `report.html`, `report.tex`, `report.pdf`
+Core tables:
+
+- `minerals`: broad source mineral records (canonical/base layer).
+- `catalog`: published catalog entities (rocks/items) that reference one source mineral.
+- `images`: global image registry.
+
+This deployment is intentionally simplified to **3 tables total**.
+
+### Embeddings placeholders
+
+To support future vector indexing, these tables include `embeddings_json` (initialized as empty JSON arrays):
+
+- `minerals`
+- `catalog`
+- `images`
+
+### Image storage
+
+All uploaded/source images are stored in one shared folder:
+
+`data/images/`
+
+`catalog.image_id` and `minerals.image_id` reference `images.id`.
+
+### Report artifacts
+
+Generated report artifacts remain per catalog slug:
+
+`data/minerals/<slug>/`
+
+- `report.html`
+- `report.tex`
+- `report.pdf`
+
+## Migrations
+
+On startup, if `catalog` is empty, the app auto-migrates in this order:
+
+1. Legacy SQL schema (`catalog_entries` + related tables), if present.
+2. `data/minerals.db.json` (previous JSON database), if present.
+3. `data/minerals/*` folder metadata (`mineral.<lang>.json` / `mineral.json`) and legacy images.
+
+## Query examples
+
+Get catalog records with their source minerals:
+
+```sql
+SELECT
+  c.slug AS catalog_slug,
+  c.folder_name,
+  m.slug AS source_mineral_slug,
+  c.metadata_json,
+  ci.stored_name AS catalog_image,
+  mi.stored_name AS mineral_image
+FROM catalog c
+JOIN minerals m ON m.id = c.source_mineral_id
+LEFT JOIN images ci ON ci.id = c.image_id
+LEFT JOIN images mi ON mi.id = m.image_id
+ORDER BY c.slug;
+```
+
+Inspect source mineral rows:
+
+```sql
+SELECT * FROM minerals ORDER BY slug;
+```
+
+## Routes
+
+- `/` Home + language selection
+- `/minerals` All Minerals sketch page (world-scale rendering scaffold)
+- `/catalog` Published catalog list
+- `/minerals/:slug` Catalog item detail + report generation
+- `/admin` Admin login + publish/delete workflows
+- `/admin/db/query` Authenticated SQL console endpoint (single-statement query/DML, schema changes blocked)
 
 ## Run in a Debian container
 
@@ -37,8 +107,6 @@ curl https://sh.rustup.rs -sSf | sh -s -- -y
 . "$HOME/.cargo/env"
 ```
 
-PDF reports are rendered with `xelatex` (via `latexmk`) so non-Roman scripts (`zh`, `ja`, `ar`, `hi`) compile correctly. Missing TeX language packs or Noto fonts can cause Unicode/font errors during PDF generation.
-
 ## Build and run
 
 ```bash
@@ -52,32 +120,29 @@ Server starts on `http://localhost:7979` (override with `PORT`).
 
 - `.env`: tracked in git; shared defaults and variable documentation.
 - `.env.local`: gitignored; private overrides/secrets for your machine.
-- On startup, the app loads `.env` first, then `.env.local` (local values override shared defaults).
 
 Current variables:
 
 - `PORT`
-- `DEFAULT_LANG` (default UI language code; fallback when no `lang` cookie is present)
+- `DEFAULT_LANG`
 - `ADMIN_PASSWORD` (required)
 - `OPENAI_MODEL`
-- `OPENAI_TRANSLATION_MODEL` (optional override for translation calls; defaults to `OPENAI_MODEL`)
-- `OPENAI_API_KEY` (set in `.env.local`)
+- `OPENAI_TRANSLATION_MODEL` (optional override; defaults to `OPENAI_MODEL`)
+- `OPENAI_API_KEY`
 
 ## Web usage
 
 1. Open `http://localhost:7979/`.
-2. On Home, select language and continue to `/minerals`.
-3. Open `http://localhost:7979/admin`.
-4. Login with password (env `ADMIN_PASSWORD`).
-5. In admin, upload an image (optionally add operator context).
-6. Click **Suggest Fields With OpenAI** to generate common name, description, and technical fields.
-7. Review/edit the English form and click **Publish Mineral**.
-8. Publish writes `mineral.en.json` and attempts translation into all 10 language files.
-9. Open the mineral page and generate report artifacts (`report.html` and `report.pdf`) in that mineral folder.
+2. Select language.
+3. Open `http://localhost:7979/admin` and authenticate.
+4. Upload an image (optional context).
+5. Generate AI draft, review fields, and publish.
+6. Publish writes localized metadata into SQLite and stores image files in `data/images`.
+7. Open `/catalog`, pick a record, and generate reports.
 
 ## API usage
 
-Generate a PDF + HTML report for one mineral:
+Generate a PDF + HTML report for one catalog slug:
 
 ```bash
 curl -X POST http://localhost:7979/api/minerals/mineral.silicate.0xabc123/pdf \
@@ -89,34 +154,18 @@ curl -X POST http://localhost:7979/api/minerals/mineral.silicate.0xabc123/pdf \
   }'
 ```
 
-Example response:
-
-```json
-{
-  "pdf_path": "/data/minerals/mineral.silicate.0xabc123/report.pdf",
-  "html_path": "/data/minerals/mineral.silicate.0xabc123/report.html",
-  "summary": "For resource geologist ..."
-}
-```
-
 ## Project structure
 
-- `src/main.rs`: HTTP routes, admin session/auth, OpenAI-assisted mineral drafting + publish.
-- `src/models.rs`: mineral models + filesystem loader (`data/minerals`).
-- `src/agent.rs`: analysis chain (metrics -> summary -> recommendations).
-- `src/pdf.rs`: HTML/LaTeX rendering and `latexmk` execution.
-- `src/web.rs`: Askama response + template structs.
-- `static/app.css`: shared UI design system and navigation styling.
-- `static/home.html`: language selector home page.
-- `static/index.html`: all-minerals catalog page.
-- `static/mineral.html`: mineral detail + report generation page.
-- `static/admin.html`: admin login + create mineral page.
-- `static/about.html`: about page.
-- `static/report.html`: generated static HTML report template.
-- `static/report.tex`: generated PDF template.
-- `static/logo_transparent.png`: preferred UI logo asset.
+- `src/main.rs`: routes, admin/auth, AI drafting/publish flow.
+- `src/models.rs`: SQLite schema, persistence, migrations, image linkage.
+- `src/agent.rs`: analysis chain.
+- `src/pdf.rs`: HTML/LaTeX rendering + `latexmk`.
+- `src/web.rs`: Askama response/template structs.
+- `static/all_minerals.html`: world-scale sketch page.
+- `static/index.html`: published catalog page.
+- `static/mineral.html`: detail + report generation page.
 
 ## Notes
 
-- If PDF generation fails, the UI shows `latexmk` output in-page.
-- Rendering is fully folder-backed: creating a valid mineral folder is sufficient for server-side discovery.
+- If PDF generation fails, the UI displays `latexmk` output.
+- Metadata authority is `data/minerals.db`; image authority is `data/images`.

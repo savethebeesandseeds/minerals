@@ -48,8 +48,9 @@
       </a>
       <a class="menu" href="/">{{ txt.nav_home }}</a>
       <a class="menu" href="/minerals">{{ txt.nav_all_minerals }}</a>
+      <a class="menu" href="/catalog">{{ txt.nav_catalog }}</a>
       <div class="top-tools">
-        <a class="login-link" href="/admin">{{ txt.nav_login }}</a>
+        <a class="login-link" href="/admin">{% if has_admin_session %}admin{% else %}{{ txt.nav_login }}{% endif %}</a>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">◐</button>
       </div>
     </div>

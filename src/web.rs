@@ -34,6 +34,7 @@ pub struct HomeTemplate {
     pub lang_code: String,
     pub lang_dir: String,
     pub txt: UiText,
+    pub has_admin_session: bool,
     pub language_options: Vec<LanguageOption>,
     pub current_lang_code: &'static str,
 }
@@ -44,7 +45,20 @@ pub struct IndexTemplate {
     pub lang_code: String,
     pub lang_dir: String,
     pub txt: UiText,
+    pub has_admin_session: bool,
     pub minerals: Vec<Mineral>,
+}
+
+#[derive(Template)]
+#[template(path = "all_minerals.html")]
+pub struct AllMineralsTemplate {
+    pub lang_code: String,
+    pub lang_dir: String,
+    pub txt: UiText,
+    pub has_admin_session: bool,
+    pub published_count: usize,
+    pub estimated_total: usize,
+    pub all_minerals_json: String,
 }
 
 #[derive(Template)]
@@ -53,6 +67,7 @@ pub struct MineralTemplate {
     pub lang_code: String,
     pub lang_dir: String,
     pub txt: UiText,
+    pub has_admin_session: bool,
     pub mineral: Mineral,
     pub request: ReportRequest,
     pub report: MineralReport,
@@ -81,6 +96,7 @@ pub struct AboutTemplate {
     pub lang_code: String,
     pub lang_dir: String,
     pub txt: UiText,
+    pub has_admin_session: bool,
 }
 
 #[derive(Template)]
@@ -89,6 +105,7 @@ pub struct InfoTemplate {
     pub lang_code: String,
     pub lang_dir: String,
     pub txt: UiText,
+    pub has_admin_session: bool,
     pub page_title: String,
     pub page_body: String,
 }
