@@ -1,4 +1,14 @@
 /target
+/.tmp
+/tmp
+/.archives
+**/__pycache__/
+/data/reports
+/data/backups
+/data/.report-work
+/data/.registry-ready-*.tmp
+*.db-shm
+*.db-wal
 .env.local
 .env.*.local
 **/*.aux

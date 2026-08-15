@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="{{ lang_code }}" dir="{{ lang_dir }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ txt.review.title }} | Minerals</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="stylesheet" href="/static/app.css" />
+  <script src="/static/theme.js" defer></script>
+  <style>
+    body {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      background:
+        radial-gradient(800px 260px at 80% -15%, #274b3b 0%, transparent 56%),
+        #0b0f0e;
+      color: #d8e2ec;
+    }
+
+    .topbar {
+      border-bottom: 1px solid #334b42;
+      background: rgba(11, 15, 14, 0.96);
+    }
+
+    .menu {
+      color: #c4d3cc;
+      border-color: #4a6258;
+      background: #151d1a;
+    }
+
+    .login-link {
+      color: #c4d3cc;
+    }
+
+    .theme-toggle {
+      border: 0;
+      border-radius: 0;
+      min-width: 0;
+      width: auto;
+      height: auto;
+      padding: 0;
+      background: transparent;
+      color: #c4d3cc;
+      letter-spacing: 0;
+      line-height: 1;
+    }
+
+    .theme-toggle:hover {
+      background: transparent;
+      color: #e2ede7;
+      text-decoration: underline;
+    }
+
+    .review-page {
+      display: grid;
+      gap: 0.58rem;
+      min-width: 0;
+    }
+
+    .panel,
+    .review-card {
+      min-width: 0;
+      max-width: 100%;
+      border: 1px solid #3b5047;
+      border-radius: 1px;
+      background: #121816;
+      box-shadow: none;
+    }
+
+    .review-header {
+      display: grid;
+      gap: 0.38rem;
+    }
+
+    .review-header-row,
+    .review-card-head,
+    .result-meta,
+    .pagination,
+    .decision-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.38rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .review-title {
+      margin: 0;
+      color: #edf4fa;
+      font-size: clamp(1.08rem, 3vw, 1.5rem);
+      letter-spacing: 0.035em;
+    }
+
+    .review-subtitle,
+    .hint {
+      margin: 0;
+      color: #97a9ba;
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+
+    .back-link,
+    .page-link {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      border: 1px solid #4a6258;
+      border-radius: 1px;
+      padding: 0.22rem 0.38rem;
+      background: #151d1a;
+      color: #c4d3cc;
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+
+    .back-link:hover,
+    .page-link:hover {
+      background: #1d2925;
+      color: #eef8f3;
+      text-decoration: none;
+    }
+
+    .status.ok {
+      border-color: #2f7050;
+      background: #10291d;
+      color: #b4e3c9;
+    }
+
+    .status.warn {
+      border-color: #8e5f53;
+      background: #2b1c18;
+      color: #f2c2b9;
+    }
+
+    .result-meta {
+      padding: 0.34rem 0.42rem;
+      color: #9db1c2;
+      font-size: 0.74rem;
+    }
+
+    .review-list {
+      display: grid;
+      gap: 0.58rem;
+    }
+
+    .review-card {
+      padding: 0.56rem;
+    }
+
+    .review-card-head {
+      align-items: flex-start;
+      padding-bottom: 0.42rem;
+      border-bottom: 1px dashed #405263;
+    }
+
+    .review-head-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.24rem;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .review-name {
+      margin: 0;
+      color: #edf4fa;
+      font-size: 1rem;
+      line-height: 1.25;
+    }
+
+    .review-revision {
+      flex: 0 0 auto;
+      border: 1px solid #4a6258;
+      padding: 0.09rem 0.25rem;
+      background: #12202d;
+      color: #b7cada;
+      font-size: 0.68rem;
+    }
+
+    .review-kind {
+      flex: 0 0 auto;
+      border: 1px solid #3a6d57;
+      padding: 0.09rem 0.25rem;
+      background: #163025;
+      color: #bfe4d2;
+      font-size: 0.68rem;
+    }
+
+    .current-profile-link {
+      color: #8fc7ab;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    .review-description {
+      margin: 0.46rem 0;
+      color: #c7d3de;
+      font-size: 0.8rem;
+      line-height: 1.48;
+      overflow-wrap: anywhere;
+    }
+
+    .record-facts,
+    .submission-facts,
+    .evidence-facts {
+      display: grid;
+      gap: 0.34rem;
+      margin: 0;
+    }
+
+    .record-facts {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      padding: 0.42rem 0;
+    }
+
+    .submission-facts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-bottom: 0.46rem;
+      padding: 0.38rem;
+      border: 1px solid #2f4039;
+      background: #0d151c;
+    }
+
+    .record-sections {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.38rem;
+      margin-bottom: 0.46rem;
+    }
+
+    .record-section {
+      min-width: 0;
+      border: 1px solid #2f4039;
+      padding: 0.38rem;
+      background: #0d151c;
+    }
+
+    .fact-list,
+    .synonym-list {
+      display: grid;
+      gap: 0.22rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .fact-list li {
+      display: grid;
+      grid-template-columns: minmax(7rem, 0.45fr) minmax(0, 1fr);
+      gap: 0.3rem;
+      padding-bottom: 0.2rem;
+      border-bottom: 1px dotted #304139;
+      color: #cbd7e1;
+      font-size: 0.72rem;
+      overflow-wrap: anywhere;
+    }
+
+    .fact-list li:last-child {
+      padding-bottom: 0;
+      border-bottom: 0;
+    }
+
+    .fact-name {
+      color: #91a7b8;
+      font-weight: 700;
+    }
+
+    .synonym-list {
+      grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+      margin-bottom: 0.46rem;
+    }
+
+    .synonym-list li {
+      border: 1px solid #34483f;
+      padding: 0.2rem 0.3rem;
+      background: #0d151c;
+      color: #cbd7e1;
+      font-size: 0.72rem;
+      overflow-wrap: anywhere;
+    }
+
+    .record-facts div,
+    .submission-facts div,
+    .evidence-facts div {
+      min-width: 0;
+    }
+
+    dt {
+      margin: 0 0 0.1rem;
+      color: #91a7b8;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    dd {
+      margin: 0;
+      color: #d8e2ec;
+      font-size: 0.76rem;
+      overflow-wrap: anywhere;
+    }
+
+    .section-title {
+      margin: 0 0 0.3rem;
+      color: #c8d8e5;
+      font-size: 0.76rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .evidence-list {
+      display: grid;
+      gap: 0.34rem;
+      margin-bottom: 0.48rem;
+    }
+
+    .evidence-item {
+      min-width: 0;
+      border: 1px solid #34483f;
+      padding: 0.38rem;
+      background: #0d151c;
+    }
+
+    .evidence-title {
+      margin: 0 0 0.3rem;
+      color: #dfe9f2;
+      font-size: 0.78rem;
+      overflow-wrap: anywhere;
+    }
+
+    .evidence-facts {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .claim-note,
+    .content-hash {
+      margin: 0.32rem 0 0;
+      color: #bccbd7;
+      font-size: 0.72rem;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    details.data-details {
+      margin-top: 0.34rem;
+      border: 1px solid #34483f;
+      background: #0a1116;
+    }
+
+    details.data-details > summary {
+      cursor: pointer;
+      padding: 0.3rem 0.38rem;
+      color: #bfe4d2;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.025em;
+    }
+
+    .payload-details {
+      margin-bottom: 0.48rem;
+    }
+
+    .payload-hint {
+      margin: 0;
+      padding: 0 0.38rem 0.3rem;
+      color: #91a7b8;
+      font-size: 0.7rem;
+      line-height: 1.4;
+    }
+
+    .json-block {
+      direction: ltr;
+      text-align: left;
+      max-height: 28rem;
+      margin: 0;
+      padding: 0.42rem;
+      border-top: 1px solid #2f4039;
+      overflow: auto;
+      background: #070d11;
+      color: #d2dee8;
+      font-family: inherit;
+      font-size: 0.7rem;
+      line-height: 1.45;
+      tab-size: 2;
+      white-space: pre;
+    }
+
+    .evidence-link {
+      display: inline-block;
+      margin-top: 0.3rem;
+      color: #8fc7ab;
+      font-size: 0.73rem;
+      overflow-wrap: anywhere;
+    }
+
+    .decision-form {
+      display: grid;
+      gap: 0.32rem;
+      padding-top: 0.46rem;
+      border-top: 1px dashed #405263;
+    }
+
+    label {
+      color: #c4d2de;
+      font-size: 0.76rem;
+      font-weight: 700;
+    }
+
+    textarea {
+      min-height: 84px;
+      resize: vertical;
+      border-color: #405264;
+      background: #0d151c;
+      color: #d8e5f0;
+      font-family: inherit;
+      line-height: 1.4;
+    }
+
+    button {
+      border-color: #3a6d57;
+      border-radius: 1px;
+      background: linear-gradient(180deg, #4a8c6f, #3a6d57);
+      letter-spacing: 0.02em;
+    }
+
+    button.danger {
+      border-color: #7a3e38;
+      background: linear-gradient(180deg, #8f4a43, #7a3e38);
+      color: #ffe8e4;
+    }
+
+    .decision-actions {
+      justify-content: flex-start;
+    }
+
+    .decision-note {
+      margin: 0;
+      color: #97a9ba;
+      font-size: 0.7rem;
+      line-height: 1.4;
+    }
+
+    .empty-state {
+      padding: 0.7rem;
+      color: #b7c7d4;
+      text-align: center;
+    }
+
+    .pagination {
+      justify-content: center;
+    }
+
+    .page-current {
+      color: #a9bccb;
+      font-size: 0.74rem;
+    }
+
+    .site-footer {
+      border-top: 1px solid #334b42;
+      background: rgba(11, 15, 14, 0.96);
+    }
+
+    .footer-col-title { color: #9db1c2; }
+    .footer-col-links a { color: #c4d2de; }
+    .footer-note { color: #8fa1b1; }
+    .footer-note a { color: #c7daec; }
+
+    [dir="rtl"] .record-facts,
+    [dir="rtl"] .submission-facts,
+    [dir="rtl"] .evidence-facts,
+    [dir="rtl"] .record-sections {
+      text-align: right;
+    }
+
+    @media (max-width: 840px) {
+      .record-facts,
+      .evidence-facts,
+      .record-sections {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      .record-facts,
+      .submission-facts,
+      .evidence-facts,
+      .record-sections {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .fact-list li {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .review-header-row,
+      .review-card-head,
+      .result-meta {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .review-head-actions {
+        justify-content: flex-start;
+      }
+
+      .back-link,
+      .decision-actions button {
+        justify-content: center;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Main">
+    <div class="topbar-inner">
+      <a class="brand" href="/" aria-label="Minerals Home">
+        <img
+          src="/static/logo_transparent.png"
+          alt="Minerals logo"
+          data-logo-light="/static/logo_transparent.png"
+          data-logo-dark="/static/logo_transparent_dark.png"
+        />
+        <span>MINERALS</span>
+      </a>
+      <a class="menu" href="/">{{ txt.nav_home }}</a>
+      <a class="menu" href="/minerals">{{ txt.nav_all_minerals }}</a>
+      <div class="top-tools">
+        <a class="login-link" href="/admin">{{ txt.nav_admin }}</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="{{ txt.registry.theme_toggle }}" aria-pressed="false">◐</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page review-page">
+    {% if !has_admin_session %}
+    <section class="panel empty-state">
+      <p>{{ txt.session_auth_required }}</p>
+      <a class="back-link" href="/admin">{{ txt.review.back_to_admin }}</a>
+    </section>
+    {% else %}
+    <section class="panel review-header">
+      <div class="review-header-row">
+        <div>
+          <h1 class="review-title">{{ txt.review.title }}</h1>
+          <p class="review-subtitle">{{ txt.review.subtitle }}</p>
+        </div>
+        <a class="back-link" href="/admin">{{ txt.review.back_to_admin }}</a>
+      </div>
+
+      {% match success_message %}
+      {% when Some with (msg) %}
+      <div class="status ok" role="status">{{ msg }}</div>
+      {% when None %}
+      {% endmatch %}
+
+      {% match error_message %}
+      {% when Some with (msg) %}
+      <div class="status warn" role="alert">{{ msg }}</div>
+      {% when None %}
+      {% endmatch %}
+    </section>
+
+    <section class="panel result-meta" aria-live="polite">
+      <span>
+        {{ txt.registry.pagination_showing }} {{ page_start }}–{{ page_end }}
+        {{ txt.registry.pagination_of }} {{ total_results }} {{ txt.review.pending_candidates }}
+      </span>
+      <span>{{ txt.registry.pagination_page }} {{ current_page }} {{ txt.registry.pagination_of }} {{ total_pages }}</span>
+    </section>
+
+    <section class="review-list" aria-label="{{ txt.review.title }}">
+      {% for review in reviews %}
+      <article class="review-card">
+        <header class="review-card-head">
+          <h2 class="review-name">{{ review.canonical_name }}</h2>
+          <div class="review-head-actions">
+            <span class="review-kind">{% if review.is_update %}{{ txt.review.updates_existing }}{% else %}{{ txt.review.creates_new }}{% endif %}</span>
+            <span class="review-revision">{{ txt.review.review_id }} {{ review.review_id }}</span>
+            <span class="review-revision">{{ txt.review.revision }} {{ review.revision }}</span>
+            {% if !review.current_profile_path.is_empty() %}
+            <a class="current-profile-link" href="{{ review.current_profile_path }}" target="_blank" rel="noopener">{{ txt.review.view_current }}</a>
+            {% endif %}
+          </div>
+        </header>
+
+        <p class="review-description">{% if review.description.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ review.description }}{% endif %}</p>
+
+        <dl class="record-facts">
+          <div>
+            <dt>{{ txt.review.slug }}</dt>
+            <dd dir="ltr">{{ review.slug }}</dd>
+          </div>
+          <div>
+            <dt>{{ txt.label_formula }}</dt>
+            <dd dir="auto">{% if review.formula.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ review.formula }}{% endif %}</dd>
+          </div>
+          <div>
+            <dt>{{ txt.label_family }}</dt>
+            <dd>{% if review.mineral_family.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ review.mineral_family }}{% endif %}</dd>
+          </div>
+          <div>
+            <dt>{{ txt.review.cas_number }}</dt>
+            <dd dir="auto">{% if review.cas_number.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ review.cas_number }}{% endif %}</dd>
+          </div>
+          <div>
+            <dt>{{ txt.registry.status }}</dt>
+            <dd>{{ review.scientific_status_display }}</dd>
+          </div>
+          <div>
+            <dt>{{ txt.review.quality }}</dt>
+            <dd>{{ review.quality_display }}</dd>
+          </div>
+          <div>
+            <dt>{{ txt.review.record_license }}</dt>
+            <dd dir="auto">{% if review.record_license.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ review.record_license }}{% endif %}</dd>
+          </div>
+        </dl>
+
+        <section aria-label="{{ txt.review.synonyms }}">
+          <h3 class="section-title">{{ txt.review.synonyms }}</h3>
+          <ul class="synonym-list">
+            {% for synonym in review.synonyms %}
+            <li>{{ synonym }}</li>
+            {% else %}
+            <li>{{ txt.registry.not_specified }}</li>
+            {% endfor %}
+          </ul>
+        </section>
+
+        <div class="record-sections">
+          <section class="record-section" aria-label="{{ txt.registry.identifiers }}">
+            <h3 class="section-title">{{ txt.registry.identifiers }}</h3>
+            <ul class="fact-list">
+              {% for fact in review.identifiers %}
+              <li><span class="fact-name">{{ fact.name }}</span><span>{{ fact.value }}</span></li>
+              {% else %}
+              <li><span>{{ txt.registry.not_specified }}</span></li>
+              {% endfor %}
+            </ul>
+          </section>
+
+          <section class="record-section" aria-label="{{ txt.registry.properties }}">
+            <h3 class="section-title">{{ txt.registry.properties }}</h3>
+            <ul class="fact-list">
+              {% for fact in review.properties %}
+              <li><span class="fact-name">{{ fact.name }}</span><span>{{ fact.value }}</span></li>
+              {% else %}
+              <li><span>{{ txt.registry.not_specified }}</span></li>
+              {% endfor %}
+            </ul>
+          </section>
+
+          <section class="record-section" aria-label="{{ txt.registry.safety }}">
+            <h3 class="section-title">{{ txt.registry.safety }}</h3>
+            <ul class="fact-list">
+              {% for fact in review.safety %}
+              <li><span class="fact-name">{{ fact.name }}</span><span>{{ fact.value }}</span></li>
+              {% else %}
+              <li><span>{{ txt.registry.not_specified }}</span></li>
+              {% endfor %}
+            </ul>
+          </section>
+        </div>
+
+        <dl class="submission-facts">
+          <div>
+            <dt>{{ txt.review.submitted_source }}</dt>
+            <dd>{{ review.source_display }}</dd>
+          </div>
+          <div>
+            <dt>{{ txt.review.submitted_at }}</dt>
+            <dd>{{ review.submitted_at_display }}</dd>
+          </div>
+        </dl>
+
+        <section aria-label="{{ txt.registry.evidence }}">
+          <h3 class="section-title">{{ txt.registry.evidence }}</h3>
+          <div class="evidence-list">
+            {% for source in review.evidence %}
+            <article class="evidence-item">
+              <h4 class="evidence-title">{{ source.title }}</h4>
+              <dl class="evidence-facts">
+                <div>
+                  <dt>{{ txt.review.publisher }}</dt>
+                  <dd>{% if source.publisher.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ source.publisher }}{% endif %}</dd>
+                </div>
+                <div>
+                  <dt>{{ txt.review.claim_scope }}</dt>
+                  <dd>{{ source.claim_scope_display }}</dd>
+                </div>
+                <div>
+                  <dt>{{ txt.review.claim_value }}</dt>
+                  <dd>{% if source.claim_value_display.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ source.claim_value_display }}{% endif %}</dd>
+                </div>
+                <div>
+                  <dt>{{ txt.review.claim_locator }}</dt>
+                  <dd>{% if source.claim_locator.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ source.claim_locator }}{% endif %}</dd>
+                </div>
+                <div>
+                  <dt>{{ txt.review.confidence }}</dt>
+                  <dd>{{ source.confidence_display }}</dd>
+                </div>
+                <div>
+                  <dt>{{ txt.review.evidence_state }}</dt>
+                  <dd>{{ source.review_status_display }}</dd>
+                </div>
+                <div>
+                  <dt>{{ txt.registry.source_license }}</dt>
+                  <dd dir="auto">{% if source.source_license.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ source.source_license }}{% endif %}</dd>
+                </div>
+                <div>
+                  <dt>{{ txt.review.retrieved_at }}</dt>
+                  <dd dir="auto">{% if source.retrieved_at_display.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ source.retrieved_at_display }}{% endif %}</dd>
+                </div>
+              </dl>
+              <p class="claim-note"><strong>{{ txt.review.claim_note }}:</strong> {% if source.claim_note.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ source.claim_note }}{% endif %}</p>
+              <p class="content-hash"><strong>{{ txt.review.content_hash }}:</strong> <bdi>{% if source.content_hash.is_empty() %}{{ txt.registry.not_specified }}{% else %}{{ source.content_hash }}{% endif %}</bdi></p>
+              <a class="evidence-link" href="{{ source.canonical_url }}" target="_blank" rel="noopener noreferrer">{{ txt.registry.open_source }}</a>
+              <details class="data-details">
+                <summary>{{ txt.review.claim_details }}</summary>
+                <pre class="json-block">{{ source.claim_json }}</pre>
+              </details>
+            </article>
+            {% else %}
+            <div class="status warn">{{ txt.registry.evidence_empty }}</div>
+            {% endfor %}
+          </div>
+        </section>
+
+        <details class="data-details payload-details">
+          <summary>{{ txt.review.complete_payload }}</summary>
+          <p class="payload-hint">{{ txt.review.complete_payload_hint }}</p>
+          <pre class="json-block">{{ review.payload_json }}</pre>
+        </details>
+
+        <form class="decision-form" method="post" action="/admin/minerals/review">
+          <input type="hidden" name="review_id" value="{{ review.review_id }}" />
+          <label for="operator-note-{{ review.review_id }}">{{ txt.review.operator_note }}</label>
+          <textarea
+            id="operator-note-{{ review.review_id }}"
+            name="operator_note"
+            maxlength="2000"
+            placeholder="{{ txt.review.operator_note_placeholder }}"
+            autocomplete="off"
+            required
+          ></textarea>
+          <p class="decision-note">{{ txt.review.note_required }} {{ txt.review.decision_warning }}</p>
+          <div class="decision-actions">
+            <button type="submit" name="action" value="approve">{{ txt.review.approve }}</button>
+            <button class="danger" type="submit" name="action" value="reject">{{ txt.review.reject }}</button>
+          </div>
+        </form>
+      </article>
+      {% else %}
+      <section class="panel empty-state">{{ txt.review.empty }}</section>
+      {% endfor %}
+    </section>
+
+    {% if total_pages > 1 %}
+    <nav class="pagination" aria-label="{{ txt.registry.pagination_page }}">
+      {% if has_previous_page %}
+      <a class="page-link" href="/admin/reviews?page={{ previous_page }}">{{ txt.registry.pagination_previous }}</a>
+      {% endif %}
+      <span class="page-current">{{ txt.registry.pagination_page }} {{ current_page }} {{ txt.registry.pagination_of }} {{ total_pages }}</span>
+      {% if has_next_page %}
+      <a class="page-link" href="/admin/reviews?page={{ next_page }}">{{ txt.registry.pagination_next }}</a>
+      {% endif %}
+    </nav>
+    {% endif %}
+    {% endif %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <nav class="footer-col-links" aria-label="Footer" style="display:flex; flex-wrap:wrap; gap:0.3rem 0.8rem;">
+        <a href="/">{{ txt.nav_home }}</a>
+        <a href="/minerals">{{ txt.nav_all_minerals }}</a>
+        <a href="/about">{{ txt.footer_about_us }}</a>
+      </nav>
+      <p class="footer-note">{{ txt.footer_powered_trust_by }} <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,929 @@
+{
+  "artifact_sha256": "sha256:60bcc403b0c23f06b8089edeed03785c4d042d4dc1a40e4da86af31e28210680",
+  "format": "waajacu-ima-extraction-overrides-v1",
+  "formula_transformations": [
+    {
+      "canonical_name": "Gachingite",
+      "ordinal": 1968,
+      "page": 79,
+      "page_row": 3,
+      "raw_formula": "Au(Te1-xSex) (0.2 \uf0bb x \uf0a3 0.5)",
+      "replacements": [
+        {
+          "count": 1,
+          "from": "\uf0bb",
+          "to": "\u2248"
+        },
+        {
+          "count": 1,
+          "from": "\uf0a3",
+          "to": "\u2264"
+        }
+      ],
+      "resolved_formula": "Au(Te1-xSex) (0.2 \u2248 x \u2264 0.5)"
+    },
+    {
+      "canonical_name": "Orcelite",
+      "ordinal": 4087,
+      "page": 160,
+      "page_row": 5,
+      "raw_formula": "Ni5-xAs2 (x \uf0bb 0.25)",
+      "replacements": [
+        {
+          "count": 1,
+          "from": "\uf0bb",
+          "to": "\u2248"
+        }
+      ],
+      "resolved_formula": "Ni5-xAs2 (x \u2248 0.25)"
+    },
+    {
+      "canonical_name": "Sluzhenikinite",
+      "ordinal": 5152,
+      "page": 201,
+      "page_row": 16,
+      "raw_formula": "Pd15(Sb7-xSnx) (3 \uf0a3\uf020x \uf0a3 4)",
+      "replacements": [
+        {
+          "count": 2,
+          "from": "\uf0a3",
+          "to": "\u2264"
+        },
+        {
+          "count": 1,
+          "from": "\uf020",
+          "to": " "
+        }
+      ],
+      "resolved_formula": "Pd15(Sb7-xSnx) (3 \u2264 x \u2264 4)"
+    },
+    {
+      "canonical_name": "Calciopharmacoalumite",
+      "ordinal": 831,
+      "page": 35,
+      "page_row": 16,
+      "raw_formula": "Ca0.5Al4(AsO4)3(\u041e\u041d)4\u22195H2O",
+      "replacements": [
+        {
+          "count": 1,
+          "from": "\u041e",
+          "to": "O"
+        },
+        {
+          "count": 1,
+          "from": "\u041d",
+          "to": "H"
+        }
+      ],
+      "resolved_formula": "Ca0.5Al4(AsO4)3(OH)4\u22195H2O"
+    },
+    {
+      "canonical_name": "Hydroxynatropyrochlore",
+      "ordinal": 2520,
+      "page": 99,
+      "page_row": 20,
+      "raw_formula": "(Na,\u0421a,Ce)2Nb2O6(OH)",
+      "replacements": [
+        {
+          "count": 1,
+          "from": "\u0421",
+          "to": "C"
+        }
+      ],
+      "resolved_formula": "(Na,Ca,Ce)2Nb2O6(OH)"
+    },
+    {
+      "canonical_name": "Zolotarevite",
+      "ordinal": 6211,
+      "page": 243,
+      "page_row": 1,
+      "raw_formula": "Na5Zr[Si6O15(\u041e\u041d)3]\u00b73H2O",
+      "replacements": [
+        {
+          "count": 1,
+          "from": "\u041e",
+          "to": "O"
+        },
+        {
+          "count": 1,
+          "from": "\u041d",
+          "to": "H"
+        }
+      ],
+      "resolved_formula": "Na5Zr[Si6O15(OH)3]\u00b73H2O"
+    }
+  ],
+  "review_policy": "artifact-bound-rendered-source-review-v1",
+  "whitespace_resolutions": [
+    {
+      "field": "first_reference",
+      "ordinal": 223,
+      "page": 11,
+      "page_row": 24,
+      "pdfplumber": "Annalen der Physik und Physikalischen Chemie, 73/NF-43 (1823), 173",
+      "pymupdf": "Annalen der Physik und Physikalischen Chemie , 73/NF-43 (1823), 173",
+      "resolved": "Annalen der Physik und Physikalischen Chemie, 73/NF-43 (1823), 173"
+    },
+    {
+      "field": "first_reference",
+      "ordinal": 262,
+      "page": 13,
+      "page_row": 9,
+      "pdfplumber": "Neues Jahrbuch f\u00fcr Mineralogie, Geologie und Pal\u00e4ontologie (1872), 930",
+      "pymupdf": "Neues Jahrbuch f\u00fcr Mineralogie, Geologie und Pal \u00e4ontologie (1872), 930",
+      "resolved": "Neues Jahrbuch f\u00fcr Mineralogie, Geologie und Pal\u00e4ontologie (1872), 930"
+    },
+    {
+      "field": "formula",
+      "ordinal": 646,
+      "page": 28,
+      "page_row": 8,
+      "pdfplumber": "Fe3+4(PO4)3(SO4)(OH)(H2O)10\u00b7nH2O (5 \u2264 n \u2264 14)",
+      "pymupdf": "Fe3+4(PO4)3(SO4)(OH)(H2O)10\u00b7n H2O (5 \u2264 n \u2264 14)",
+      "resolved": "Fe3+4(PO4)3(SO4)(OH)(H2O)10\u00b7nH2O (5 \u2264 n \u2264 14)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 679,
+      "page": 29,
+      "page_row": 15,
+      "pdfplumber": "SiO2\u2219nCxH2x+2",
+      "pymupdf": "SiO2\u2219n CxH2x+2",
+      "resolved": "SiO2\u2219nCxH2x+2"
+    },
+    {
+      "field": "formula",
+      "ordinal": 701,
+      "page": 30,
+      "page_row": 9,
+      "pdfplumber": "Ca6.15Na0.85REE2.08[B6O7(OH)3(O,OH)3]4\u00b7H2O",
+      "pymupdf": "Ca6.15Na0.85REE 2.08[B6O7(OH)3(O,OH)3]4\u00b7H2O",
+      "resolved": "Ca6.15Na0.85REE2.08[B6O7(OH)3(O,OH)3]4\u00b7H2O"
+    },
+    {
+      "field": "formula",
+      "ordinal": 778,
+      "page": 33,
+      "page_row": 10,
+      "pdfplumber": "(Ce,REE)3(Na,H2O)6MnSi9Be5(O,OH)30F4",
+      "pymupdf": "(Ce,REE )3(Na,H2O)6MnSi9Be5(O,OH)30F4",
+      "resolved": "(Ce,REE)3(Na,H2O)6MnSi9Be5(O,OH)30F4"
+    },
+    {
+      "field": "formula",
+      "ordinal": 779,
+      "page": 33,
+      "page_row": 11,
+      "pdfplumber": "(Y,REE,Ca)3(Na,Ca)6MnSi9Be5(O,F,OH)34",
+      "pymupdf": "(Y,REE ,Ca)3(Na,Ca)6MnSi9Be5(O,F,OH)34",
+      "resolved": "(Y,REE,Ca)3(Na,Ca)6MnSi9Be5(O,F,OH)34"
+    },
+    {
+      "field": "formula",
+      "ordinal": 792,
+      "page": 33,
+      "page_row": 24,
+      "pdfplumber": "Ba5(Ca,REE,Y)22(Ti,Nb)18(SiO4)4[(PO4),(SiO4)]4 (BO3)9O22[(OH),F]43(H2O)1.5",
+      "pymupdf": "Ba5(Ca,REE ,Y)22(Ti,Nb)18(SiO4)4[(PO4),(SiO4)]4 (BO3)9O22[(OH),F]43(H2O)1.5",
+      "resolved": "Ba5(Ca,REE,Y)22(Ti,Nb)18(SiO4)4[(PO4),(SiO4)]4 (BO3)9O22[(OH),F]43(H2O)1.5"
+    },
+    {
+      "field": "formula",
+      "ordinal": 803,
+      "page": 34,
+      "page_row": 11,
+      "pdfplumber": "Al2(H2O)(OH)4\u00b7n(Cl,OH,H2O)",
+      "pymupdf": "Al2(H2O)(OH)4\u00b7n (Cl,OH,H2O)",
+      "resolved": "Al2(H2O)(OH)4\u00b7n(Cl,OH,H2O)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 841,
+      "page": 36,
+      "page_row": 1,
+      "pdfplumber": "(Y,REE,Ca)2(B,Be)2(SiO4)2(OH,O)2",
+      "pymupdf": "(Y,REE ,Ca)2(B,Be)2(SiO4)2(OH,O)2",
+      "resolved": "(Y,REE,Ca)2(B,Be)2(SiO4)2(OH,O)2"
+    },
+    {
+      "field": "formula",
+      "ordinal": 907,
+      "page": 38,
+      "page_row": 8,
+      "pdfplumber": "(Ni1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)",
+      "pymupdf": "(Ni1-x Alx )(SO4)x /2(OH)2\u00b7n H2O (x < 0.5, n > 3x /2)",
+      "resolved": "(Ni1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 1023,
+      "page": 43,
+      "page_row": 4,
+      "pdfplumber": "SiO2\u00b7n(CH4,C2H6,C3H8,C4H10) (nmax = 3/17)",
+      "pymupdf": "SiO2\u00b7n (CH4,C2H6,C3H8,C4H10) (n max = 3/17)",
+      "resolved": "SiO2\u00b7n(CH4,C2H6,C3H8,C4H10) (nmax = 3/17)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 1062,
+      "page": 44,
+      "page_row": 18,
+      "pdfplumber": "Pb15-2xSb14+2xS36Ox (x~0.2)",
+      "pymupdf": "Pb15-2xSb14+2xS36Ox (x ~0.2)",
+      "resolved": "Pb15-2xSb14+2xS36Ox (x~0.2)"
+    },
+    {
+      "field": "first_reference",
+      "ordinal": 1287,
+      "page": 53,
+      "page_row": 16,
+      "pdfplumber": "Neues Jahrbuch f\u00fcr Mineralogie, Geologie und Pal\u00e4ontologie 2 (1893), 125",
+      "pymupdf": "Neues Jahrbuch f\u00fcr Mineralogie, Geologie und Pal \u00e4ontologie 2 (1893), 125",
+      "resolved": "Neues Jahrbuch f\u00fcr Mineralogie, Geologie und Pal\u00e4ontologie 2 (1893), 125"
+    },
+    {
+      "field": "formula",
+      "ordinal": 1349,
+      "page": 55,
+      "page_row": 25,
+      "pdfplumber": "(Na0.5REE0.25Ca0.25)(Ca0.75REE0.25)Sr1.5 (CaNa0.25REE0.25)(PO4)3F0.5(OH)0.5",
+      "pymupdf": "(Na0.5REE 0.25Ca0.25)(Ca0.75REE 0.25)Sr1.5 (CaNa0.25REE 0.25)(PO4)3F0.5(OH)0.5",
+      "resolved": "(Na0.5REE0.25Ca0.25)(Ca0.75REE0.25)Sr1.5 (CaNa0.25REE0.25)(PO4)3F0.5(OH)0.5"
+    },
+    {
+      "field": "formula",
+      "ordinal": 1364,
+      "page": 56,
+      "page_row": 15,
+      "pdfplumber": "Na8[Al6Si6O24](PO4,CO3)1-x\u00b73H2O (x< 0.5)",
+      "pymupdf": "Na8[Al6Si6O24](PO4,CO3)1-x \u00b73H2O (x < 0.5)",
+      "resolved": "Na8[Al6Si6O24](PO4,CO3)1-x\u00b73H2O (x< 0.5)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 1474,
+      "page": 60,
+      "page_row": 20,
+      "pdfplumber": "Na8Ce4+(La,REE)2(PO4)6",
+      "pymupdf": "Na8Ce4+(La,REE )2(PO4)6",
+      "resolved": "Na8Ce4+(La,REE)2(PO4)6"
+    },
+    {
+      "field": "formula",
+      "ordinal": 1506,
+      "page": 62,
+      "page_row": 1,
+      "pdfplumber": "NaxMn2+6(Si,Al)10O24(OH)4(H2O)n (x = 1-2; n = 7-11)",
+      "pymupdf": "NaxMn2+6(Si,Al)10O24(OH)4( H2O)n (x = 1-2; n = 7-11)",
+      "resolved": "NaxMn2+6(Si,Al)10O24(OH)4(H2O)n (x = 1-2; n = 7-11)"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 1754,
+      "page": 71,
+      "page_row": 3,
+      "pdfplumber": "Ferroh\u00f6gbomite-2N2S",
+      "pymupdf": "Ferroh\u00f6gbomite-2N 2S",
+      "resolved": "Ferroh\u00f6gbomite-2N2S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 1766,
+      "page": 71,
+      "page_row": 15,
+      "pdfplumber": "Ferronigerite-2N1S",
+      "pymupdf": "Ferronigerite-2N 1S",
+      "resolved": "Ferronigerite-2N1S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 1767,
+      "page": 71,
+      "page_row": 16,
+      "pdfplumber": "Ferronigerite-6N6S",
+      "pymupdf": "Ferronigerite-6N 6S",
+      "resolved": "Ferronigerite-6N6S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 1785,
+      "page": 72,
+      "page_row": 11,
+      "pdfplumber": "Ferrotaaffeite-2N'2S",
+      "pymupdf": "Ferrotaaffeite-2N' 2S",
+      "resolved": "Ferrotaaffeite-2N'2S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 1786,
+      "page": 72,
+      "page_row": 12,
+      "pdfplumber": "Ferrotaaffeite-6N'3S",
+      "pymupdf": "Ferrotaaffeite-6N' 3S",
+      "resolved": "Ferrotaaffeite-6N'3S"
+    },
+    {
+      "field": "formula",
+      "ordinal": 1818,
+      "page": 73,
+      "page_row": 18,
+      "pdfplumber": "K4Ca2[AlSi7O17(O2-x(OH)x)][(H2O)2-x(OH)x]Cl (x = 0-2)",
+      "pymupdf": "K4Ca2[AlSi7O17(O2-x (OH)x )][(H2O)2-x (OH)x ]Cl (x = 0-2)",
+      "resolved": "K4Ca2[AlSi7O17(O2-x(OH)x)][(H2O)2-x(OH)x]Cl (x = 0-2)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 1856,
+      "page": 75,
+      "page_row": 3,
+      "pdfplumber": "(Ca,REE)5(SiO4,PO4)3F",
+      "pymupdf": "(Ca,REE )5(SiO4,PO4)3F",
+      "resolved": "(Ca,REE)5(SiO4,PO4)3F"
+    },
+    {
+      "field": "formula",
+      "ordinal": 1877,
+      "page": 75,
+      "page_row": 24,
+      "pdfplumber": "(Na,Pb,Ca,REE,U)2Nb2O6F",
+      "pymupdf": "(Na,Pb,Ca,REE ,U)2Nb2O6F",
+      "resolved": "(Na,Pb,Ca,REE,U)2Nb2O6F"
+    },
+    {
+      "field": "formula",
+      "ordinal": 1998,
+      "page": 80,
+      "page_row": 4,
+      "pdfplumber": "KxMn2+6(Si,Al)10O24(OH)4(H2O)n (x = 1-2; n = 7-11)",
+      "pymupdf": "KxMn2+6(Si,Al)10O24(OH)4( H2O)n (x = 1-2; n = 7-11)",
+      "resolved": "KxMn2+6(Si,Al)10O24(OH)4(H2O)n (x = 1-2; n = 7-11)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2032,
+      "page": 81,
+      "page_row": 9,
+      "pdfplumber": "BiMo6+(2-5x)Mo5+6xO7(OH)(H2O) [0 < x < 0.4]",
+      "pymupdf": "BiMo6+(2-5x)Mo5+6x O7(OH)(H2O) [0 < x < 0.4]",
+      "resolved": "BiMo6+(2-5x)Mo5+6xO7(OH)(H2O) [0 < x < 0.4]"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2039,
+      "page": 81,
+      "page_row": 16,
+      "pdfplumber": "Na12(Mn,Sr,REE)3Ca6Fe2+3Zr3NbSi25O76Cl2\u00b7H2O",
+      "pymupdf": "Na12(Mn,Sr,REE )3Ca6Fe2+3Zr3NbSi25O76Cl2\u00b7H2O",
+      "resolved": "Na12(Mn,Sr,REE)3Ca6Fe2+3Zr3NbSi25O76Cl2\u00b7H2O"
+    },
+    {
+      "field": "first_reference",
+      "ordinal": 2051,
+      "page": 82,
+      "page_row": 1,
+      "pdfplumber": "Metall und Erz 19 (1922), 324",
+      "pymupdf": "Metall und Er z 19 (1922), 324",
+      "resolved": "Metall und Erz 19 (1922), 324"
+    },
+    {
+      "field": "second_reference",
+      "ordinal": 2068,
+      "page": 82,
+      "page_row": 18,
+      "pdfplumber": "American Mineralogist 59 (1974), 1166",
+      "pymupdf": "American Mineralogis t 59 (1974), 1166",
+      "resolved": "American Mineralogist 59 (1974), 1166"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2091,
+      "page": 83,
+      "page_row": 15,
+      "pdfplumber": "(Zn1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)",
+      "pymupdf": "(Zn1-x Alx )(SO4)x /2(OH)2\u00b7n H2O (x < 0.5, n > 3x /2)",
+      "resolved": "(Zn1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2244,
+      "page": 89,
+      "page_row": 9,
+      "pdfplumber": "Al2Si2O5(OH)4\u00b7nH2O",
+      "pymupdf": "Al2Si2O5(OH)4\u00b7n H2O",
+      "resolved": "Al2Si2O5(OH)4\u00b7nH2O"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2309,
+      "page": 91,
+      "page_row": 23,
+      "pdfplumber": "(Ca,REE)4Ce2Al\u26102(B4Si4O22)(OH)2",
+      "pymupdf": "(Ca,REE )4Ce2Al\u26102(B4Si4O22)(OH)2",
+      "resolved": "(Ca,REE)4Ce2Al\u26102(B4Si4O22)(OH)2"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2310,
+      "page": 91,
+      "page_row": 24,
+      "pdfplumber": "(Ca,REE)4Y2Al\u26102(B4Si4O22)(OH)2",
+      "pymupdf": "(Ca,REE )4Y2Al\u26102(B4Si4O22)(OH)2",
+      "resolved": "(Ca,REE)4Y2Al\u26102(B4Si4O22)(OH)2"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2362,
+      "page": 93,
+      "page_row": 21,
+      "pdfplumber": "(Sr,REE)4Zr(Ti,Fe3+,Fe2+)2Ti2(Si2O7)2O8",
+      "pymupdf": "(Sr,REE )4Zr(Ti,Fe3+,Fe2+)2Ti2(Si2O7)2O8",
+      "resolved": "(Sr,REE)4Zr(Ti,Fe3+,Fe2+)2Ti2(Si2O7)2O8"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2413,
+      "page": 95,
+      "page_row": 20,
+      "pdfplumber": "(Ni1-xFe3+x)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n < 3x/2)",
+      "pymupdf": "(Ni1-x Fe3+x )(SO4)x /2(OH)2\u00b7n H2O (x < 0.5, n < 3x /2)",
+      "resolved": "(Ni1-xFe3+x)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n < 3x/2)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2452,
+      "page": 97,
+      "page_row": 4,
+      "pdfplumber": "(Y,REE,Ca,Na)15(Al,Fe3+)CaxAs3+1-x(Si,As5+) Si6B3(O,F)48",
+      "pymupdf": "(Y,REE ,Ca,Na)15(Al,Fe3+)CaxAs3+1-x(Si,As5+) Si6B3(O,F)48",
+      "resolved": "(Y,REE,Ca,Na)15(Al,Fe3+)CaxAs3+1-x(Si,As5+) Si6B3(O,F)48"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2473,
+      "page": 97,
+      "page_row": 25,
+      "pdfplumber": "(Ni1-xFe3+x)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)",
+      "pymupdf": "(Ni1-x Fe3+x )(SO4)x /2(OH)2\u00b7n H2O (x < 0.5, n > 3x /2)",
+      "resolved": "(Ni1-xFe3+x)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2493,
+      "page": 98,
+      "page_row": 18,
+      "pdfplumber": "(Cu1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)",
+      "pymupdf": "(Cu1-x Alx )(SO4)x /2(OH)2\u00b7n H2O (x < 0.5, n > 3x /2)",
+      "resolved": "(Cu1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2518,
+      "page": 99,
+      "page_row": 18,
+      "pdfplumber": "(Mn,Th,Na,Ca,REE)2(Nb,Ti)2O6(OH)",
+      "pymupdf": "(Mn,Th,Na,Ca,REE )2(Nb,Ti)2O6(OH)",
+      "resolved": "(Mn,Th,Na,Ca,REE)2(Nb,Ti)2O6(OH)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2539,
+      "page": 100,
+      "page_row": 8,
+      "pdfplumber": "(Na,H3O)15(Ca,Mn,REE)6Fe3+2Zr3Si24O66 (O,OH)6Cl\u00b7nH2O",
+      "pymupdf": "(Na,H3O)15(Ca,Mn,REE )6Fe3+2Zr3Si24O66 (O,OH)6Cl\u00b7nH2O",
+      "resolved": "(Na,H3O)15(Ca,Mn,REE)6Fe3+2Zr3Si24O66 (O,OH)6Cl\u00b7nH2O"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2639,
+      "page": 104,
+      "page_row": 5,
+      "pdfplumber": "Ni2+1-xCo3+x(OH)2-x(SO4)x\u00b7nH2O [x \u2264 \u2153; n \u2264 (1-x)]",
+      "pymupdf": "Ni2+1-xCo3+x(OH)2-x(SO4)x\u00b7n H2O [x \u2264 \u2153; n \u2264 (1-x )]",
+      "resolved": "Ni2+1-xCo3+x(OH)2-x(SO4)x\u00b7nH2O [x \u2264 \u2153; n \u2264 (1-x)]"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2835,
+      "page": 111,
+      "page_row": 15,
+      "pdfplumber": "(Na,REE)15(Ca,REE)6Mn3Zr3Nb(Si25O73)(O,OH, H2O)3(F,Cl)2",
+      "pymupdf": "(Na,REE )15(Ca,REE )6Mn3Zr3Nb(Si25O73)(O,OH, H2O)3(F,Cl)2",
+      "resolved": "(Na,REE)15(Ca,REE)6Mn3Zr3Nb(Si25O73)(O,OH, H2O)3(F,Cl)2"
+    },
+    {
+      "field": "formula",
+      "ordinal": 2914,
+      "page": 114,
+      "page_row": 12,
+      "pdfplumber": "Na3(Ca5Na)Si16O36(OH)4F2\u2219(14-x)H2O (x ~ 5)",
+      "pymupdf": "Na3(Ca5Na)Si16O36(OH)4F2\u2219(14-x )H2O (x ~ 5)",
+      "resolved": "Na3(Ca5Na)Si16O36(OH)4F2\u2219(14-x)H2O (x ~ 5)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 3083,
+      "page": 121,
+      "page_row": 10,
+      "pdfplumber": "NaFe2+(REE7Ca5Y3)(SiO4)4(Si3B2PO18)(BO3)F11",
+      "pymupdf": "NaFe2+(REE 7Ca5Y3)(SiO4)4(Si3B2PO18)(BO3)F11",
+      "resolved": "NaFe2+(REE7Ca5Y3)(SiO4)4(Si3B2PO18)(BO3)F11"
+    },
+    {
+      "field": "first_reference",
+      "ordinal": 3225,
+      "page": 126,
+      "page_row": 26,
+      "pdfplumber": "Mineralogiceskij Zhurnal 5(1) (1983), 91",
+      "pymupdf": "Mineralogiceskij Zhurna l 5(1) (1983), 91",
+      "resolved": "Mineralogiceskij Zhurnal 5(1) (1983), 91"
+    },
+    {
+      "field": "first_reference",
+      "ordinal": 3226,
+      "page": 126,
+      "page_row": 27,
+      "pdfplumber": "Mineralogiceskij Zhurnal 12(1) (1990), 94",
+      "pymupdf": "Mineralogiceskij Zhurna l 12(1) (1990), 94",
+      "resolved": "Mineralogiceskij Zhurnal 12(1) (1990), 94"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 3319,
+      "page": 130,
+      "page_row": 14,
+      "pdfplumber": "Magnesiobeltrandoite-2N3S",
+      "pymupdf": "Magnesiobeltrandoite-2N 3S",
+      "resolved": "Magnesiobeltrandoite-2N3S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 3341,
+      "page": 131,
+      "page_row": 10,
+      "pdfplumber": "Magnesioh\u00f6gbomite-2N2S",
+      "pymupdf": "Magnesioh\u00f6gbomite-2N 2S",
+      "resolved": "Magnesioh\u00f6gbomite-2N2S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 3342,
+      "page": 131,
+      "page_row": 11,
+      "pdfplumber": "Magnesioh\u00f6gbomite-2N3S",
+      "pymupdf": "Magnesioh\u00f6gbomite-2N 3S",
+      "resolved": "Magnesioh\u00f6gbomite-2N3S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 3343,
+      "page": 131,
+      "page_row": 12,
+      "pdfplumber": "Magnesioh\u00f6gbomite-2N4S",
+      "pymupdf": "Magnesioh\u00f6gbomite-2N 4S",
+      "resolved": "Magnesioh\u00f6gbomite-2N4S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 3344,
+      "page": 131,
+      "page_row": 13,
+      "pdfplumber": "Magnesioh\u00f6gbomite-6N12S",
+      "pymupdf": "Magnesioh\u00f6gbomite-6N 12S",
+      "resolved": "Magnesioh\u00f6gbomite-6N12S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 3345,
+      "page": 131,
+      "page_row": 14,
+      "pdfplumber": "Magnesioh\u00f6gbomite-6N6S",
+      "pymupdf": "Magnesioh\u00f6gbomite-6N 6S",
+      "resolved": "Magnesioh\u00f6gbomite-6N6S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 3353,
+      "page": 131,
+      "page_row": 22,
+      "pdfplumber": "Magnesionigerite-2N1S",
+      "pymupdf": "Magnesionigerite-2N 1S",
+      "resolved": "Magnesionigerite-2N1S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 3354,
+      "page": 131,
+      "page_row": 23,
+      "pdfplumber": "Magnesionigerite-6N6S",
+      "pymupdf": "Magnesionigerite-6N 6S",
+      "resolved": "Magnesionigerite-6N6S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 3360,
+      "page": 132,
+      "page_row": 4,
+      "pdfplumber": "Magnesiotaaffeite-2N'2S",
+      "pymupdf": "Magnesiotaaffeite-2N '2S",
+      "resolved": "Magnesiotaaffeite-2N'2S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 3361,
+      "page": 132,
+      "page_row": 5,
+      "pdfplumber": "Magnesiotaaffeite-6N'3S",
+      "pymupdf": "Magnesiotaaffeite-6N' 3S",
+      "resolved": "Magnesiotaaffeite-6N'3S"
+    },
+    {
+      "field": "formula",
+      "ordinal": 3468,
+      "page": 136,
+      "page_row": 10,
+      "pdfplumber": "Ca2Pb7(Si36Al12)O99\u00b7n(H2O,OH)",
+      "pymupdf": "Ca2Pb7(Si36Al12)O99\u00b7n (H2O,OH)",
+      "resolved": "Ca2Pb7(Si36Al12)O99\u00b7n(H2O,OH)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 3570,
+      "page": 140,
+      "page_row": 3,
+      "pdfplumber": "Cs6(Ce,REE,Ca)30(Si70O175)(OH,F,H2O)35",
+      "pymupdf": "Cs6(Ce,REE ,Ca)30(Si70O175)(OH,F,H2O)35",
+      "resolved": "Cs6(Ce,REE,Ca)30(Si70O175)(OH,F,H2O)35"
+    },
+    {
+      "field": "formula",
+      "ordinal": 3571,
+      "page": 140,
+      "page_row": 4,
+      "pdfplumber": "Cs6(Nd,REE,Ca)30(Si70O175)(OH,F,H2O)35",
+      "pymupdf": "Cs6(Nd,REE ,Ca)30(Si70O175)(OH,F,H2O)35",
+      "resolved": "Cs6(Nd,REE,Ca)30(Si70O175)(OH,F,H2O)35"
+    },
+    {
+      "field": "formula",
+      "ordinal": 3698,
+      "page": 145,
+      "page_row": 10,
+      "pdfplumber": "K1.5-x(Ca,Y,REE)5[Si6O15][Si2O7](OH,F)2\u00b7yH2O",
+      "pymupdf": "K1.5-x(Ca,Y,REE )5[Si6O15][Si2O7](OH,F)2\u00b7yH2O",
+      "resolved": "K1.5-x(Ca,Y,REE)5[Si6O15][Si2O7](OH,F)2\u00b7yH2O"
+    },
+    {
+      "field": "formula",
+      "ordinal": 3741,
+      "page": 147,
+      "page_row": 4,
+      "pdfplumber": "Bi3+2Te6+O6\u00b7nH2O (0 < n < 2/3)",
+      "pymupdf": "Bi3+2Te6+O6\u00b7n H2O (0 < n < 2/3)",
+      "resolved": "Bi3+2Te6+O6\u00b7nH2O (0 < n < 2/3)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 3787,
+      "page": 148,
+      "page_row": 22,
+      "pdfplumber": "(Mg1-xFe3+x)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)",
+      "pymupdf": "(Mg1-x Fe3+x )(SO4)x /2(OH)2\u00b7n H2O (x < 0.5, n > 3x /2)",
+      "resolved": "(Mg1-xFe3+x)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 4052,
+      "page": 158,
+      "page_row": 24,
+      "pdfplumber": "(Y,REE,Ca,Na,Th)16(Fe3+,Ti)(Si,B,P)10(O,OH)38F10",
+      "pymupdf": "(Y,REE ,Ca,Na,Th)16(Fe3+,Ti)(Si,B,P)10(O,OH)38F10",
+      "resolved": "(Y,REE,Ca,Na,Th)16(Fe3+,Ti)(Si,B,P)10(O,OH)38F10"
+    },
+    {
+      "field": "formula",
+      "ordinal": 4064,
+      "page": 159,
+      "page_row": 6,
+      "pdfplumber": "(Ba,Sr)(Na,Sr,REE)2Na(PO4)2",
+      "pymupdf": "(Ba,Sr)(Na,Sr,REE )2Na(PO4)2",
+      "resolved": "(Ba,Sr)(Na,Sr,REE)2Na(PO4)2"
+    },
+    {
+      "field": "formula",
+      "ordinal": 4248,
+      "page": 166,
+      "page_row": 1,
+      "pdfplumber": "UO3\u00b7(2-x)H2O",
+      "pymupdf": "UO3\u00b7(2-x )H2O",
+      "resolved": "UO3\u00b7(2-x)H2O"
+    },
+    {
+      "field": "formula",
+      "ordinal": 4304,
+      "page": 168,
+      "page_row": 3,
+      "pdfplumber": "Li4Na12(Y,Na,Ca,REE)12(PO4)12(CO3)4(F,OH)8",
+      "pymupdf": "Li4Na12(Y,Na,Ca,REE )12(PO4)12(CO3)4(F,OH)8",
+      "resolved": "Li4Na12(Y,Na,Ca,REE)12(PO4)12(CO3)4(F,OH)8"
+    },
+    {
+      "field": "formula",
+      "ordinal": 4485,
+      "page": 175,
+      "page_row": 1,
+      "pdfplumber": "CuTlSb2(Sb1-xTlx)AsS7-x (0.2<x<0.5)",
+      "pymupdf": "CuTlSb2(Sb1-xTlx)AsS7-x (0.2<x <0.5)",
+      "resolved": "CuTlSb2(Sb1-xTlx)AsS7-x (0.2<x<0.5)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 4559,
+      "page": 177,
+      "page_row": 24,
+      "pdfplumber": "(Y,REE,Ca,Na,Mn)15Fe2+Ca(P,Si)Si6B3(O,F)48",
+      "pymupdf": "(Y,REE ,Ca,Na,Mn)15Fe2+Ca(P,Si)Si6B3(O,F)48",
+      "resolved": "(Y,REE,Ca,Na,Mn)15Fe2+Ca(P,Si)Si6B3(O,F)48"
+    },
+    {
+      "field": "formula",
+      "ordinal": 4669,
+      "page": 181,
+      "page_row": 26,
+      "pdfplumber": "Li4(Na,Ca)12(Y,Ca,REE)6Zr6(PO4)12(CO3)4O4 [(OH),F]4",
+      "pymupdf": "Li4(Na,Ca)12(Y,Ca,REE )6Zr6(PO4)12(CO3)4O4 [(OH),F]4",
+      "resolved": "Li4(Na,Ca)12(Y,Ca,REE)6Zr6(PO4)12(CO3)4O4 [(OH),F]4"
+    },
+    {
+      "field": "formula",
+      "ordinal": 4788,
+      "page": 186,
+      "page_row": 20,
+      "pdfplumber": "Ca2BeAl2Si4O13(OH)2\u00b7nH2O (n < 2.5)",
+      "pymupdf": "Ca2BeAl2Si4O13(OH)2\u00b7n H2O (n < 2.5)",
+      "resolved": "Ca2BeAl2Si4O13(OH)2\u00b7nH2O (n < 2.5)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 4827,
+      "page": 188,
+      "page_row": 10,
+      "pdfplumber": "(Nb,Ti)(Ca,Na,\u2610)3(Ca,REE)4(Si2O7)2(OH)F3",
+      "pymupdf": "(Nb,Ti)(Ca,Na,\u2610)3(Ca,REE )4(Si2O7)2(OH)F3",
+      "resolved": "(Nb,Ti)(Ca,Na,\u2610)3(Ca,REE)4(Si2O7)2(OH)F3"
+    },
+    {
+      "field": "formula",
+      "ordinal": 4972,
+      "page": 194,
+      "page_row": 7,
+      "pdfplumber": "(Y,REE)2AlSi2O7(OH)2F",
+      "pymupdf": "(Y,REE )2AlSi2O7(OH)2F",
+      "resolved": "(Y,REE)2AlSi2O7(OH)2F"
+    },
+    {
+      "field": "formula",
+      "ordinal": 5226,
+      "page": 204,
+      "page_row": 18,
+      "pdfplumber": "(Ca,REE)2Zr2(Nb,Ti)(Ti,Nb)2Fe2+O14",
+      "pymupdf": "(Ca,REE )2Zr2(Nb,Ti)(Ti,Nb)2Fe2+O14",
+      "resolved": "(Ca,REE)2Zr2(Nb,Ti)(Ti,Nb)2Fe2+O14"
+    },
+    {
+      "field": "formula",
+      "ordinal": 5361,
+      "page": 210,
+      "page_row": 1,
+      "pdfplumber": "Ca0.2(Li,Al,Mg,Fe)3(Si,Al)4O10(OH,F)2\u00b7nH2O",
+      "pymupdf": "Ca0.2(Li,Al,Mg,Fe)3(Si,Al)4O10(OH,F)2\u00b7n H2O",
+      "resolved": "Ca0.2(Li,Al,Mg,Fe)3(Si,Al)4O10(OH,F)2\u00b7nH2O"
+    },
+    {
+      "field": "formula",
+      "ordinal": 5395,
+      "page": 211,
+      "page_row": 10,
+      "pdfplumber": "CaxMn2+6(Si,Al)10O24(OH)4(H2O)n (x = 1-2; n = 7-11)",
+      "pymupdf": "CaxMn2+6(Si,Al)10O24(OH)4( H2O)n (x = 1-2; n = 7-11)",
+      "resolved": "CaxMn2+6(Si,Al)10O24(OH)4(H2O)n (x = 1-2; n = 7-11)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 5692,
+      "page": 223,
+      "page_row": 4,
+      "pdfplumber": "(Y,Na)6(Ca,Na,REE)12(Ca,Na)F42",
+      "pymupdf": "(Y,Na)6(Ca,Na,REE )12(Ca,Na)F42",
+      "resolved": "(Y,Na)6(Ca,Na,REE)12(Ca,Na)F42"
+    },
+    {
+      "field": "second_reference",
+      "ordinal": 5750,
+      "page": 225,
+      "page_row": 16,
+      "pdfplumber": "Physics and Chemistry of Minerals 49 (2022), 40",
+      "pymupdf": "Physics and Chemistry of Mineral s 49 (2022), 40",
+      "resolved": "Physics and Chemistry of Minerals 49 (2022), 40"
+    },
+    {
+      "field": "formula",
+      "ordinal": 5792,
+      "page": 227,
+      "page_row": 12,
+      "pdfplumber": "Al5(PO4)4(OH)3(H2O)7\u00b7nH2O (n ~ 9)",
+      "pymupdf": "Al5(PO4)4(OH)3(H2O)7\u00b7n H2O (n ~ 9)",
+      "resolved": "Al5(PO4)4(OH)3(H2O)7\u00b7nH2O (n ~ 9)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 5948,
+      "page": 233,
+      "page_row": 15,
+      "pdfplumber": "Ti10SixPy [x > y, 6 \u2264 (x + y) \u2264 7]",
+      "pymupdf": "Ti10SixPy [x > y , 6 \u2264 (x + y ) \u2264 7]",
+      "resolved": "Ti10SixPy [x > y, 6 \u2264 (x + y) \u2264 7]"
+    },
+    {
+      "field": "formula",
+      "ordinal": 6018,
+      "page": 235,
+      "page_row": 24,
+      "pdfplumber": "(Cu1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n < 3x/2)",
+      "pymupdf": "(Cu1-x Alx )(SO4)x /2(OH)2\u00b7n H2O (x < 0.5, n < 3x /2)",
+      "resolved": "(Cu1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n < 3x/2)"
+    },
+    {
+      "field": "formula",
+      "ordinal": 6133,
+      "page": 239,
+      "page_row": 26,
+      "pdfplumber": "Mg0.5ZnFe3+(Te4+O3)3(H2O)n [3 \u2264 n \u2264 4.5]",
+      "pymupdf": "Mg0.5ZnFe3+(Te4+O3)3( H2O)n [3 \u2264 n \u2264 4.5]",
+      "resolved": "Mg0.5ZnFe3+(Te4+O3)3(H2O)n [3 \u2264 n \u2264 4.5]"
+    },
+    {
+      "field": "formula",
+      "ordinal": 6156,
+      "page": 240,
+      "page_row": 22,
+      "pdfplumber": "(Zn1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)",
+      "pymupdf": "(Zn1-x Alx )(SO4)x /2(OH)2\u00b7n H2O (x < 0.5, n > 3x /2)",
+      "resolved": "(Zn1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n > 3x/2)"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 6168,
+      "page": 241,
+      "page_row": 7,
+      "pdfplumber": "Zincoh\u00f6gbomite-2N2S",
+      "pymupdf": "Zincoh\u00f6gbomite-2N 2S",
+      "resolved": "Zincoh\u00f6gbomite-2N2S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 6169,
+      "page": 241,
+      "page_row": 8,
+      "pdfplumber": "Zincoh\u00f6gbomite-2N6S",
+      "pymupdf": "Zincoh\u00f6gbomite-2N 6S",
+      "resolved": "Zincoh\u00f6gbomite-2N6S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 6173,
+      "page": 241,
+      "page_row": 12,
+      "pdfplumber": "Zinconigerite-2N1S",
+      "pymupdf": "Zinconigerite-2N 1S",
+      "resolved": "Zinconigerite-2N1S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 6174,
+      "page": 241,
+      "page_row": 13,
+      "pdfplumber": "Zinconigerite-6N6S",
+      "pymupdf": "Zinconigerite-6N 6S",
+      "resolved": "Zinconigerite-6N6S"
+    },
+    {
+      "field": "canonical_name",
+      "ordinal": 6181,
+      "page": 241,
+      "page_row": 20,
+      "pdfplumber": "Zincovelesite-6N6S",
+      "pymupdf": "Zincovelesite-6N 6S",
+      "resolved": "Zincovelesite-6N6S"
+    },
+    {
+      "field": "formula",
+      "ordinal": 6183,
+      "page": 241,
+      "page_row": 22,
+      "pdfplumber": "(Zn1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n < 3x/2)",
+      "pymupdf": "(Zn1-x Alx )(SO4)x /2(OH)2\u00b7n H2O (x < 0.5, n < 3x /2)",
+      "resolved": "(Zn1-xAlx)(SO4)x/2(OH)2\u00b7nH2O (x < 0.5, n < 3x/2)"
+    }
+  ]
+}

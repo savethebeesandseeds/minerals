@@ -1,0 +1,38 @@
+{
+  "slug": "REPLACE_WITH_REAL_MINERAL_SLUG",
+  "record_type": "mineral",
+  "canonical_name": "Example mineral — NON-IMPORTABLE TEMPLATE",
+  "formula": "X2Y",
+  "description": "NON-IMPORTABLE TEMPLATE. Replace every value and source field with verified mineral data.",
+  "mineral_family": "Example family",
+  "cas_number": null,
+  "identifiers": {},
+  "synonyms": ["example synonym"],
+  "properties": {
+    "hardness_mohs": {"min": 6.0, "max": 6.5}
+  },
+  "safety": {},
+  "verification_status": "draft",
+  "data_quality_score": 0.0,
+  "license_spdx": "NOASSERTION",
+  "sources": [
+    {
+      "url": "https://replace.invalid/with-a-real-source",
+      "title": "Replace with the actual source title",
+      "publisher": "Replace with the source publisher",
+      "license_spdx": "NOASSERTION",
+      "claim_scope": "properties.hardness_mohs",
+      "claim": {
+        "value": {"min": 6.0, "max": 6.5},
+        "unit": "Mohs",
+        "conditions": {"specimen": "natural, unweathered"},
+        "source_locator": "Replace with a page, table, section, or dataset row",
+        "note": "Illustrative shape only; replace every field before importing"
+      },
+      "confidence": 0.7,
+      "review_status": "unreviewed",
+      "retrieved_at": "REPLACE_WITH_RFC3339_TIMESTAMP",
+      "content_hash": "REPLACE_WITH_CONTENT_HASH"
+    }
+  ]
+}

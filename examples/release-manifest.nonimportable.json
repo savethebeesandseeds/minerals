@@ -1,0 +1,44 @@
+{
+  "schema_version": 0,
+  "dataset": {
+    "key": "replace.invalid.mineral-dataset",
+    "title": "NON-IMPORTABLE TEMPLATE - replace with the admitted dataset"
+  },
+  "source": {
+    "key": "replace.invalid.publisher",
+    "url": "https://replace.invalid/with-the-canonical-source-page",
+    "license_spdx": "NOASSERTION",
+    "attribution": {
+      "attribution_party": "REPLACE_WITH_SOURCE_SUPPLIED_ATTRIBUTION_PARTY",
+      "work_title": "REPLACE_WITH_EXACT_SOURCE_WORK_TITLE",
+      "work_url": "https://replace.invalid/with-the-attributed-work",
+      "license_url": "https://replace.invalid/with-the-canonical-license",
+      "changes_notice": "REPLACE_WITH_AN_EXPLICIT_DESCRIPTION_OF_EXTRACTION_NORMALIZATION_AND_OTHER_CHANGES",
+      "no_endorsement_notice": "REPLACE_WITH_A_CLEAR_NON_ENDORSEMENT_NOTICE",
+      "derived_output_license_spdx": "NOASSERTION"
+    }
+  },
+  "release": {
+    "version": "REPLACE_WITH_IMMUTABLE_SOURCE_RELEASE",
+    "released_at": "REPLACE_WITH_RFC3339_TIMESTAMP"
+  },
+  "retrieval": {
+    "retrieved_at": "REPLACE_WITH_RFC3339_TIMESTAMP"
+  },
+  "artifact": {
+    "url": "https://replace.invalid/with-the-exact-source-artifact",
+    "sha256": "sha256:REPLACE_WITH_64_LOWERCASE_HEX_CHARACTERS"
+  },
+  "parser": {
+    "name": "REPLACE_WITH_ADAPTER_NAME",
+    "version": "REPLACE_WITH_ADAPTER_VERSION",
+    "code_revision": "REPLACE_WITH_IMMUTABLE_CODE_REVISION",
+    "configuration_sha256": "sha256:REPLACE_WITH_64_LOWERCASE_HEX_CHARACTERS"
+  },
+  "policy": "ima_identity_v1",
+  "expected_record_count": 1,
+  "expected_chunk_count": 1,
+  "records_sha256": "sha256:REPLACE_WITH_CANONICAL_RECORD_ARRAY_HASH",
+  "snapshot_kind": "complete",
+  "base_batch_id": null
+}

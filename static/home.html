@@ -149,7 +149,13 @@
 
     @media (max-width: 700px) {
       .home-card {
-        --lang-orbit-scale: 0.62;
+        --lang-orbit-scale: 0.4;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .home-card {
+        --lang-orbit-scale: 0.3;
       }
     }
   </style>
@@ -168,17 +174,16 @@
       </a>
       <a class="menu active" href="/">{{ txt.nav_home }}</a>
       <a class="menu" href="/minerals">{{ txt.nav_all_minerals }}</a>
-      <a class="menu" href="/catalog">{{ txt.nav_catalog }}</a>
       <div class="top-tools">
         <a class="login-link" href="/admin">{% if has_admin_session %}admin{% else %}{{ txt.nav_login }}{% endif %}</a>
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">◐</button>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="{{ txt.registry.theme_toggle }}" aria-pressed="false">◐</button>
       </div>
     </div>
   </nav>
 
   <main class="home-shell">
     <section class="home-card">
-      <h1>Minerals</h1>
+      <h1>{{ txt.home_title }}</h1>
 
       <form class="lang-form" method="post" action="/language">
         <div class="orbit-stage" id="language-orbit">
@@ -204,7 +209,7 @@
           </button>
           {% endfor %}
         </div>
-        <p class="market-tagline">world's first mineral blockchain market</p>
+        <p class="market-tagline">{{ txt.home_subtitle }}</p>
         <p class="market-tagline">
           <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a>
         </p>
@@ -224,35 +229,11 @@
   </main>
   <footer class="site-footer">
     <div class="footer-inner">
-      <div class="footer-grid" aria-label="Footer">
-        <section class="footer-col">
-          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
-          <div class="footer-col-links">
-            <a href="/pages/contact-us">{{ txt.footer_contact_us }}</a>
-            <a href="/pages/support">{{ txt.footer_support }}</a>
-            <a href="/pages/work-with-us">{{ txt.footer_work_with_us }}</a>
-            <a href="/pages/account">{{ txt.footer_account }}</a>
-          </div>
-        </section>
-        <section class="footer-col">
-          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
-          <div class="footer-col-links">
-            <a href="/pages/legal">{{ txt.footer_legal_link }}</a>
-            <a href="/pages/privacy-policy">{{ txt.footer_privacy_policy }}</a>
-            <a href="/pages/terms-of-service">{{ txt.footer_terms_of_service }}</a>
-            <a href="/pages/returns-and-refunds">{{ txt.footer_returns_and_refunds }}</a>
-            <a href="/pages/shipping">{{ txt.footer_shipping }}</a>
-          </div>
-        </section>
-        <section class="footer-col">
-          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>
-          <div class="footer-col-links">
-            <a href="/about">{{ txt.footer_about_us }}</a>
-            <a href="/pages/conflict-free-minerals">{{ txt.footer_conflict_free_minerals }}</a>
-            <a href="/pages/frequently-asked-questions">{{ txt.footer_faq }}</a>
-          </div>
-        </section>
-      </div>
+      <nav class="footer-col-links" aria-label="Footer" style="display:flex; flex-wrap:wrap; gap:0.3rem 0.8rem;">
+        <a href="/">{{ txt.nav_home }}</a>
+        <a href="/minerals">{{ txt.nav_all_minerals }}</a>
+        <a href="/about">{{ txt.footer_about_us }}</a>
+      </nav>
       <p class="footer-note">{{ txt.footer_powered_trust_by }} <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
     </div>
   </footer>
@@ -270,7 +251,15 @@
         const baseRadius = parseFloat(style.getPropertyValue("--lang-orbit-radius")) || 320;
         const baseTopBottomGap = parseFloat(style.getPropertyValue("--lang-orbit-top-bottom-gap")) || 96;
         const orbitScale = parseFloat(style.getPropertyValue("--lang-orbit-scale")) || 1;
-        const radius = baseRadius * orbitScale;
+        const widestNodeHalf = nodes.reduce(
+          (width, node) => Math.max(width, node.offsetWidth / 2),
+          0,
+        );
+        const horizontalRadiusLimit = Math.max(
+          24,
+          (stage.clientWidth / 2) - widestNodeHalf - 4,
+        );
+        const radius = Math.min(baseRadius * orbitScale, horizontalRadiusLimit);
         const topBottomGap = baseTopBottomGap * orbitScale;
         const yLimit = Math.max(24, radius - topBottomGap);
 

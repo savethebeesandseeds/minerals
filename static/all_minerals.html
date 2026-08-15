@@ -15,10 +15,10 @@
 
     .metrics {
       display: grid;
-      grid-template-columns: repeat(2, minmax(180px, 1fr));
+      grid-template-columns: minmax(180px, 1fr);
       gap: 0.46rem;
       margin-top: 0.46rem;
-      max-width: 640px;
+      max-width: 320px;
     }
 
     .metric {
@@ -48,34 +48,23 @@
 
     .filters {
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: minmax(0, 1fr) auto;
       gap: 0.4rem;
       align-items: end;
     }
 
-    .chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.24rem;
-      justify-content: flex-end;
+    .filters label {
+      min-width: 0;
     }
 
-    .chip {
-      border: 1px solid var(--line);
-      border-radius: 1px;
-      background: var(--surface-2);
-      color: var(--ink);
-      font-size: 0.68rem;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      padding: 0.16rem 0.3rem;
-      cursor: pointer;
+    .filters button {
+      min-width: 7rem;
     }
 
-    .chip.active {
-      color: #fff;
-      border-color: var(--brand-2);
-      background: linear-gradient(180deg, var(--brand), var(--brand-2));
+    .result-summary {
+      margin-top: 0.34rem;
+      color: var(--muted);
+      font-size: 0.74rem;
     }
 
     .results {
@@ -88,7 +77,7 @@
     .results-head,
     .result-row {
       display: grid;
-      grid-template-columns: minmax(180px, 1.35fr) minmax(140px, 1fr) minmax(110px, 0.85fr) minmax(98px, 0.7fr);
+      grid-template-columns: minmax(260px, 1.6fr) minmax(180px, 1fr);
       column-gap: 0.42rem;
       align-items: center;
       padding: 0.24rem 0.34rem;
@@ -110,6 +99,12 @@
       color: var(--ink);
       text-decoration: none;
       min-height: 44px;
+      content-visibility: auto;
+      contain-intrinsic-size: 64px;
+    }
+
+    .empty-result > span {
+      grid-column: 1 / -1;
     }
 
     .result-row:last-child {
@@ -122,14 +117,73 @@
 
     .mono {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      text-transform: uppercase;
       font-size: 0.72rem;
       letter-spacing: 0.03em;
+    }
+
+    .mineral-name {
+      display: grid;
+      min-width: 0;
+      gap: 0.08rem;
+    }
+
+    .mineral-name strong {
+      overflow-wrap: anywhere;
+      font-size: 0.8rem;
+      letter-spacing: 0.035em;
+      line-height: 1.15;
+      text-transform: uppercase;
+    }
+
+    .description {
+      display: -webkit-box;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      line-height: 1.3;
     }
 
     .muted {
       color: var(--muted);
       font-size: 0.74rem;
+    }
+
+    .science-cell,
+    .record-meta {
+      display: grid;
+      min-width: 0;
+      gap: 0.16rem;
+    }
+
+    .status-badge {
+      display: inline-block;
+      width: fit-content;
+      max-width: 100%;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      padding: 0.12rem 0.26rem;
+      color: var(--ink);
+      font-size: 0.68rem;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .record-counts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.12rem 0.5rem;
+      color: var(--muted);
+      font-size: 0.7rem;
+    }
+
+    .formula-line {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .result-cell-label {
+      display: none;
     }
 
     .note {
@@ -141,26 +195,136 @@
       font-size: 0.76rem;
     }
 
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      padding: 0.4rem;
+    }
+
+    .pagination-summary,
+    .page-position {
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+
+    .page-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+    }
+
+    .page-form {
+      margin: 0;
+    }
+
+    .page-button {
+      min-height: 2rem;
+      padding: 0.24rem 0.42rem;
+      white-space: normal;
+    }
+
     @media (max-width: 900px) {
       .filters {
         grid-template-columns: 1fr;
       }
 
-      .chips {
-        justify-content: flex-start;
-      }
-
       .results {
-        overflow-x: auto;
+        border: 0;
+        background: transparent;
+        overflow: visible;
       }
 
-      .results-head,
+      .results-head {
+        display: none;
+      }
+
       .result-row {
-        min-width: 620px;
+        grid-template-columns: minmax(0, 1fr) minmax(160px, 0.8fr);
+        gap: 0.5rem 0.8rem;
+        min-width: 0;
+        margin-bottom: 0.45rem;
+        padding: 0.65rem;
+        border: 1px solid var(--line);
+        background: var(--surface);
+      }
+
+      .result-row > span {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .result-row > .mineral-name {
+        grid-column: 1;
+      }
+
+      .result-row > .science-cell {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      .result-cell-label {
+        display: block;
+        margin-bottom: 0.12rem;
+        color: var(--muted);
+        font-family: inherit;
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        line-height: 1.2;
+        text-transform: uppercase;
       }
 
       .metrics {
         grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .filters {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .filters button {
+        width: 100%;
+      }
+
+      .result-row {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .result-row > .mineral-name,
+      .result-row > .science-cell {
+        grid-column: 1;
+      }
+
+      .result-row > .science-cell {
+        grid-row: auto;
+      }
+
+      .empty-result > span {
+        grid-column: 1 / -1;
+      }
+
+      .pagination,
+      .page-actions {
+        align-items: stretch;
+      }
+
+      .pagination,
+      .page-actions,
+      .page-form,
+      .page-button {
+        width: 100%;
+      }
+
+      .page-position {
+        text-align: center;
       }
     }
   </style>
@@ -179,10 +343,9 @@
       </a>
       <a class="menu" href="/">{{ txt.nav_home }}</a>
       <a class="menu active" href="/minerals">{{ txt.nav_all_minerals }}</a>
-      <a class="menu" href="/catalog">{{ txt.nav_catalog }}</a>
       <div class="top-tools">
-        <a class="login-link" href="/admin">{% if has_admin_session %}admin{% else %}{{ txt.nav_login }}{% endif %}</a>
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">◐</button>
+        <a class="login-link" href="/admin">{% if has_admin_session %}{{ txt.nav_admin }}{% else %}{{ txt.nav_login }}{% endif %}</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="{{ txt.registry.theme_toggle }}" aria-pressed="false">◐</button>
       </div>
     </div>
   </nav>
@@ -196,36 +359,76 @@
           <span class="metric-label">{{ txt.all_minerals_published_label }}</span>
           <span class="metric-value" id="published-count">{{ published_count }}</span>
         </div>
-        <div class="metric">
-          <span class="metric-label">{{ txt.all_minerals_estimated_label }}</span>
-          <span class="metric-value" id="estimated-count">{{ estimated_total }}+</span>
-        </div>
       </div>
     </section>
 
-    <section class="panel filters">
-      <label>
-        Search by name / formula
-        <input id="mineral-search" type="search" placeholder="quartz, fe2o3, silicate" autocomplete="off" />
-      </label>
-      <div class="chips" id="family-filters" aria-label="Family filters">
-        <button class="chip active" type="button" data-family="all">All</button>
-        <button class="chip" type="button" data-family="silicates">Silicates</button>
-        <button class="chip" type="button" data-family="oxides">Oxides</button>
-        <button class="chip" type="button" data-family="sulfides">Sulfides</button>
-        <button class="chip" type="button" data-family="carbonates">Carbonates</button>
-      </div>
+    <section class="panel">
+      <form class="filters" method="get" action="/minerals">
+        <label>
+          {{ txt.registry.search_label }}
+          <input name="q" type="search" dir="auto" value="{{ query }}" placeholder="{{ txt.registry.search_placeholder }}" autocomplete="off" />
+        </label>
+        <button type="submit">{{ txt.registry.search_action }}</button>
+      </form>
+      <p class="result-summary" aria-live="polite">
+        {{ txt.registry.pagination_showing }} {{ page_start }}–{{ page_end }}
+        {{ txt.registry.pagination_of }} {{ total_results }} {{ txt.registry.pagination_results }}
+      </p>
     </section>
 
-    <section class="results" aria-label="Estimated all-minerals list">
+    <section class="results" aria-label="{{ txt.all_minerals_title }}">
       <div class="results-head" role="row">
-        <span>Name</span>
-        <span>Family</span>
-        <span>Formula</span>
-        <span>Source</span>
+        <span>{{ txt.registry.identity }}</span>
+        <span>{{ txt.label_formula }}</span>
       </div>
-      <div id="all-minerals-rows"></div>
+      <div>
+        {% for mineral in minerals %}
+        <a class="result-row" href="/minerals/{{ mineral.slug }}">
+          <span class="mineral-name">
+            <strong>{{ mineral.common_name }}</strong>
+          </span>
+          <span class="science-cell">
+            {% if !mineral.mineral_family.is_empty() %}
+            <small class="result-cell-label">{{ txt.label_family }}</small>
+            <span class="muted">{{ mineral.mineral_family }}</span>
+            {% endif %}
+            <span class="formula-line"><span class="muted">{{ txt.label_formula }}:</span> <bdi class="mono">{{ mineral.formula }}</bdi></span>
+          </span>
+        </a>
+        {% endfor %}
+        {% if minerals.is_empty() %}
+        <div class="result-row empty-result">
+          <span class="muted">{{ txt.registry.empty_results }}</span>
+        </div>
+        {% endif %}
+      </div>
     </section>
+
+    <nav class="pagination" aria-label="{{ txt.registry.pagination_page }}">
+      <span class="pagination-summary">
+        {{ txt.registry.pagination_showing }} {{ page_start }}–{{ page_end }}
+        {{ txt.registry.pagination_of }} {{ total_results }} {{ txt.registry.pagination_results }}
+      </span>
+      <div class="page-actions">
+        {% if has_previous_page %}
+        <form class="page-form" method="get" action="/minerals">
+          <input type="hidden" name="q" value="{{ query }}" />
+          <input type="hidden" name="page" value="{{ previous_page }}" />
+          <button class="page-button" type="submit">{{ txt.registry.pagination_previous }}</button>
+        </form>
+        {% endif %}
+        <span class="page-position" aria-current="page">
+          {{ txt.registry.pagination_page }} {{ current_page }} / {{ total_pages }}
+        </span>
+        {% if has_next_page %}
+        <form class="page-form" method="get" action="/minerals">
+          <input type="hidden" name="q" value="{{ query }}" />
+          <input type="hidden" name="page" value="{{ next_page }}" />
+          <button class="page-button" type="submit">{{ txt.registry.pagination_next }}</button>
+        </form>
+        {% endif %}
+      </div>
+    </nav>
 
     <section class="note">
       {{ txt.all_minerals_disclaimer }}
@@ -234,134 +437,14 @@
 
   <footer class="site-footer">
     <div class="footer-inner">
-      <div class="footer-grid" aria-label="Footer">
-        <section class="footer-col">
-          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
-          <div class="footer-col-links">
-            <a href="/pages/contact-us">{{ txt.footer_contact_us }}</a>
-            <a href="/pages/support">{{ txt.footer_support }}</a>
-            <a href="/pages/work-with-us">{{ txt.footer_work_with_us }}</a>
-            <a href="/pages/account">{{ txt.footer_account }}</a>
-          </div>
-        </section>
-        <section class="footer-col">
-          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
-          <div class="footer-col-links">
-            <a href="/pages/legal">{{ txt.footer_legal_link }}</a>
-            <a href="/pages/privacy-policy">{{ txt.footer_privacy_policy }}</a>
-            <a href="/pages/terms-of-service">{{ txt.footer_terms_of_service }}</a>
-            <a href="/pages/returns-and-refunds">{{ txt.footer_returns_and_refunds }}</a>
-            <a href="/pages/shipping">{{ txt.footer_shipping }}</a>
-          </div>
-        </section>
-        <section class="footer-col">
-          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>
-          <div class="footer-col-links">
-            <a href="/about">{{ txt.footer_about_us }}</a>
-            <a href="/pages/conflict-free-minerals">{{ txt.footer_conflict_free_minerals }}</a>
-            <a href="/pages/frequently-asked-questions">{{ txt.footer_faq }}</a>
-          </div>
-        </section>
-      </div>
+      <nav class="footer-col-links" aria-label="Footer" style="display:flex; flex-wrap:wrap; gap:0.3rem 0.8rem;">
+        <a href="/">{{ txt.nav_home }}</a>
+        <a href="/minerals">{{ txt.nav_all_minerals }}</a>
+        <a href="/about">{{ txt.footer_about_us }}</a>
+      </nav>
       <p class="footer-note">{{ txt.footer_powered_trust_by }} <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
     </div>
   </footer>
 
-  <script id="all-minerals-data" type="application/json">{{ all_minerals_json|safe }}</script>
-  <script>
-    (() => {
-      const rows = document.getElementById("all-minerals-rows");
-      const searchInput = document.getElementById("mineral-search");
-      const familyFilters = document.getElementById("family-filters");
-      const dataNode = document.getElementById("all-minerals-data");
-      const data = (() => {
-        if (!dataNode) {
-          return [];
-        }
-        try {
-          const parsed = JSON.parse(dataNode.textContent || "[]");
-          return Array.isArray(parsed) ? parsed : [];
-        } catch (_) {
-          return [];
-        }
-      })();
-      let activeFamily = "all";
-      let chips = [];
-
-      function renderFamilyChips() {
-        const families = Array.from(
-          new Set(
-            data
-              .map((item) => String(item.family || "").trim().toLowerCase())
-              .filter((value) => value.length > 0),
-          ),
-        ).sort((a, b) => a.localeCompare(b));
-
-        familyFilters.innerHTML = "";
-        const allChip = document.createElement("button");
-        allChip.className = "chip active";
-        allChip.type = "button";
-        allChip.dataset.family = "all";
-        allChip.textContent = "All";
-        familyFilters.appendChild(allChip);
-
-        families.forEach((family) => {
-          const chip = document.createElement("button");
-          chip.className = "chip";
-          chip.type = "button";
-          chip.dataset.family = family;
-          chip.textContent = family;
-          familyFilters.appendChild(chip);
-        });
-
-        chips = Array.from(familyFilters.querySelectorAll(".chip"));
-        chips.forEach((chip) => {
-          chip.addEventListener("click", () => {
-            chips.forEach((value) => value.classList.remove("active"));
-            chip.classList.add("active");
-            activeFamily = chip.dataset.family || "all";
-            render();
-          });
-        });
-      }
-
-      function render() {
-        const query = searchInput.value.trim().toLowerCase();
-        const filtered = data.filter((item) => {
-          if (activeFamily !== "all" && item.family !== activeFamily) {
-            return false;
-          }
-
-          if (!query) {
-            return true;
-          }
-
-          const blob = `${item.name} ${item.family} ${item.formula}`.toLowerCase();
-          return blob.includes(query);
-        });
-
-        if (filtered.length === 0) {
-          rows.innerHTML = '<div class="result-row"><span class="muted">No minerals found.</span><span></span><span></span><span></span></div>';
-          return;
-        }
-
-        rows.innerHTML = filtered
-          .slice(0, 300)
-          .map((item) => `
-            <a class="result-row" href="/minerals/${encodeURIComponent(item.slug || "")}">
-              <span>${item.name || ""}</span>
-              <span class="muted">${item.family || ""}</span>
-              <span class="mono">${item.formula || ""}</span>
-              <span class="muted">${item.source || "database"}</span>
-            </a>
-          `)
-          .join("");
-      }
-
-      searchInput.addEventListener("input", render);
-      renderFamilyChips();
-      render();
-    })();
-  </script>
 </body>
 </html>

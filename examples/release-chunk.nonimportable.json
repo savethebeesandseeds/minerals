@@ -1,0 +1,27 @@
+{
+  "schema_version": 0,
+  "chunk_index": 0,
+  "items": [
+    {
+      "source_record_id": "REPLACE_WITH_STABLE_SOURCE_RECORD_ID",
+      "source_locator": "REPLACE_WITH_DATASET_ROW_OR_SECTION",
+      "slug": "mineral.replace-with-reviewed-slug",
+      "canonical_name": "NON-IMPORTABLE TEMPLATE MINERAL",
+      "formula": "REPLACE_WITH_APPROVED_FORMULA",
+      "nomenclature_status": "REPLACE_WITH_SOURCE_STATUS",
+      "is_valid_species": false,
+      "official_identifiers": {
+        "ima_number": "REPLACE_WITH_AUTHORITY_VALUE"
+      },
+      "synonyms": [
+        "REPLACE WITH A SOURCE-SCOPED SYNONYM OR FORMER NAME"
+      ],
+      "official_facts": {
+        "discovery_country": "REPLACE WITH SOURCE COUNTRY OR OMIT",
+        "first_reference": "REPLACE WITH SOURCE REFERENCE OR OMIT",
+        "second_reference": "REPLACE WITH SOURCE REFERENCE OR OMIT",
+        "source_status": "REPLACE WITH RAW AUTHORITY STATUS OR OMIT"
+      }
+    }
+  ]
+}

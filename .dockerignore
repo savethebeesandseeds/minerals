@@ -1,0 +1,10 @@
+# Keep the build context deliberately narrow. In particular, neither mutable
+# catalog data nor any environment/secrets file is sent to the builder.
+**
+!Cargo.toml
+!Cargo.lock
+!askama.toml
+!src/
+!src/**
+!static/
+!static/**

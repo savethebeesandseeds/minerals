@@ -1,0 +1,45 @@
+services:
+  minerals:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${MINERALS_IMAGE:-waajacu/minerals:local}
+    init: true
+    restart: unless-stopped
+    env_file:
+      - path: ./.env
+        required: false
+      - path: ./.env.local
+        required: false
+    environment:
+      BIND_ADDRESS: "0.0.0.0"
+      DATA_ROOT: /app/data
+      PORT: "7979"
+      RUST_LOG: ${RUST_LOG:-minerals=info,tower_http=info}
+    user: "${MINERALS_UID:-10001}:${MINERALS_GID:-10001}"
+    ports:
+      - "${MINERALS_BIND_ADDRESS:-127.0.0.1}:${MINERALS_HOST_PORT:-7979}:7979"
+    volumes:
+      - type: bind
+        source: ./data
+        target: /app/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=512m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    # Resource defaults are guardrails, not capacity guarantees. Rehearse each
+    # intended source release before changing them; never remove the memory bound.
+    cpus: "${MINERALS_CPUS:-2.0}"
+    mem_limit: "${MINERALS_MEMORY_LIMIT:-1g}"
+    mem_reservation: "${MINERALS_MEMORY_RESERVATION:-512m}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "${MINERALS_LOG_MAX_SIZE:-10m}"
+        max-file: "${MINERALS_LOG_MAX_FILES:-5}"
+    # A committed 500-record chunk must have time to finish after SIGTERM.
+    stop_grace_period: "${MINERALS_STOP_GRACE_PERIOD:-90s}"

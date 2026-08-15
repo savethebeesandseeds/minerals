@@ -1,0 +1,13 @@
+# Runtime contract: CPython 3.12.13
+# Direct extractors and every installed runtime dependency are pinned so the
+# archived parser environment can be recreated without floating transitive
+# versions.
+pdfplumber==0.11.9
+pdfminer.six==20251230
+Pillow==12.3.0
+pypdfium2==5.12.1
+PyMuPDF==1.28.2
+charset-normalizer==3.4.9
+cryptography==50.0.0
+cffi==2.1.1
+pycparser==3.0

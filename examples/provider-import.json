@@ -1,0 +1,35 @@
+{
+  "slug": "provider.example",
+  "name": "Example Provider",
+  "website_url": "https://example.org",
+  "network_kind": "direct",
+  "country_code": "",
+  "verification_status": "unverified",
+  "trust_score": 0.0,
+  "offers": [
+    {
+      "mineral_slug": "mineral.example-record",
+      "external_id": "replace-with-provider-product-id",
+      "title": "Example mineral offer",
+      "product_url": "https://example.org/replace-with-product-page",
+      "currency_code": "",
+      "price_minor": null,
+      "currency_exponent": 2,
+      "pricing_basis": "quote",
+      "minimum_order_quantity": null,
+      "minimum_order_unit": "",
+      "available_quantity": null,
+      "available_quantity_unit": "",
+      "stock_status": "unknown",
+      "purity_text": "",
+      "grade": "",
+      "origin_country_code": "",
+      "provider_claims": {},
+      "evidence_url": null,
+      "verification_status": "provider_claim",
+      "last_checked_at": "",
+      "expires_at": null,
+      "active": true
+    }
+  ]
+}

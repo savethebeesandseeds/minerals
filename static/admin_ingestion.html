@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="{{ lang_code }}" dir="{{ lang_dir }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ txt.ingestion.title }} | Minerals</title>
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="stylesheet" href="/static/app.css" />
+  <script src="/static/theme.js" defer></script>
+  <style>
+    body {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      background:
+        radial-gradient(800px 260px at 80% -15%, #274b3b 0%, transparent 56%),
+        #0b0f0e;
+      color: #d8e2ec;
+    }
+
+    .topbar {
+      border-bottom: 1px solid #334b42;
+      background: rgba(11, 15, 14, 0.96);
+    }
+
+    .menu {
+      color: #c4d3cc;
+      border-color: #4a6258;
+      background: #151d1a;
+    }
+
+    .login-link,
+    .theme-toggle { color: #c4d3cc; }
+
+    .theme-toggle {
+      width: auto;
+      min-width: 0;
+      height: auto;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      background: transparent;
+      letter-spacing: 0;
+      line-height: 1;
+    }
+
+    .theme-toggle:hover {
+      background: transparent;
+      color: #e2ede7;
+      text-decoration: underline;
+    }
+
+    .ingestion-page,
+    .release-list,
+    .release-card,
+    .source-panel,
+    .decision-panel,
+    .warning-list {
+      display: grid;
+      min-width: 0;
+    }
+
+    .ingestion-page,
+    .release-list { gap: 0.72rem; }
+
+    .release-card,
+    .page-header,
+    .empty-state {
+      max-width: 100%;
+      border: 1px solid #3b5047;
+      border-radius: 1px;
+      background: #121816;
+      box-shadow: none;
+    }
+
+    .page-header,
+    .release-card { padding: clamp(0.72rem, 2vw, 1rem); }
+
+    .header-row,
+    .release-head,
+    .release-badges,
+    .decision-actions,
+    .progress-label,
+    .pagination {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.48rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .page-title,
+    .release-title,
+    .section-title {
+      margin: 0;
+      color: #edf4fa;
+    }
+
+    .page-title {
+      font-size: clamp(1.22rem, 4vw, 1.72rem);
+      letter-spacing: 0.035em;
+    }
+
+    .release-title {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-size: clamp(1rem, 3vw, 1.3rem);
+    }
+
+    .section-title {
+      font-size: 0.76rem;
+      letter-spacing: 0.045em;
+      text-transform: uppercase;
+    }
+
+    .subtitle,
+    .hint,
+    .decision-warning,
+    .source-note,
+    .terminal-note {
+      margin: 0;
+      color: #a5b7c4;
+      font-size: 0.76rem;
+      line-height: 1.5;
+    }
+
+    .page-header .subtitle { margin-top: 0.3rem; }
+
+    .back-link,
+    .page-link {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      border: 1px solid #4a6258;
+      border-radius: 1px;
+      padding: 0.3rem 0.48rem;
+      background: #151d1a;
+      color: #c4d3cc;
+      font-size: 0.7rem;
+      font-weight: 800;
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+
+    .back-link:hover,
+    .page-link:hover {
+      background: #1d2925;
+      color: #eef8f3;
+    }
+
+    .release-card { gap: 0.82rem; }
+
+    .release-head {
+      align-items: flex-start;
+      border-bottom: 1px solid #30443b;
+      padding-bottom: 0.64rem;
+    }
+
+    .release-badges { justify-content: flex-end; }
+
+    .status-pill,
+    .release-pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #52695f;
+      padding: 0.2rem 0.38rem;
+      color: #cbd9d2;
+      background: #17201d;
+      font-size: 0.66rem;
+      font-weight: 800;
+      letter-spacing: 0.025em;
+      text-transform: uppercase;
+    }
+
+    .status-receiving { border-color: #556f82; color: #bfd8eb; }
+    .status-ready { border-color: #41745a; background: #173124; color: #c7edd3; }
+    .status-attention { border-color: #8a6940; background: #2b2114; color: #f2d09e; }
+    .status-approved { border-color: #41745a; background: #173124; color: #c7edd3; }
+    .status-rejected { border-color: #8f4a43; background: #321d1b; color: #f0beb9; }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: minmax(12rem, 0.8fr) minmax(0, 1.7fr);
+      gap: 0.62rem;
+      min-width: 0;
+    }
+
+    .record-panel,
+    .source-panel,
+    .count-card,
+    .warning-card,
+    .decision-panel {
+      min-width: 0;
+      border: 1px solid #30443b;
+      background: #0e1412;
+    }
+
+    .record-panel,
+    .source-panel,
+    .decision-panel { padding: 0.64rem; }
+
+    .record-panel {
+      display: grid;
+      align-content: start;
+      gap: 0.48rem;
+    }
+
+    .record-total {
+      margin: 0;
+      color: #edf4fa;
+      font-size: clamp(1.5rem, 5vw, 2.3rem);
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .record-total span {
+      color: #91a59a;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .progress-label {
+      color: #b9c8c0;
+      font-size: 0.68rem;
+    }
+
+    progress {
+      width: 100%;
+      height: 0.68rem;
+      accent-color: #4b8d6b;
+    }
+
+    .source-panel { gap: 0.55rem; }
+
+    dl {
+      display: grid;
+      gap: 0.42rem;
+      margin: 0;
+    }
+
+    .source-facts {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.5rem 0.8rem;
+    }
+
+    dl div { min-width: 0; }
+
+    dt {
+      color: #7f948a;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    dd {
+      margin: 0.08rem 0 0;
+      color: #c7d4de;
+      font-size: 0.72rem;
+      line-height: 1.42;
+      overflow-wrap: anywhere;
+    }
+
+    dd a { color: #b9d7c8; }
+
+    .source-note {
+      border-left: 2px solid #557666;
+      padding-left: 0.48rem;
+    }
+
+    .count-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 0.42rem;
+      min-width: 0;
+    }
+
+    .count-card {
+      display: grid;
+      gap: 0.1rem;
+      padding: 0.52rem 0.36rem;
+      text-align: center;
+    }
+
+    .count-value {
+      color: #edf4fa;
+      font-size: 1.08rem;
+      font-weight: 900;
+    }
+
+    .count-label {
+      color: #879c91;
+      font-size: 0.59rem;
+      text-transform: uppercase;
+    }
+
+    .count-card.alert {
+      border-color: #7d5941;
+      background: #211a14;
+    }
+
+    .warning-list { gap: 0.4rem; }
+
+    .warning-card {
+      display: grid;
+      gap: 0.26rem;
+      padding: 0.54rem;
+      border-color: #8a5946;
+      background: #211714;
+    }
+
+    .warning-card strong {
+      color: #efc0aa;
+      font-size: 0.72rem;
+    }
+
+    .warning-card p {
+      margin: 0;
+      color: #c7b3a9;
+      font-size: 0.7rem;
+      line-height: 1.45;
+    }
+
+    .decision-panel {
+      gap: 0.56rem;
+      border-color: #695a3c;
+      background: #19170f;
+    }
+
+    .decision-form {
+      display: grid;
+      gap: 0.52rem;
+      min-width: 0;
+    }
+
+    .confirmation-row {
+      display: grid;
+      grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+      gap: 0.48rem;
+    }
+
+    label {
+      display: grid;
+      gap: 0.22rem;
+      min-width: 0;
+      color: #d9c9a8;
+      font-size: 0.7rem;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid #5f5842;
+      border-radius: 1px;
+      padding: 0.46rem;
+      background: #090d0c;
+      color: #e1e9ef;
+      font: inherit;
+      font-size: 0.72rem;
+    }
+
+    textarea {
+      min-height: 4.2rem;
+      resize: vertical;
+    }
+
+    .ack-label {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      gap: 0.42rem;
+      font-weight: 600;
+    }
+
+    .ack-label input {
+      width: auto;
+      margin-top: 0.12rem;
+    }
+
+    .decision-actions { justify-content: flex-start; }
+
+    button {
+      width: fit-content;
+      border: 1px solid #537365;
+      border-radius: 1px;
+      padding: 0.46rem 0.7rem;
+      background: #28483a;
+      color: #eef8f3;
+      font: inherit;
+      font-size: 0.72rem;
+      font-weight: 900;
+      letter-spacing: 0.025em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    button:hover { background: #345b4a; }
+
+    button.reject {
+      border-color: #79534f;
+      background: #251b19;
+      color: #e6b8b3;
+    }
+
+    button.reject:hover { background: #3a2421; }
+
+    .terminal-note {
+      border-left: 3px solid #516d60;
+      padding-left: 0.5rem;
+    }
+
+    .empty-state {
+      padding: 1rem;
+      color: #b7c7d4;
+      text-align: center;
+    }
+
+    .pagination { justify-content: center; }
+    .page-current { color: #a9bccb; font-size: 0.72rem; }
+
+    .site-footer {
+      border-top: 1px solid #334b42;
+      background: rgba(11, 15, 14, 0.96);
+    }
+
+    .footer-col-title { color: #9db1c2; }
+    .footer-col-links a { color: #c4d2de; }
+    .footer-note { color: #8fa1b1; }
+    .footer-note a { color: #c7daec; }
+
+    [dir="rtl"] .source-panel,
+    [dir="rtl"] .warning-card,
+    [dir="rtl"] .decision-panel { text-align: right; }
+
+    @media (max-width: 900px) {
+      .count-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 680px) {
+      .overview-grid,
+      .source-facts,
+      .confirmation-row { grid-template-columns: minmax(0, 1fr); }
+
+      .count-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+      .header-row,
+      .release-head {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .release-badges { justify-content: flex-start; }
+
+      .back-link,
+      .decision-actions button {
+        justify-content: center;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar" aria-label="Main">
+    <div class="topbar-inner">
+      <a class="brand" href="/" aria-label="Minerals Home">
+        <img
+          src="/static/logo_transparent.png"
+          alt="Minerals logo"
+          data-logo-light="/static/logo_transparent.png"
+          data-logo-dark="/static/logo_transparent_dark.png"
+        />
+        <span>MINERALS</span>
+      </a>
+      <a class="menu" href="/">{{ txt.nav_home }}</a>
+      <a class="menu" href="/minerals">{{ txt.nav_all_minerals }}</a>
+      <div class="top-tools">
+        <a class="login-link" href="/admin">{{ txt.nav_admin }}</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="{{ txt.registry.theme_toggle }}" aria-pressed="false">&#9680;</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page ingestion-page">
+    {% if !has_admin_session %}
+    <section class="empty-state">
+      <p>{{ txt.session_auth_required }}</p>
+      <a class="back-link" href="/admin">{{ txt.review.back_to_admin }}</a>
+    </section>
+    {% else %}
+    <section class="page-header">
+      <div class="header-row">
+        <div>
+          <h1 class="page-title">{{ txt.ingestion.title }}</h1>
+          <p class="subtitle">{{ txt.ingestion.subtitle }}</p>
+          <a class="back-link" href="/minerals">{{ published_mineral_count }} &middot; {{ txt.nav_all_minerals }}</a>
+        </div>
+        <a class="back-link" href="/admin">{{ txt.ingestion.back_to_admin }}</a>
+      </div>
+
+      {% match success_message %}
+      {% when Some with (msg) %}
+      <div class="status ok" role="status">{{ msg }}</div>
+      {% when None %}
+      {% endmatch %}
+
+      {% match error_message %}
+      {% when Some with (msg) %}
+      <div class="status warn" role="alert">{{ msg }}</div>
+      {% when None %}
+      {% endmatch %}
+    </section>
+
+    <section class="release-list" aria-label="{{ txt.ingestion.batches_title }}">
+      {% for batch in batches %}
+      <article class="release-card">
+        <header class="release-head">
+          <h2 class="release-title">{{ batch.dataset_title }}</h2>
+          <div class="release-badges">
+            <span class="release-pill">{{ txt.ingestion.release_version }} {{ batch.release_version }}</span>
+            {% if batch.is_receiving %}
+            <span class="status-pill status-receiving">{{ batch.status_display }}</span>
+            {% else if batch.is_ready %}
+            <span class="status-pill status-ready">{{ batch.status_display }}</span>
+            {% else if batch.needs_attention %}
+            <span class="status-pill status-attention">{{ batch.status_display }}</span>
+            {% else if batch.is_approved %}
+            <span class="status-pill status-approved">{{ batch.status_display }}</span>
+            {% else if batch.is_rejected %}
+            <span class="status-pill status-rejected">{{ batch.status_display }}</span>
+            {% else %}
+            <span class="status-pill">{{ batch.status_display }}</span>
+            {% endif %}
+          </div>
+        </header>
+
+        <div class="overview-grid">
+          <section class="record-panel" aria-label="{{ txt.ingestion.records }}">
+            <h3 class="section-title">{{ txt.ingestion.records }}</h3>
+            {% if batch.is_approved || batch.is_rejected %}
+            <p class="record-total">{{ batch.received_record_count }}</p>
+            {% else %}
+            <p class="record-total">{{ batch.received_record_count }} <span>/ {{ batch.expected_record_count }}</span></p>
+            <div class="progress-label">
+              <span>{{ txt.ingestion.progress }}</span>
+              <strong>{{ batch.record_progress_percent }}%</strong>
+            </div>
+            <progress value="{{ batch.record_progress_percent }}" max="100">{{ batch.record_progress_percent }}%</progress>
+            {% endif %}
+          </section>
+
+          <section class="source-panel" aria-label="{{ txt.ingestion.attribution_review }}">
+            <h3 class="section-title">{{ txt.ingestion.attribution_review }}</h3>
+            {% if batch.attribution_complete %}
+            <dl class="source-facts">
+              <div><dt>{{ txt.registry.attribution_party }}</dt><dd>{{ batch.attribution_party }}</dd></div>
+              <div><dt>{{ txt.ingestion.released_at }}</dt><dd>{{ batch.released_at_display }}</dd></div>
+              <div>
+                <dt>{{ txt.registry.source_work }}</dt>
+                <dd>
+                  {% match batch.attribution_work_url_href %}
+                  {% when Some with (href) %}<a href="{{ href }}" target="_blank" rel="noopener noreferrer">{{ batch.attribution_work_title }}</a>
+                  {% when None %}{{ batch.attribution_work_title }}
+                  {% endmatch %}
+                </dd>
+              </div>
+              <div>
+                <dt>{{ txt.registry.license_terms }}</dt>
+                <dd>
+                  {% match batch.attribution_license_url_href %}
+                  {% when Some with (href) %}<a href="{{ href }}" target="_blank" rel="license noopener noreferrer">{{ batch.source_license }}</a>
+                  {% when None %}{{ batch.source_license }}
+                  {% endmatch %}
+                </dd>
+              </div>
+            </dl>
+            <p class="source-note">{{ batch.attribution_changes_notice }}</p>
+            <p class="source-note">{{ batch.attribution_no_endorsement_notice }}</p>
+            {% else %}
+            <p class="decision-warning">{{ txt.ingestion.historical_attribution_missing }}</p>
+            {% endif %}
+          </section>
+        </div>
+
+        {% if !batch.is_approved && !batch.is_rejected %}
+        {% match batch.report_summary %}
+        {% when Some with (summary) %}
+        <section aria-label="{{ txt.ingestion.progress }}">
+          <div class="count-grid">
+            <div class="count-card"><span class="count-value">{{ summary.create_count }}</span><span class="count-label">{{ txt.ingestion.created }}</span></div>
+            <div class="count-card"><span class="count-value">{{ summary.adopt_count }}</span><span class="count-label">{{ txt.ingestion.adopted }}</span></div>
+            <div class="count-card"><span class="count-value">{{ summary.update_count }}</span><span class="count-label">{{ txt.ingestion.updated }}</span></div>
+            <div class="count-card"><span class="count-value">{{ summary.unchanged_count }}</span><span class="count-label">{{ txt.ingestion.unchanged }}</span></div>
+            <div class="count-card alert"><span class="count-value">{{ summary.conflict_count }}</span><span class="count-label">{{ txt.ingestion.blockers }}</span></div>
+            <div class="count-card alert"><span class="count-value">{{ summary.identity_critical_warning_count }}</span><span class="count-label">{{ txt.ingestion.identity_warnings }}</span></div>
+          </div>
+        </section>
+        {% when None %}
+        {% endmatch %}
+        {% endif %}
+
+        {% if batch.needs_attention %}
+        <section class="warning-list" aria-label="{{ txt.ingestion.anomaly_samples }}">
+          <h3 class="section-title">{{ txt.ingestion.anomaly_samples }}</h3>
+          {% if batch.anomaly_samples.is_empty() %}
+          <p class="hint">{{ txt.ingestion.no_anomalies }}</p>
+          {% else %}
+            {% for anomaly in batch.anomaly_samples %}
+            <article class="warning-card">
+              <strong>{{ anomaly.severity_display }}</strong>
+              <p>{{ anomaly.message }}</p>
+            </article>
+            {% endfor %}
+          {% endif %}
+        </section>
+        {% endif %}
+
+        {% match batch.decision %}
+        {% when Some with (decision) %}
+        <section class="decision-panel">
+          <h3 class="section-title">{{ txt.ingestion.decision_title }}</h3>
+          <p class="decision-warning">{{ txt.ingestion.decision_warning }}</p>
+          <form class="decision-form" method="post" action="/admin/ingestion/batches/{{ decision.batch_id }}/decision">
+            <input type="hidden" name="batch_id" value="{{ decision.batch_id }}" />
+            <input type="hidden" name="manifest_hash" value="{{ decision.manifest_hash }}" />
+            <input type="hidden" name="report_hash" value="{{ decision.report_hash }}" />
+            <input type="hidden" name="base_batch_id" value="{{ decision.base_batch_id }}" />
+            <input type="hidden" name="release_version" value="{{ decision.release_version }}" />
+
+            <div class="confirmation-row">
+              <label>
+                {{ txt.ingestion.confirmation }}: {{ decision.release_version }}
+                <input name="release_confirmation" autocomplete="off" placeholder="{{ txt.ingestion.confirmation_hint }}" required />
+              </label>
+              <label>
+                {{ txt.ingestion.operator_note }}
+                <textarea name="operator_note" maxlength="2000" placeholder="{{ txt.ingestion.operator_note_placeholder }}" required></textarea>
+              </label>
+            </div>
+
+            <label class="ack-label">
+              <input type="checkbox" name="warning_acknowledged" value="1" required />
+              <span>{{ txt.ingestion.acknowledge_warning }}</span>
+            </label>
+
+            <div class="decision-actions">
+              {% if batch.can_approve %}
+              <button type="submit" name="action" value="approve">{{ txt.ingestion.approve_release }}</button>
+              {% endif %}
+              <button class="reject" type="submit" name="action" value="reject">{{ txt.ingestion.reject_release }}</button>
+            </div>
+          </form>
+        </section>
+        {% when None %}
+        {% endmatch %}
+      </article>
+      {% else %}
+      <div class="empty-state">{{ txt.ingestion.empty }}</div>
+      {% endfor %}
+    </section>
+
+    {% if total_pages > 1 %}
+    <nav class="pagination" aria-label="{{ txt.registry.pagination_page }}">
+      {% if has_previous_page %}
+      <a class="page-link" href="/admin/ingestion?page={{ previous_page }}">{{ txt.registry.pagination_previous }}</a>
+      {% endif %}
+      <span class="page-current">{{ txt.registry.pagination_page }} {{ current_page }} {{ txt.registry.pagination_of }} {{ total_pages }}</span>
+      {% if has_next_page %}
+      <a class="page-link" href="/admin/ingestion?page={{ next_page }}">{{ txt.registry.pagination_next }}</a>
+      {% endif %}
+    </nav>
+    {% endif %}
+    {% endif %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <nav class="footer-col-links" aria-label="Footer" style="display:flex; flex-wrap:wrap; gap:0.3rem 0.8rem;">
+        <a href="/">{{ txt.nav_home }}</a>
+        <a href="/minerals">{{ txt.nav_all_minerals }}</a>
+        <a href="/about">{{ txt.footer_about_us }}</a>
+      </nav>
+      <p class="footer-note">{{ txt.footer_powered_trust_by }} <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
+    </div>
+  </footer>
+</body>
+</html>

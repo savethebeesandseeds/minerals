@@ -113,32 +113,6 @@
       border-radius: 1px;
     }
 
-    .mineral-delete-list {
-      display: grid;
-      gap: 0.38rem;
-    }
-
-    .mineral-delete-item {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 0.42rem;
-      align-items: center;
-      padding: 0.34rem 0.4rem;
-      border: 1px solid #3b5047;
-      background: #0d151c;
-    }
-
-    .mineral-delete-name {
-      font-size: 0.84rem;
-      color: #d8e2ec;
-    }
-
-    .mineral-delete-meta {
-      font-size: 0.72rem;
-      color: #9db1c2;
-      margin-top: 0.12rem;
-    }
-
     .auth-wrap {
       max-width: 520px;
       margin: 1.2rem auto 0;
@@ -181,41 +155,45 @@
       gap: 0.58rem;
     }
 
-    .screen-switch {
+    .admin-workflow-links {
       display: flex;
       flex-wrap: wrap;
-      gap: 0.28rem;
+      gap: 0.32rem;
+      align-items: center;
       margin-top: 0.32rem;
     }
 
-    .screen-toggle {
-      border: 1px solid #4a6258;
-      background: #151d1a;
-      color: #c4d3cc;
+    .review-queue-link {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      border: 1px solid #3a6d57;
       border-radius: 1px;
       padding: 0.24rem 0.42rem;
-      cursor: pointer;
+      background: #163025;
+      color: #bfe4d2;
       font-size: 0.74rem;
+      font-weight: 700;
       letter-spacing: 0.03em;
+      text-decoration: none;
       text-transform: uppercase;
     }
 
-    .screen-toggle.active {
-      border-color: #3a6d57;
-      background: linear-gradient(180deg, #4a8c6f, #3a6d57);
-      color: #f0f7f3;
+    .review-queue-link:hover {
+      background: #1d3d30;
+      color: #eef8f3;
+      text-decoration: none;
     }
 
-    .admin-screen-group {
-      display: none;
-      grid-template-columns: minmax(0, 1fr);
-      gap: 0.58rem;
-      min-width: 0;
-      max-width: 100%;
+    .ingestion-link {
+      border-color: #486985;
+      background: #172838;
+      color: #c6def2;
     }
 
-    .admin-screen-group.is-active {
-      display: grid;
+    .ingestion-link:hover {
+      background: #1d3448;
+      color: #f0f7fd;
     }
 
     .grid-2 {
@@ -226,14 +204,6 @@
 
     @media (max-width: 840px) {
       .grid-2 { grid-template-columns: 1fr; }
-
-      .mineral-delete-item {
-        grid-template-columns: 1fr;
-      }
-
-      .mineral-delete-item button {
-        width: 100%;
-      }
     }
 
     .preview {
@@ -247,113 +217,6 @@
       background: #0d151c;
       display: block;
       margin: 0.2rem 0 0.4rem;
-    }
-
-    .code {
-      font-family: inherit;
-      font-size: 0.76rem;
-      color: #9db2c7;
-      margin-top: 0.08rem;
-    }
-
-    .sql-console-form {
-      display: grid;
-      gap: 0.42rem;
-      min-width: 0;
-    }
-
-    .sql-console-form textarea {
-      min-height: 172px;
-      font-family: inherit;
-      line-height: 1.35;
-    }
-
-    .sql-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.32rem;
-      align-items: center;
-    }
-
-    .table-shortcuts {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.24rem;
-    }
-
-    .table-shortcut {
-      border: 1px solid #4a6258;
-      background: #151d1a;
-      color: #c4d3cc;
-      border-radius: 1px;
-      padding: 0.16rem 0.28rem;
-      font-size: 0.7rem;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-      cursor: pointer;
-    }
-
-    .table-shortcut.active {
-      border-color: #3a6d57;
-      background: #163025;
-      color: #bfe4d2;
-    }
-
-    .sql-result-wrap {
-      margin-top: 0.42rem;
-      width: 100%;
-      max-width: 100%;
-      min-width: 0;
-      border: 1px solid #3b5047;
-      border-radius: 1px;
-      background: #0d151c;
-      overflow-x: auto;
-      overflow-y: auto;
-      max-height: 340px;
-    }
-
-    .sql-table {
-      width: max-content;
-      border-collapse: collapse;
-      min-width: 100%;
-    }
-
-    .sql-table th,
-    .sql-table td {
-      border-bottom: 1px solid #283730;
-      border-right: 1px solid #283730;
-      padding: 0.24rem 0.3rem;
-      text-align: left;
-      vertical-align: top;
-      font-size: 0.74rem;
-      white-space: nowrap;
-      word-break: normal;
-    }
-
-    .sql-table td {
-      max-width: 360px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .sql-table th:last-child,
-    .sql-table td:last-child {
-      border-right: 0;
-    }
-
-    .sql-table th {
-      position: sticky;
-      top: 0;
-      background: #13211b;
-      color: #d8e2ec;
-      z-index: 1;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-    }
-
-    .sql-table tr:last-child td {
-      border-bottom: 0;
     }
 
     .site-footer {
@@ -494,10 +357,9 @@
       </a>
       <a class="menu" href="/">{{ txt.nav_home }}</a>
       <a class="menu" href="/minerals">{{ txt.nav_all_minerals }}</a>
-      <a class="menu" href="/catalog">{{ txt.nav_catalog }}</a>
       <div class="top-tools">
-        <a class="login-link" href="/admin">{% if has_admin_session %}admin{% else %}{{ txt.nav_login }}{% endif %}</a>
-        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Toggle dark mode" aria-pressed="false">◐</button>
+        <a class="login-link" href="/admin">{% if has_admin_session %}{{ txt.nav_admin }}{% else %}{{ txt.nav_login }}{% endif %}</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="{{ txt.registry.theme_toggle }}" aria-pressed="false">◐</button>
       </div>
     </div>
   </nav>
@@ -506,8 +368,8 @@
   <main class="page">
     <section class="auth-wrap" aria-label="admin authentication">
       <div class="auth-head">
-        <h1 style="font-size:1.04rem; margin:0; color:#edf4fa; letter-spacing:0.04em; text-transform:uppercase;">Admin Access</h1>
-        <span class="auth-tag">HARDENED AUTH</span>
+        <h1 style="font-size:1.04rem; margin:0; color:#edf4fa; letter-spacing:0.04em; text-transform:uppercase;">Admin sign in</h1>
+        <span class="auth-tag">Restricted</span>
       </div>
 
       {% match error_message %}
@@ -523,17 +385,16 @@
       {% endmatch %}
 
       <p class="hint">
-        Single control point. Password is sourced from server environment and never exposed in the interface.
+        Sign in to manage catalog records.
       </p>
 
       <form method="post" action="/admin/login" style="display:grid; gap:0.42rem;">
         <label>
-          ADMIN_PASSWORD
+          Password
           <input type="password" name="password" autocomplete="current-password" required />
         </label>
         <div style="display:flex; gap:0.32rem; align-items:center; flex-wrap:wrap;">
-          <button type="submit">Authenticate Session</button>
-          <a class="ghost" href="/about" style="padding:0.3rem 0.46rem;">Security Notes</a>
+          <button type="submit">Sign in</button>
         </div>
       </form>
     </section>
@@ -542,12 +403,12 @@
   <main class="page layout">
     <section class="panel">
       <div style="display:flex; justify-content:space-between; gap:0.38rem; align-items:baseline; flex-wrap:wrap;">
-        <h1 style="font-size:1.02rem; letter-spacing:0.04em; text-transform:uppercase;">Admin Control Plane</h1>
+        <h1 style="font-size:1.02rem; letter-spacing:0.04em; text-transform:uppercase;">Admin</h1>
         <form method="post" action="/admin/logout" style="margin:0;">
-          <button class="ghost" type="submit">End Session</button>
+          <button class="ghost" type="submit">Sign out</button>
         </form>
       </div>
-      <p class="code">Manage catalog publishing and inspect/update data in isolated screens.</p>
+      <p class="hint">Add minerals and manage what is published.</p>
 
       {% match success_message %}
       {% when Some with (msg) %}
@@ -561,36 +422,21 @@
       {% when None %}
       {% endmatch %}
 
-      <div class="screen-switch" role="tablist" aria-label="Admin screens">
-        <button
-          class="screen-toggle active"
-          type="button"
-          data-admin-screen-toggle="creation"
-          role="tab"
-          aria-selected="true"
-        >
-          Catalog Creation
-        </button>
-        <button
-          class="screen-toggle"
-          type="button"
-          data-admin-screen-toggle="database"
-          role="tab"
-          aria-selected="false"
-        >
-          Database Viewer
-        </button>
+      <div class="admin-workflow-links" aria-label="Admin publishing workflows">
+        <a class="review-queue-link" href="/admin/reviews">{{ txt.review.queue_link }} &rarr;</a>
+        <a class="review-queue-link ingestion-link" href="/admin/ingestion">{{ txt.ingestion.link }} &rarr;</a>
       </div>
+
     </section>
 
-    <div class="admin-screen-group is-active" data-admin-screen-group="creation">
+    <div class="layout">
       <section class="panel">
-        <h2 style="font-size:0.9rem;">1. AI Draft</h2>
-        <p class="hint">Upload a mineral image (up to 20 MB). Optional context can influence AI naming and technical inference.</p>
+        <h2 style="font-size:0.9rem;">Add a mineral</h2>
+        <p class="hint">Upload a mineral image (up to 20 MB). Optional notes can help prepare the fields for your review.</p>
 
         <form method="post" action="/admin/minerals/suggest" enctype="multipart/form-data" style="display:grid; gap:0.42rem;">
           <label>
-            Optional Context
+            Optional notes
             <textarea name="suggestion_context">{{ draft_form.suggestion_context }}</textarea>
           </label>
 
@@ -600,15 +446,15 @@
           </label>
 
           <div>
-            <button type="submit">Suggest Fields</button>
+            <button type="submit">Prepare mineral</button>
           </div>
         </form>
       </section>
 
       {% if has_suggestion %}
       <section class="panel">
-        <h2 style="font-size:0.9rem;">2. Review And Publish</h2>
-        <p class="hint">Review generated values, apply edits, then publish.</p>
+        <h2 style="font-size:0.9rem;">Review and publish</h2>
+        <p class="hint">Check every field, make any edits, then publish.</p>
 
         {% if !draft_form.preview_image_data_url.is_empty() %}
         <img class="preview" src="{{ draft_form.preview_image_data_url }}" alt="mineral preview" />
@@ -697,61 +543,26 @@
       {% endif %}
 
       <section class="panel">
-        <h2 style="font-size:0.9rem;">3. Delete Minerals</h2>
-        <p class="hint">Permanently removes mineral metadata from SQLite, clears shared image links/files when orphaned, and deletes local report artifact folders when present.</p>
-
-        <div class="mineral-delete-list">
-          {% for mineral in admin_minerals %}
-          <div class="mineral-delete-item">
-            <div>
-              <div class="mineral-delete-name">{{ mineral.common_name }}</div>
-              <div class="mineral-delete-meta">{{ mineral.mineral_family }} · {{ mineral.folder_name }}</div>
-            </div>
-            <form method="post" action="/admin/minerals/delete" style="margin:0;" data-delete-form>
-              <input type="hidden" name="slug" value="{{ mineral.slug }}" />
-              <button class="danger" type="submit" data-mineral-name="{{ mineral.common_name }}">Delete</button>
-            </form>
-          </div>
-          {% else %}
-          <div class="status warn">No minerals available to delete.</div>
-          {% endfor %}
-        </div>
-      </section>
-    </div>
-
-    <div class="admin-screen-group" data-admin-screen-group="database">
-      <section class="panel">
-        <h2 style="font-size:0.9rem;">Database Viewer</h2>
-        <p class="hint">
-          Run one SQL statement at a time against <code>data/minerals.db</code>. Data queries and data modifications are supported. Schema-changing and PRAGMA statements are blocked.
+        <h2 style="font-size:0.9rem;">Remove a mineral from public view</h2>
+        <p class="status warn">
+          This hides the mineral and its buying options without deleting its history, and supersedes every pending revision. Add a reason before continuing.
         </p>
 
-        <div class="table-shortcuts" aria-label="Quick table view">
-          <button class="table-shortcut active" type="button" data-db-table="minerals">minerals</button>
-          <button class="table-shortcut" type="button" data-db-table="catalog">catalog</button>
-          <button class="table-shortcut" type="button" data-db-table="images">images</button>
-        </div>
-
-        <form class="sql-console-form" data-db-query-form>
+        <form method="post" action="/admin/minerals/withdraw" style="display:grid; gap:0.42rem;">
           <label>
-            SQL Statement
-            <textarea id="db-sql-input" spellcheck="false" autocomplete="off">SELECT * FROM minerals;</textarea>
+            Mineral page ID
+            <input name="slug" autocomplete="off" required />
           </label>
 
-          <div class="sql-actions">
-            <button type="submit" id="db-sql-run">Run SQL</button>
-            <button class="ghost" type="button" id="db-sql-clear">Clear Results</button>
+          <label>
+            Reason
+            <textarea name="operator_note" maxlength="2000" required></textarea>
+          </label>
+
+          <div>
+            <button class="danger" type="submit">Remove from public view</button>
           </div>
         </form>
-
-        <div id="db-sql-message" class="status" style="display:none;"></div>
-
-        <div class="sql-result-wrap" id="db-sql-results-wrap" hidden>
-          <table class="sql-table" id="db-sql-results-table" aria-label="Database query results">
-            <thead id="db-sql-results-head"></thead>
-            <tbody id="db-sql-results-body"></tbody>
-          </table>
-        </div>
       </section>
     </div>
   </main>
@@ -768,35 +579,11 @@
   </div>
   <footer class="site-footer">
     <div class="footer-inner">
-      <div class="footer-grid" aria-label="Footer">
-        <section class="footer-col">
-          <h4 class="footer-col-title">{{ txt.footer_contact }}</h4>
-          <div class="footer-col-links">
-            <a href="/pages/contact-us">{{ txt.footer_contact_us }}</a>
-            <a href="/pages/support">{{ txt.footer_support }}</a>
-            <a href="/pages/work-with-us">{{ txt.footer_work_with_us }}</a>
-            <a href="/pages/account">{{ txt.footer_account }}</a>
-          </div>
-        </section>
-        <section class="footer-col">
-          <h4 class="footer-col-title">{{ txt.footer_legal }}</h4>
-          <div class="footer-col-links">
-            <a href="/pages/legal">{{ txt.footer_legal_link }}</a>
-            <a href="/pages/privacy-policy">{{ txt.footer_privacy_policy }}</a>
-            <a href="/pages/terms-of-service">{{ txt.footer_terms_of_service }}</a>
-            <a href="/pages/returns-and-refunds">{{ txt.footer_returns_and_refunds }}</a>
-            <a href="/pages/shipping">{{ txt.footer_shipping }}</a>
-          </div>
-        </section>
-        <section class="footer-col">
-          <h4 class="footer-col-title">{{ txt.footer_mission }}</h4>
-          <div class="footer-col-links">
-            <a href="/about">{{ txt.footer_about_us }}</a>
-            <a href="/pages/conflict-free-minerals">{{ txt.footer_conflict_free_minerals }}</a>
-            <a href="/pages/frequently-asked-questions">{{ txt.footer_faq }}</a>
-          </div>
-        </section>
-      </div>
+      <nav class="footer-col-links" aria-label="Footer" style="display:flex; flex-wrap:wrap; gap:0.3rem 0.8rem;">
+        <a href="/">{{ txt.nav_home }}</a>
+        <a href="/minerals">{{ txt.nav_all_minerals }}</a>
+        <a href="/about">{{ txt.footer_about_us }}</a>
+      </nav>
       <p class="footer-note">{{ txt.footer_powered_trust_by }} <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
     </div>
   </footer>
@@ -818,260 +605,6 @@
         });
       }
 
-      const deleteForms = document.querySelectorAll("form[data-delete-form]");
-      deleteForms.forEach((form) => {
-        form.addEventListener("submit", (event) => {
-          const submit = form.querySelector("button[type=\"submit\"]");
-          const mineralName = submit?.dataset.mineralName || "this mineral";
-          const confirmed = window.confirm(`Delete ${mineralName}? This cannot be undone.`);
-          if (!confirmed) {
-            event.preventDefault();
-            return;
-          }
-
-          if (submit) {
-            submit.disabled = true;
-            submit.textContent = "Deleting...";
-          }
-        });
-      });
-
-      const screenButtons = Array.from(document.querySelectorAll("[data-admin-screen-toggle]"));
-      const screenGroups = Array.from(document.querySelectorAll("[data-admin-screen-group]"));
-
-      const dbQueryForm = document.querySelector("form[data-db-query-form]");
-      const dbSqlInput = document.getElementById("db-sql-input");
-      const dbSqlRun = document.getElementById("db-sql-run");
-      const dbSqlClear = document.getElementById("db-sql-clear");
-      const dbSqlMessage = document.getElementById("db-sql-message");
-      const dbSqlResultsWrap = document.getElementById("db-sql-results-wrap");
-      const dbSqlResultsHead = document.getElementById("db-sql-results-head");
-      const dbSqlResultsBody = document.getElementById("db-sql-results-body");
-      const tableShortcutButtons = Array.from(document.querySelectorAll("[data-db-table]"));
-      const DEFAULT_DB_TABLE = "minerals";
-      let dbDefaultLoaded = false;
-
-      function setActiveScreen(screenName) {
-        screenButtons.forEach((button) => {
-          const isActive = button.dataset.adminScreenToggle === screenName;
-          button.classList.toggle("active", isActive);
-          button.setAttribute("aria-selected", isActive ? "true" : "false");
-        });
-
-        screenGroups.forEach((group) => {
-          const isActive = group.dataset.adminScreenGroup === screenName;
-          group.classList.toggle("is-active", isActive);
-        });
-
-        if (
-          screenName === "database" &&
-          !dbDefaultLoaded &&
-          dbSqlInput &&
-          dbQueryForm &&
-          dbSqlRun
-        ) {
-          const defaultQuery = queryForTable(DEFAULT_DB_TABLE);
-          dbSqlInput.value = defaultQuery;
-          setActiveTableShortcut(DEFAULT_DB_TABLE);
-          executeSql(defaultQuery);
-          dbDefaultLoaded = true;
-        }
-      }
-
-      function setActiveTableShortcut(tableName) {
-        tableShortcutButtons.forEach((button) => {
-          button.classList.toggle("active", button.dataset.dbTable === tableName);
-        });
-      }
-
-      function queryForTable(tableName) {
-        if (!/^[a-z_][a-z0-9_]*$/i.test(tableName)) {
-          return "";
-        }
-        return `SELECT * FROM ${tableName};`;
-      }
-
-      function clearSqlResults() {
-        if (dbSqlResultsHead) {
-          dbSqlResultsHead.replaceChildren();
-        }
-        if (dbSqlResultsBody) {
-          dbSqlResultsBody.replaceChildren();
-        }
-        if (dbSqlResultsWrap) {
-          dbSqlResultsWrap.hidden = true;
-        }
-      }
-
-      function showSqlMessage(kind, message) {
-        if (!dbSqlMessage) {
-          return;
-        }
-
-        dbSqlMessage.classList.remove("ok", "warn");
-        dbSqlMessage.classList.add(kind === "ok" ? "ok" : "warn");
-        dbSqlMessage.textContent = message;
-        dbSqlMessage.style.display = "block";
-      }
-
-      function renderSqlResults(columns, rows) {
-        if (!dbSqlResultsHead || !dbSqlResultsBody || !dbSqlResultsWrap) {
-          return;
-        }
-
-        dbSqlResultsHead.replaceChildren();
-        dbSqlResultsBody.replaceChildren();
-
-        if (!Array.isArray(columns) || columns.length === 0) {
-          dbSqlResultsWrap.hidden = true;
-          return;
-        }
-
-        const headRow = document.createElement("tr");
-        columns.forEach((column) => {
-          const th = document.createElement("th");
-          th.textContent = String(column);
-          headRow.appendChild(th);
-        });
-        dbSqlResultsHead.appendChild(headRow);
-
-        const embeddingColumnIndexes = columns
-          .map((column, index) => ({ index, name: String(column).toLowerCase() }))
-          .filter((column) => column.name.includes("embedding"))
-          .map((column) => column.index);
-
-        rows.forEach((row) => {
-          const tr = document.createElement("tr");
-          columns.forEach((_, index) => {
-            const td = document.createElement("td");
-            const value = Array.isArray(row) ? row[index] : "";
-            const fullText = value == null ? "" : String(value);
-            if (embeddingColumnIndexes.includes(index)) {
-              td.textContent = "[<...>]";
-              td.dataset.fullText = "[<...>]";
-            } else {
-              td.textContent = fullText;
-              td.dataset.fullText = fullText;
-            }
-            tr.appendChild(td);
-          });
-          dbSqlResultsBody.appendChild(tr);
-        });
-
-        dbSqlResultsWrap.hidden = false;
-        requestAnimationFrame(applySqlCellTooltips);
-      }
-
-      function applySqlCellTooltips() {
-        if (!dbSqlResultsBody) {
-          return;
-        }
-
-        const cells = dbSqlResultsBody.querySelectorAll("td");
-        cells.forEach((cell) => {
-          const fullText = cell.dataset.fullText || cell.textContent || "";
-          if (cell.scrollWidth > cell.clientWidth) {
-            cell.title = fullText;
-          } else {
-            cell.removeAttribute("title");
-          }
-        });
-      }
-
-        async function executeSql(sql) {
-          const statement = sql.trim();
-          if (!statement) {
-            showSqlMessage("warn", "SQL is required.");
-            clearSqlResults();
-            return;
-          }
-
-          dbSqlRun.disabled = true;
-          dbSqlRun.textContent = "Running...";
-          tableShortcutButtons.forEach((button) => {
-            button.disabled = true;
-          });
-
-          try {
-            const response = await fetch("/admin/db/query", {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                accept: "application/json",
-              },
-              body: JSON.stringify({ sql: statement }),
-            });
-
-            if (!response.ok) {
-              const errorText = (await response.text()).trim();
-              throw new Error(errorText || `Request failed (${response.status})`);
-            }
-
-            const payload = await response.json();
-            showSqlMessage("ok", payload.message || "Statement executed.");
-            renderSqlResults(payload.columns || [], payload.rows || []);
-          } catch (error) {
-            showSqlMessage(
-              "warn",
-              error instanceof Error ? error.message : "SQL execution failed.",
-            );
-            clearSqlResults();
-          } finally {
-            dbSqlRun.disabled = false;
-            dbSqlRun.textContent = "Run SQL";
-            tableShortcutButtons.forEach((button) => {
-              button.disabled = false;
-            });
-          }
-        }
-
-      tableShortcutButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-          const tableName = button.dataset.dbTable || "";
-          const query = queryForTable(tableName);
-          if (!query || !dbSqlInput) {
-            return;
-          }
-
-          dbDefaultLoaded = true;
-          setActiveScreen("database");
-          setActiveTableShortcut(tableName);
-          dbSqlInput.value = query;
-          executeSql(query);
-        });
-      });
-
-      if (dbSqlClear) {
-        dbSqlClear.addEventListener("click", () => {
-          clearSqlResults();
-          if (dbSqlMessage) {
-            dbSqlMessage.style.display = "none";
-          }
-        });
-      }
-
-      if (dbQueryForm && dbSqlInput && dbSqlRun) {
-        dbQueryForm.addEventListener("submit", async (event) => {
-          event.preventDefault();
-          setActiveTableShortcut("");
-          await executeSql(dbSqlInput.value);
-        });
-      }
-
-      screenButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-          const screenName = button.dataset.adminScreenToggle || "creation";
-          setActiveScreen(screenName);
-        });
-      });
-
-      if (screenButtons.length > 0) {
-        setActiveScreen("creation");
-      }
-
-      window.addEventListener("resize", () => {
-        requestAnimationFrame(applySqlCellTooltips);
-      });
     })();
   </script>
 </body>

@@ -2,12 +2,13 @@ use std::{
     collections::{BTreeMap, HashMap},
     fs,
     path::Path,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{anyhow, Context, Result};
 use rusqlite::{params, types::ValueRef, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 
 const MINERALS_DB_FILE: &str = "minerals.db";
 const LEGACY_JSON_DB_FILE: &str = "minerals.db.json";
@@ -17,6 +18,9 @@ const FALLBACK_LANGUAGE: &str = "en";
 const METADATA_SCHEMA_VERSION: i64 = 1;
 const ADMIN_SQL_MAX_ROWS: usize = 500;
 const ADMIN_SQL_MAX_LENGTH: usize = 100_000;
+const ADMIN_SQL_MAX_CELL_BYTES: usize = 100_000;
+const ADMIN_SQL_MAX_OUTPUT_BYTES: usize = 1_000_000;
+const ADMIN_SQL_MAX_RUNTIME: Duration = Duration::from_secs(2);
 const ADMIN_SQL_FORBIDDEN_KEYWORDS: &[&str] = &[
     "alter",
     "analyze",
@@ -150,6 +154,26 @@ struct StoredImage {
     content_type: String,
 }
 
+#[derive(Debug)]
+struct PendingImageFile {
+    path: std::path::PathBuf,
+    keep: bool,
+}
+
+impl PendingImageFile {
+    fn persist(mut self) {
+        self.keep = true;
+    }
+}
+
+impl Drop for PendingImageFile {
+    fn drop(&mut self) {
+        if !self.keep {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct OwnedImageInput {
     bytes: Vec<u8>,
@@ -193,6 +217,11 @@ pub fn init_minerals_database(data_root: &Path) -> Result<()> {
 
 pub fn load_minerals(data_root: &Path, lang_code: &str) -> Result<Vec<Mineral>> {
     let conn = open_connection(data_root)?;
+    let started_at = std::time::Instant::now();
+    conn.progress_handler(
+        1_000,
+        Some(move || started_at.elapsed() >= ADMIN_SQL_MAX_RUNTIME),
+    );
     let mut stmt = conn
         .prepare(
             "
@@ -277,12 +306,80 @@ pub fn load_minerals(data_root: &Path, lang_code: &str) -> Result<Vec<Mineral>> 
             luster: selected.luster,
             major_elements_pct: selected.major_elements_pct,
             notes: selected.notes,
-            image_path: selected_image.map(|value| format!("/data/{IMAGES_DIR}/{value}")),
+            image_path: selected_image.map(|value| format!("/media/{IMAGES_DIR}/{value}")),
         });
     }
 
     minerals.sort_by(|a, b| a.common_name.cmp(&b.common_name));
     Ok(minerals)
+}
+
+pub fn load_registered_image(
+    data_root: &Path,
+    stored_name: &str,
+) -> Result<Option<(Vec<u8>, String)>> {
+    if stored_name.is_empty()
+        || stored_name.len() > 255
+        || !stored_name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_'))
+        || matches!(stored_name, "." | "..")
+    {
+        return Ok(None);
+    }
+
+    let conn = open_connection(data_root)?;
+    let stored_content_type = conn
+        .query_row(
+            "SELECT COALESCE(content_type, '') FROM images WHERE stored_name = ?1",
+            params![stored_name],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .context("failed to resolve registered image")?;
+    let Some(stored_content_type) = stored_content_type else {
+        return Ok(None);
+    };
+    let content_type = if stored_content_type.is_empty() {
+        Path::new(stored_name)
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(content_type_from_ext)
+            .unwrap_or("")
+            .to_string()
+    } else {
+        stored_content_type
+    };
+    if !matches!(
+        content_type.as_str(),
+        "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+    ) {
+        return Ok(None);
+    }
+
+    let images_root = data_root.join(IMAGES_DIR);
+    let image_path = images_root.join(stored_name);
+    let metadata = match fs::symlink_metadata(&image_path) {
+        Ok(metadata) if metadata.file_type().is_file() && !metadata.file_type().is_symlink() => {
+            metadata
+        }
+        Ok(_) => return Ok(None),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err).context("failed to inspect registered image"),
+    };
+    if metadata.len() > 25 * 1024 * 1024 {
+        return Ok(None);
+    }
+    let canonical_root = fs::canonicalize(&images_root)
+        .with_context(|| format!("failed to resolve {}", images_root.display()))?;
+    let canonical_image = fs::canonicalize(&image_path)
+        .with_context(|| format!("failed to resolve {}", image_path.display()))?;
+    if !canonical_image.starts_with(&canonical_root) {
+        return Ok(None);
+    }
+    let bytes = fs::read(&canonical_image)
+        .with_context(|| format!("failed to read registered image {}", image_path.display()))?;
+    Ok(Some((bytes, content_type)))
 }
 
 pub fn save_localized_mineral_records(
@@ -300,7 +397,7 @@ pub fn save_localized_mineral_records(
         let tx = conn
             .transaction()
             .context("failed to open transaction for save")?;
-        upsert_catalog_bundle(
+        let pending_image = upsert_catalog_bundle(
             &tx,
             data_root,
             slug,
@@ -309,9 +406,14 @@ pub fn save_localized_mineral_records(
             Some(&image_input),
         )?;
         tx.commit().context("failed to commit save transaction")?;
+        if let Some(pending_image) = pending_image {
+            pending_image.persist();
+        }
     }
 
-    prune_orphan_images(&conn, data_root)?;
+    if let Err(err) = prune_orphan_images(&conn, data_root) {
+        warn!("post-commit orphan image cleanup failed: {err:#}");
+    }
     Ok(())
 }
 
@@ -360,7 +462,9 @@ pub fn delete_mineral_records(data_root: &Path, slug: &str) -> Result<usize> {
         deleted
     };
 
-    prune_orphan_images(&conn, data_root)?;
+    if let Err(err) = prune_orphan_images(&conn, data_root) {
+        warn!("post-delete orphan image cleanup failed: {err:#}");
+    }
     Ok(deleted_rows)
 }
 
@@ -401,6 +505,11 @@ pub fn execute_admin_sql(data_root: &Path, sql: &str) -> Result<AdminSqlExecutio
     let mut stmt = conn
         .prepare(trimmed)
         .context("failed to prepare SQL statement")?;
+    if !stmt.readonly() {
+        return Err(anyhow!(
+            "admin SQL console is read-only; use reviewed application workflows for writes"
+        ));
+    }
 
     let column_names = stmt
         .column_names()
@@ -411,6 +520,7 @@ pub fn execute_admin_sql(data_root: &Path, sql: &str) -> Result<AdminSqlExecutio
     if !column_names.is_empty() {
         let mut rows = Vec::new();
         let mut truncated = false;
+        let mut output_bytes = 0usize;
         let mut query_rows = stmt.query([]).context("failed to execute SQL query")?;
 
         while let Some(row) = query_rows
@@ -427,7 +537,18 @@ pub fn execute_admin_sql(data_root: &Path, sql: &str) -> Result<AdminSqlExecutio
                 let value = row
                     .get_ref(idx)
                     .with_context(|| format!("failed to read SQL value at column {idx}"))?;
-                out_row.push(sql_value_to_string(value));
+                let rendered = sql_value_to_string(value);
+                if rendered.len() > ADMIN_SQL_MAX_CELL_BYTES
+                    || output_bytes.saturating_add(rendered.len()) > ADMIN_SQL_MAX_OUTPUT_BYTES
+                {
+                    truncated = true;
+                    break;
+                }
+                output_bytes += rendered.len();
+                out_row.push(rendered);
+            }
+            if truncated {
+                break;
             }
             rows.push(out_row);
         }
@@ -442,21 +563,7 @@ pub fn execute_admin_sql(data_root: &Path, sql: &str) -> Result<AdminSqlExecutio
         });
     }
 
-    let affected_rows = stmt
-        .execute([])
-        .context("failed to execute SQL statement")?;
-    drop(stmt);
-
-    prune_orphan_images(&conn, data_root)?;
-
-    Ok(AdminSqlExecution {
-        statement_type,
-        columns: Vec::new(),
-        rows: Vec::new(),
-        row_count: 0,
-        affected_rows,
-        truncated: false,
-    })
+    Err(anyhow!("admin SQL statement did not return rows"))
 }
 
 fn sql_value_to_string(value: ValueRef<'_>) -> String {
@@ -603,8 +710,12 @@ fn open_connection(data_root: &Path) -> Result<Connection> {
     let db_path = data_root.join(MINERALS_DB_FILE);
     let conn = Connection::open(&db_path)
         .with_context(|| format!("failed to open {}", db_path.display()))?;
-    conn.execute_batch("PRAGMA foreign_keys = ON;")
-        .context("failed to enable sqlite foreign keys")?;
+    conn.busy_timeout(Duration::from_secs(5))
+        .context("failed to configure sqlite busy timeout")?;
+    conn.execute_batch(
+        "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;",
+    )
+    .context("failed to configure sqlite connection")?;
     Ok(conn)
 }
 
@@ -857,6 +968,7 @@ fn migrate_from_legacy_sql_schema(data_root: &Path, conn: &mut Connection) -> Re
     let tx = conn
         .transaction()
         .context("failed to open transaction for legacy SQL migration")?;
+    let mut pending_images = Vec::new();
 
     for (slug, group) in grouped {
         let image = match group.image_name {
@@ -864,18 +976,23 @@ fn migrate_from_legacy_sql_schema(data_root: &Path, conn: &mut Connection) -> Re
             None => None,
         };
 
-        upsert_catalog_bundle(
+        if let Some(pending_image) = upsert_catalog_bundle(
             &tx,
             data_root,
             &slug,
             &group.folder_name,
             &group.localized,
             image.as_ref(),
-        )?;
+        )? {
+            pending_images.push(pending_image);
+        }
     }
 
     tx.commit()
         .context("failed to commit legacy SQL migration transaction")?;
+    for pending_image in pending_images {
+        pending_image.persist();
+    }
 
     drop_legacy_schema_tables(conn)?;
 
@@ -948,21 +1065,27 @@ fn import_localized_records(
     let tx = conn
         .transaction()
         .context("failed to open migration transaction")?;
+    let mut pending_images = Vec::new();
 
     for (slug, (folder_name, localized)) in grouped {
         let image = resolve_legacy_image_for_slug(data_root, &folder_name, &localized)?;
-        upsert_catalog_bundle(
+        if let Some(pending_image) = upsert_catalog_bundle(
             &tx,
             data_root,
             &slug,
             &folder_name,
             &localized,
             image.as_ref(),
-        )?;
+        )? {
+            pending_images.push(pending_image);
+        }
     }
 
     tx.commit()
         .context("failed to commit migration transaction")?;
+    for pending_image in pending_images {
+        pending_image.persist();
+    }
     Ok(())
 }
 
@@ -973,7 +1096,7 @@ fn upsert_catalog_bundle(
     folder_name: &str,
     localized_records: &HashMap<String, MineralDiskRecord>,
     image: Option<&OwnedImageInput>,
-) -> Result<()> {
+) -> Result<Option<PendingImageFile>> {
     let normalized = normalize_localized_records(localized_records)?;
     let canonical = normalized
         .get(FALLBACK_LANGUAGE)
@@ -1136,7 +1259,7 @@ fn upsert_catalog_bundle(
         }
     };
 
-    if let Some(image_input) = image {
+    let pending_image = if let Some(image_input) = image {
         let stored_image = store_image_file(
             data_root,
             slug,
@@ -1144,6 +1267,10 @@ fn upsert_catalog_bundle(
             &image_input.bytes,
             image_input.original_name.as_deref(),
         )?;
+        let pending_image = PendingImageFile {
+            path: data_root.join(IMAGES_DIR).join(&stored_image.stored_name),
+            keep: false,
+        };
 
         tx.execute(
             "
@@ -1178,9 +1305,12 @@ fn upsert_catalog_bundle(
             params![image_id, source_mineral_id],
         )
         .context("failed to set mineral image reference")?;
-    }
+        Some(pending_image)
+    } else {
+        None
+    };
 
-    Ok(())
+    Ok(pending_image)
 }
 
 fn prune_orphan_images(conn: &Connection, data_root: &Path) -> Result<()> {
@@ -1205,14 +1335,14 @@ fn prune_orphan_images(conn: &Connection, data_root: &Path) -> Result<()> {
         .context("failed to collect orphan image rows")?;
 
     for (image_id, stored_name) in orphan_rows {
-        conn.execute("DELETE FROM images WHERE id = ?1", params![image_id])
-            .with_context(|| format!("failed to delete orphan image id {image_id}"))?;
-
         let image_path = data_root.join(IMAGES_DIR).join(&stored_name);
         if image_path.exists() {
             fs::remove_file(&image_path)
                 .with_context(|| format!("failed to delete {}", image_path.display()))?;
         }
+
+        conn.execute("DELETE FROM images WHERE id = ?1", params![image_id])
+            .with_context(|| format!("failed to delete orphan image id {image_id}"))?;
     }
 
     Ok(())
@@ -1535,11 +1665,26 @@ pub fn parse_major_elements(raw: &str) -> Result<BTreeMap<String, f32>, String> 
         if key.is_empty() || value.is_empty() {
             return Err("major_elements_pct lines must be like 'Si=46.7'".to_string());
         }
+        if key.len() > 16 || !key.chars().all(|ch| ch.is_ascii_alphanumeric()) {
+            return Err(format!("invalid element symbol '{key}'"));
+        }
 
         let parsed = value
             .parse::<f32>()
             .map_err(|_| format!("invalid percentage for '{key}'"))?;
+        if !parsed.is_finite() || !(0.0..=100.0).contains(&parsed) {
+            return Err(format!("percentage for '{key}' must be between 0 and 100"));
+        }
         values.insert(key.to_string(), parsed);
+        if values.len() > 64 {
+            return Err("major_elements_pct contains too many entries".to_string());
+        }
+    }
+    let total: f32 = values.values().sum();
+    if total > 100.5 {
+        return Err(format!(
+            "major element percentages total {total:.2}, above 100"
+        ));
     }
     Ok(values)
 }
