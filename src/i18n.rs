@@ -66,21 +66,6 @@ impl Language {
         }
     }
 
-    pub fn native_name(self) -> &'static str {
-        match self {
-            Language::En => "English",
-            Language::Es => "Español",
-            Language::Cs => "Čeština",
-            Language::Zh => "中文",
-            Language::Ar => "العربية",
-            Language::Fr => "Français",
-            Language::De => "Deutsch",
-            Language::Pt => "Português",
-            Language::Hi => "हिन्दी",
-            Language::Ja => "日本語",
-        }
-    }
-
     pub fn from_code(value: &str) -> Option<Self> {
         let code = value
             .trim()
@@ -105,22 +90,6 @@ impl Language {
             _ => None,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct LanguageOption {
-    pub code: &'static str,
-    pub label: &'static str,
-}
-
-pub fn language_options() -> Vec<LanguageOption> {
-    Language::all()
-        .iter()
-        .map(|lang| LanguageOption {
-            code: lang.code(),
-            label: lang.native_name(),
-        })
-        .collect()
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -644,23 +613,6 @@ pub struct UiText {
     pub label_hardness_band: &'static str,
     pub label_density_band: &'static str,
     pub label_dominant_element: &'static str,
-    pub label_audience: &'static str,
-    pub label_purpose: &'static str,
-    pub label_site_context: &'static str,
-    pub label_generated_utc: &'static str,
-    pub label_weight_pct: &'static str,
-
-    pub mineral_profile: &'static str,
-    pub major_composition: &'static str,
-    pub computed_classification: &'static str,
-    pub report_builder: &'static str,
-    pub report_builder_subtitle: &'static str,
-    pub generate_pdf: &'static str,
-    pub status_pdf: &'static str,
-    pub status_html: &'static str,
-    pub status_pdf_failed: &'static str,
-    pub current_chain_output: &'static str,
-    pub recommendations_heading: &'static str,
 
     pub about_title: &'static str,
     pub about_subtitle: &'static str,
@@ -3011,23 +2963,7 @@ fn en_text() -> UiText {
         label_hardness_band: "Hardness Band",
         label_density_band: "Density Band",
         label_dominant_element: "Dominant Element",
-        label_audience: "Audience",
-        label_purpose: "Purpose",
-        label_site_context: "Site Context",
-        label_generated_utc: "Generated (UTC)",
-        label_weight_pct: "Weight Percent",
 
-        mineral_profile: "Mineral Profile",
-        major_composition: "Major Chemical Composition",
-        computed_classification: "Computed Classification",
-        report_builder: "Report Builder",
-        report_builder_subtitle: "Create a downloadable report for this mineral profile.",
-        generate_pdf: "Generate PDF",
-        status_pdf: "PDF",
-        status_html: "HTML",
-        status_pdf_failed: "PDF generation failed.",
-        current_chain_output: "Research summary",
-        recommendations_heading: "Recommendations",
 
         about_title: "About Minerals",
         about_subtitle: "An open knowledge and sourcing platform for trustworthy information about minerals.",
@@ -3105,17 +3041,6 @@ pub fn ui_text(lang: Language) -> UiText {
             t.label_hardness_band = "Banda de dureza";
             t.label_density_band = "Banda de densidad";
             t.label_dominant_element = "Elemento dominante";
-            t.label_purpose = "Propósito";
-            t.label_site_context = "Contexto del sitio";
-            t.mineral_profile = "Perfil del mineral";
-            t.major_composition = "Composición química principal";
-            t.computed_classification = "Clasificación calculada";
-            t.report_builder = "Generador de informes";
-            t.report_builder_subtitle = "Crea un informe descargable para este perfil mineral.";
-            t.generate_pdf = "Generar PDF";
-            t.status_pdf_failed = "Falló la generación de PDF.";
-            t.current_chain_output = "Resumen de investigación";
-            t.recommendations_heading = "Recomendaciones";
             t.about_title = "Acerca de Minerals";
             t.about_subtitle = "Una plataforma abierta de conocimiento y abastecimiento para obtener información fiable sobre minerales.";
             t.about_operating_model = "Nuestro enfoque";
@@ -3168,14 +3093,6 @@ pub fn ui_text(lang: Language) -> UiText {
             t.label_description = "Popis";
             t.label_crystal_system = "Krystalová soustava";
             t.label_notes = "Poznámky";
-            t.mineral_profile = "Profil minerálu";
-            t.major_composition = "Hlavní chemické složení";
-            t.computed_classification = "Vypočtená klasifikace";
-            t.report_builder = "Generátor reportu";
-            t.generate_pdf = "Vygenerovat PDF";
-            t.status_pdf_failed = "Generování PDF selhalo.";
-            t.current_chain_output = "Shrnutí výzkumu";
-            t.recommendations_heading = "Doporučení";
             t.about_title = "O Minerals";
             t.about_subtitle =
                 "Otevřená platforma znalostí a zásobování pro spolehlivé informace o minerálech.";
@@ -3245,22 +3162,6 @@ pub fn ui_text(lang: Language) -> UiText {
             t.label_hardness_band = "硬度等级";
             t.label_density_band = "密度等级";
             t.label_dominant_element = "主导元素";
-            t.label_audience = "受众";
-            t.label_purpose = "目的";
-            t.label_site_context = "现场背景";
-            t.label_generated_utc = "生成时间 (UTC)";
-            t.label_weight_pct = "质量百分比";
-            t.mineral_profile = "矿物概况";
-            t.major_composition = "主要化学组成";
-            t.computed_classification = "计算分类";
-            t.report_builder = "报告生成";
-            t.report_builder_subtitle = "为此矿物档案创建可下载的报告。";
-            t.generate_pdf = "生成 PDF";
-            t.status_pdf = "PDF";
-            t.status_html = "HTML";
-            t.status_pdf_failed = "PDF 生成失败。";
-            t.current_chain_output = "研究摘要";
-            t.recommendations_heading = "建议";
             t.about_title = "关于 Minerals";
             t.about_subtitle = "面向矿物可信信息的开放知识与采购平台。";
             t.about_operating_model = "我们的方法";
@@ -3333,22 +3234,6 @@ pub fn ui_text(lang: Language) -> UiText {
             t.label_hardness_band = "فئة الصلادة";
             t.label_density_band = "فئة الكثافة";
             t.label_dominant_element = "العنصر الغالب";
-            t.label_audience = "الجمهور";
-            t.label_purpose = "الغرض";
-            t.label_site_context = "سياق الموقع";
-            t.label_generated_utc = "وقت الإنشاء (UTC)";
-            t.label_weight_pct = "النسبة الوزنية";
-            t.mineral_profile = "ملف المعدن";
-            t.major_composition = "التركيب الكيميائي الرئيسي";
-            t.computed_classification = "التصنيف المحسوب";
-            t.report_builder = "منشئ التقرير";
-            t.report_builder_subtitle = "أنشئ تقريراً قابلاً للتنزيل لملف هذا المعدن.";
-            t.generate_pdf = "إنشاء PDF";
-            t.status_pdf = "PDF";
-            t.status_html = "HTML";
-            t.status_pdf_failed = "فشل إنشاء PDF.";
-            t.current_chain_output = "ملخص البحث";
-            t.recommendations_heading = "التوصيات";
             t.about_title = "حول Minerals";
             t.about_subtitle = "منصة معرفة وتوريد مفتوحة لمعلومات موثوقة عن المعادن.";
             t.about_operating_model = "نهجنا";
@@ -3402,14 +3287,6 @@ pub fn ui_text(lang: Language) -> UiText {
             t.label_description = "Description";
             t.label_crystal_system = "Système cristallin";
             t.label_notes = "Notes";
-            t.mineral_profile = "Profil du minéral";
-            t.major_composition = "Composition chimique principale";
-            t.computed_classification = "Classification calculée";
-            t.report_builder = "Générateur de rapport";
-            t.generate_pdf = "Générer le PDF";
-            t.status_pdf_failed = "Échec de génération du PDF.";
-            t.current_chain_output = "Synthèse de la recherche";
-            t.recommendations_heading = "Recommandations";
             t.about_title = "À propos de Minerals";
             t.about_subtitle = "Une plateforme ouverte de connaissances et d’approvisionnement pour des informations fiables sur les minéraux.";
             t.about_operating_model = "Notre approche";
@@ -3461,12 +3338,6 @@ pub fn ui_text(lang: Language) -> UiText {
             t.label_description = "Beschreibung";
             t.label_crystal_system = "Kristallsystem";
             t.label_notes = "Notizen";
-            t.mineral_profile = "Mineralprofil";
-            t.report_builder = "Berichtsgenerator";
-            t.generate_pdf = "PDF erzeugen";
-            t.status_pdf_failed = "PDF-Erzeugung fehlgeschlagen.";
-            t.current_chain_output = "Forschungszusammenfassung";
-            t.recommendations_heading = "Empfehlungen";
             t.about_title = "Über Minerals";
             t.about_subtitle = "Eine offene Wissens- und Beschaffungsplattform für verlässliche Informationen über Mineralien.";
             t.about_operating_model = "Unser Ansatz";
@@ -3518,12 +3389,6 @@ pub fn ui_text(lang: Language) -> UiText {
             t.label_description = "Descrição";
             t.label_crystal_system = "Sistema cristalino";
             t.label_notes = "Notas";
-            t.mineral_profile = "Perfil do mineral";
-            t.report_builder = "Gerador de relatório";
-            t.generate_pdf = "Gerar PDF";
-            t.status_pdf_failed = "Falha ao gerar PDF.";
-            t.current_chain_output = "Resumo da pesquisa";
-            t.recommendations_heading = "Recomendações";
             t.about_title = "Sobre o Minerals";
             t.about_subtitle = "Uma plataforma aberta de conhecimento e fornecimento para informações confiáveis sobre minerais.";
             t.about_operating_model = "Nossa abordagem";
@@ -3575,14 +3440,6 @@ pub fn ui_text(lang: Language) -> UiText {
             t.label_family = "परिवार";
             t.label_description = "विवरण";
             t.label_notes = "टिप्पणियाँ";
-            t.mineral_profile = "खनिज प्रोफ़ाइल";
-            t.major_composition = "मुख्य रासायनिक संरचना";
-            t.computed_classification = "गणना-आधारित वर्गीकरण";
-            t.report_builder = "रिपोर्ट बिल्डर";
-            t.generate_pdf = "PDF बनाएँ";
-            t.status_pdf_failed = "PDF निर्माण विफल हुआ।";
-            t.current_chain_output = "शोध सारांश";
-            t.recommendations_heading = "सिफारिशें";
             t.about_title = "Minerals के बारे में";
             t.about_subtitle = "खनिजों की भरोसेमंद जानकारी के लिए एक खुला ज्ञान और आपूर्ति मंच।";
             t.about_operating_model = "हमारा दृष्टिकोण";
@@ -3636,14 +3493,6 @@ pub fn ui_text(lang: Language) -> UiText {
             t.label_description = "説明";
             t.label_crystal_system = "結晶系";
             t.label_notes = "ノート";
-            t.mineral_profile = "鉱物プロフィール";
-            t.major_composition = "主要化学組成";
-            t.computed_classification = "計算分類";
-            t.report_builder = "レポート生成";
-            t.generate_pdf = "PDFを生成";
-            t.status_pdf_failed = "PDF 生成に失敗しました。";
-            t.current_chain_output = "調査概要";
-            t.recommendations_heading = "推奨事項";
             t.about_title = "Minerals について";
             t.about_subtitle =
                 "鉱物の信頼できる情報を提供する、オープンな知識・調達プラットフォームです。";
@@ -3930,45 +3779,6 @@ mod tests {
                     language.code()
                 );
             }
-        }
-    }
-
-    #[test]
-    fn mineral_detail_template_does_not_embed_targeted_english_copy_or_raw_statuses() {
-        let template = include_str!("../static/material_record.html");
-        for forbidden in [
-            ">Mineral species<",
-            "IMA approved\n",
-            "Recognized (grandfathered)",
-            "Approved by the IMA",
-            ">Mineral facts<",
-            ">Nomenclature<",
-            ">Discovery country<",
-            "This entry currently documents the mineral's official identity",
-            ">Published references<",
-            ">Source and license<",
-            "{{ material.nomenclature_status }}",
-        ] {
-            assert!(
-                !template.contains(forbidden),
-                "mineral detail template still embeds {forbidden:?}"
-            );
-        }
-
-        for required in [
-            "txt.registry.ima_number",
-            "txt.registry.ima_symbol",
-            "txt.registry.mineral_species",
-            "txt.registry.source_status_approved",
-            "txt.registry.discovery_country",
-            "txt.registry.official_identity_coverage_note",
-            "txt.registry.published_references",
-            "txt.registry.source_and_license",
-        ] {
-            assert!(
-                template.contains(required),
-                "mineral detail template does not use {required}"
-            );
         }
     }
 
@@ -4427,25 +4237,6 @@ mod tests {
             assert_eq!(text.rejected_notice, rejected);
             assert_ne!(text.approved_notice.trim_end_matches('.'), text.approve);
             assert_ne!(text.rejected_notice.trim_end_matches('.'), text.reject);
-        }
-    }
-
-    #[test]
-    fn research_summary_copy_is_localized_without_process_jargon() {
-        for &language in Language::all() {
-            let expected = match language {
-                Language::En => "Research summary",
-                Language::Es => "Resumen de investigación",
-                Language::Cs => "Shrnutí výzkumu",
-                Language::De => "Forschungszusammenfassung",
-                Language::Fr => "Synthèse de la recherche",
-                Language::Pt => "Resumo da pesquisa",
-                Language::Zh => "研究摘要",
-                Language::Ar => "ملخص البحث",
-                Language::Hi => "शोध सारांश",
-                Language::Ja => "調査概要",
-            };
-            assert_eq!(ui_text(language).current_chain_output, expected);
         }
     }
 

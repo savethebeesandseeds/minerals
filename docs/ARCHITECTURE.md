@@ -1,50 +1,79 @@
 # Architecture
 
-## Current runtime
+## Public delivery and private control
 
-The application is a Rust/Axum service with Askama-rendered HTML and SQLite.
-It intentionally remains a modular monolith while the domain and data contracts
-stabilize.
+The catalog supports a deliberately simple split deployment. Public browsing
+is a static single-page application; administration and publication remain on
+the private Axum service.
 
 ```text
-browser / API client
+public browser                    administrator
+      |                                |
+      v                                v
+static HTML/JS/WASM              private Axum routes
+      |                                |
+      v                                v
+sanitized public SQLite          authoritative minerals.db
+      ^                                |
+      |                                v
+      +----- verified export-public snapshot
+```
+
+The static app fetches a small manifest and its content-addressed database,
+checks the byte length and SHA-256 digest, opens it read-only with SQLite
+WebAssembly in a dedicated worker, validates the public schema, and exposes
+only fixed parameterized search/detail/evidence/offer operations. It has no
+account, review, ingestion, report-generation, or arbitrary-SQL capability.
+
+`export-public` reads one consistent transaction from the authoritative
+database and constructs a new database containing only published, valid
+minerals and their public associations. It assembles an entirely fresh sibling
+staging directory, writes the manifest last, validates the complete package,
+and only then renames that directory to the requested previously absent release
+path. Failure cleans the staging directory and cannot partially mutate an
+existing release. Operational tables and the live database file are never
+copied. Content publication is therefore admin change, export to a versioned
+directory, then an atomic static-host release switch; it does not require
+regenerating one HTML file per mineral or recompiling SQLite.
+
+## Current runtime
+
+The private application is a Rust/Axum service with Askama-rendered admin HTML
+and SQLite. Build-time packages separate the administration service, registry
+core, public exporter, and IMA release tooling so each command compiles only
+the dependency graph it needs.
+
+```text
+administrator / ingestion adapter
         |
         v
-Axum routes and Askama views
+private Axum routes and Askama admin views
         |
         +-- legacy catalog compatibility (`minerals`, `catalog`, `images`)
-        +-- global mineral registry and FTS5 search
+        +-- global mineral registry
         +-- evidence, immutable review revisions, and versioned source releases
         +-- providers, offers, and sourcing requests
-        +-- deterministic report analysis
-        +-- bounded XeLaTeX report worker
         |
         v
 SQLite + private data root
 ```
 
-Only three file surfaces are public:
+The private service exposes no catalog records or data-root files. Its only
+unauthenticated surfaces are:
 
-- `/static/*`: application-owned CSS, JavaScript, fonts, and images (template
-  source files such as `.html` and `.tex` are denied);
-- `/media/images/:file`: database-registered image files;
-- `/artifacts/:folder/:run/:file`: only `report.pdf` and `report.html` from
-  opaque, request-specific report runs.
+- `/livez`, `/readyz`, and the compatibility `/healthz` probe;
+- `/` as a redirect to `/admin`;
+- seven exact, binary-embedded assets used by the admin login and review UI.
 
-The database, source JSON, ingestion payloads, TeX working files, and backups
-are not public routes.
-
-The media and artifact handlers consult the authoritative publication state
-before reading bytes. A withdrawn mineral's unshared images and legacy reports
-therefore return `404`; image responses revalidate and personalized reports use
-`no-store`.
+The database, uploaded images, source JSON, ingestion payloads, and backups are
+not HTTP file routes. The separate static catalog is the only public read plane.
 
 ## Data boundaries
 
 ### Legacy publication model
 
 The original `minerals`, `catalog`, and `images` tables remain compatible with
-the existing catalog, admin publishing, translations, and reports. A trigger
+admin publishing and translations. A trigger
 projects new legacy mineral rows into the global registry.
 
 Legacy scientific content is imported with:
@@ -202,23 +231,13 @@ trust score.
 
 ## Search contract
 
-`GET /minerals?q=<query>&page=<number>` is the localized public discovery
-surface. It is backed by the same mineral registry and returns 24 records per
-page. `/catalog` is retained only as a permanent redirect for old links.
-
-`GET /api/minerals?q=<query>&limit=<1..100>`
-uses SQLite FTS5 with alphanumeric prefix tokens. Empty queries list records by
-quality and canonical name. Results include verification, evidence count, and
-active offer count; attributed results also include a compact derived-data
-license signal and stable detail-page attribution path. Commerce does not alter
-knowledge relevance.
-
-Mineral detail and offer endpoints are:
-
-```text
-GET /api/minerals/:slug
-GET /api/minerals/:slug/offers
-```
+Public search is a browser-local contract. The static application verifies the
+content-addressed public SQLite file, deserializes it into SQLite WebAssembly in
+a worker, validates its schema, and exposes only fixed parameterized
+search/detail/evidence/offer operations to the UI. Empty queries list records
+deterministically by quality and canonical name. Commerce does not alter
+knowledge relevance. The private Axum service has no public search or detail
+API.
 
 ## Import contracts
 

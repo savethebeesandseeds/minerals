@@ -8,7 +8,6 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Duration as ChronoDuration, NaiveDateTime, SecondsFormat, Utc};
-use reqwest::Url;
 use ring::digest::{digest, Context as DigestContext, SHA256};
 use rusqlite::{
     params, Connection, DatabaseName, OptionalExtension, Transaction, TransactionBehavior,
@@ -16,10 +15,13 @@ use rusqlite::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
+use url::Url;
 
 const DATABASE_FILE: &str = "minerals.db";
 const REGISTRY_MIGRATION: &str = "registry_v1";
 const MINERAL_REVIEW_MIGRATION: &str = "mineral_review_workflow_v1";
+const MINERAL_REVIEW_AUDIT_MIGRATION: &str = "mineral_review_audit_v2";
+const LEGACY_WITHDRAWAL_AUDIT_ACTOR: &str = "system:legacy-withdrawal-audit-backfill";
 const EVIDENCE_SNAPSHOT_MIGRATION: &str = "material_evidence_snapshots_v1";
 const EVIDENCE_ATTRIBUTION_SNAPSHOT_MIGRATION: &str = "material_evidence_attribution_snapshots_v2";
 const MINERAL_WITHDRAWAL_MIGRATION: &str = "mineral_withdrawal_v1";
@@ -335,6 +337,7 @@ pub struct MineralReviewOutcome {
     pub revision: usize,
     pub mineral_slug: String,
     pub status: MineralReviewStatus,
+    pub reviewer_actor: Option<String>,
     pub operator_note: String,
     pub submitted_at: String,
     pub reviewed_at: Option<String>,
@@ -817,9 +820,17 @@ pub fn init_registry_database(data_root: &Path) -> Result<()> {
     init_registry_database_with_options(data_root, true)
 }
 
+/// Validates every environment-backed registry setting without opening or
+/// mutating the database.
+pub fn validate_registry_configuration() -> Result<()> {
+    mineral_ingestion_limits()?;
+    sqlite_durability_mode()?;
+    Ok(())
+}
+
 pub fn init_registry_database_with_options(data_root: &Path, backfill_legacy: bool) -> Result<()> {
     // Validate operational limits at startup, before accepting any writes.
-    mineral_ingestion_limits()?;
+    validate_registry_configuration()?;
     let mut conn = open_connection(data_root, true)?;
     let tx = conn
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -1216,13 +1227,27 @@ pub fn init_registry_database_with_options(data_root: &Path, backfill_legacy: bo
             ingestion_run_id INTEGER NOT NULL,
             source_label TEXT NOT NULL,
             payload_json TEXT NOT NULL CHECK(json_valid(payload_json)),
+            target_baseline_hash TEXT,
             status TEXT NOT NULL DEFAULT 'pending'
                 CHECK(status IN ('pending', 'approved', 'rejected', 'superseded')),
+            reviewer_actor TEXT,
             operator_note TEXT NOT NULL DEFAULT '',
             submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             reviewed_at TEXT,
             UNIQUE(material_slug, revision),
             FOREIGN KEY(ingestion_run_id) REFERENCES ingestion_runs(id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE IF NOT EXISTS material_publication_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            material_public_id TEXT NOT NULL,
+            material_slug TEXT NOT NULL,
+            review_id INTEGER,
+            event_type TEXT NOT NULL CHECK(event_type IN ('published', 'withdrawn')),
+            actor TEXT NOT NULL,
+            operator_note TEXT NOT NULL,
+            material_state_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE INDEX IF NOT EXISTS idx_materials_type_name
@@ -1259,6 +1284,8 @@ pub fn init_registry_database_with_options(data_root: &Path, backfill_legacy: bo
             ON mineral_dataset_facts(material_id, dataset_key, source_release_id);
         CREATE UNIQUE INDEX IF NOT EXISTS idx_mineral_reviews_one_pending
             ON mineral_review_revisions(material_slug) WHERE status = 'pending';
+        CREATE INDEX IF NOT EXISTS idx_material_publication_events_slug
+            ON material_publication_events(material_slug, created_at, id);
 
         CREATE TRIGGER IF NOT EXISTS mineral_ingestion_chunks_immutable_update
         BEFORE UPDATE ON mineral_ingestion_chunks BEGIN
@@ -1319,6 +1346,14 @@ pub fn init_registry_database_with_options(data_root: &Path, backfill_legacy: bo
         CREATE TRIGGER IF NOT EXISTS mineral_ingestion_events_immutable_delete
         BEFORE DELETE ON mineral_ingestion_events BEGIN
             SELECT RAISE(ABORT, 'ingestion events are append-only');
+        END;
+        CREATE TRIGGER IF NOT EXISTS material_publication_events_immutable_update
+        BEFORE UPDATE ON material_publication_events BEGIN
+            SELECT RAISE(ABORT, 'material publication events are append-only');
+        END;
+        CREATE TRIGGER IF NOT EXISTS material_publication_events_immutable_delete
+        BEFORE DELETE ON material_publication_events BEGIN
+            SELECT RAISE(ABORT, 'material publication events are append-only');
         END;
         CREATE TRIGGER IF NOT EXISTS mineral_external_identities_immutable_update
         BEFORE UPDATE ON mineral_external_identities BEGIN
@@ -1425,6 +1460,15 @@ pub fn init_registry_database_with_options(data_root: &Path, backfill_legacy: bo
         "#,
     )
     .context("failed to initialize registry schema")?;
+
+    for (column, definition) in [("target_baseline_hash", "TEXT"), ("reviewer_actor", "TEXT")] {
+        if !table_has_column(&tx, "mineral_review_revisions", column)? {
+            tx.execute_batch(&format!(
+                "ALTER TABLE mineral_review_revisions ADD COLUMN {column} {definition};"
+            ))
+            .with_context(|| format!("failed to add mineral review audit column '{column}'"))?;
+        }
+    }
 
     if !table_has_column(&tx, "mineral_ingestion_chunks", "payload_bytes")? {
         tx.execute_batch(
@@ -1875,6 +1919,17 @@ pub fn init_registry_database_with_options(data_root: &Path, backfill_legacy: bo
     )
     .context("failed to record dataset-owned mineral facts migration")?;
 
+    // Run this after every older column migration because the state hash
+    // intentionally covers all material associations. The NOT EXISTS guard
+    // also repairs databases initialized by the short-lived audit migration
+    // that recorded its marker without seeding an existing withdrawal.
+    backfill_legacy_withdrawal_events(&tx)?;
+    tx.execute(
+        "INSERT OR IGNORE INTO schema_migrations(name) VALUES (?1)",
+        params![MINERAL_REVIEW_AUDIT_MIGRATION],
+    )
+    .context("failed to record mineral review audit migration")?;
+
     tx.commit()
         .context("failed to commit registry migration transaction")?;
     Ok(())
@@ -2106,18 +2161,19 @@ pub fn registry_is_ready(data_root: &Path) -> Result<()> {
     }
     let migration_count: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM schema_migrations WHERE name IN (?1, ?2, ?3, ?4)",
+            "SELECT COUNT(*) FROM schema_migrations WHERE name IN (?1, ?2, ?3, ?4, ?5)",
             params![
                 BULK_MINERAL_INGESTION_MIGRATION,
                 BULK_MINERAL_INGESTION_SAFETY_MIGRATION,
                 EVIDENCE_ATTRIBUTION_SNAPSHOT_MIGRATION,
-                MINERAL_DATASET_FACTS_MIGRATION
+                MINERAL_DATASET_FACTS_MIGRATION,
+                MINERAL_REVIEW_AUDIT_MIGRATION
             ],
             |row| row.get(0),
         )
         .context("failed to inspect bulk mineral migration markers")?;
-    if migration_count != 4 {
-        bail!("bulk mineral ingestion safety migrations are not fully applied");
+    if migration_count != 5 {
+        bail!("registry safety migrations are not fully applied");
     }
     for table in [
         "mineral_ingestion_batches",
@@ -2131,6 +2187,7 @@ pub fn registry_is_ready(data_root: &Path) -> Result<()> {
         "mineral_ingestion_authorities",
         "mineral_ingestion_events",
         "mineral_ingestion_backups",
+        "material_publication_events",
         "material_search",
     ] {
         let exists: bool = conn
@@ -2180,6 +2237,10 @@ pub fn registry_is_ready(data_root: &Path) -> Result<()> {
                 "compacted_record_count",
                 "compacted_payload_bytes",
             ][..],
+        ),
+        (
+            "mineral_review_revisions",
+            &["target_baseline_hash", "reviewer_actor"][..],
         ),
     ] {
         for column in columns {
@@ -6300,12 +6361,14 @@ pub fn list_pending_mineral_reviews(
 pub fn approve_mineral_review(
     data_root: &Path,
     review_id: i64,
+    actor: &str,
     operator_note: &str,
 ) -> Result<MineralReviewOutcome> {
     decide_mineral_review(
         data_root,
         review_id,
         MineralReviewStatus::Approved,
+        actor,
         operator_note,
     )
 }
@@ -6316,12 +6379,14 @@ pub fn approve_mineral_review(
 pub fn reject_mineral_review(
     data_root: &Path,
     review_id: i64,
+    actor: &str,
     operator_note: &str,
 ) -> Result<MineralReviewOutcome> {
     decide_mineral_review(
         data_root,
         review_id,
         MineralReviewStatus::Rejected,
+        actor,
         operator_note,
     )
 }
@@ -6330,11 +6395,18 @@ pub fn reject_mineral_review(
 /// published identity. The operator note is retained with the live row.
 /// Returns true when the public state changed and false when it was already
 /// withdrawn. Pending revisions are superseded in either case.
-pub fn withdraw_mineral(data_root: &Path, slug: &str, operator_note: &str) -> Result<bool> {
+pub fn withdraw_mineral(
+    data_root: &Path,
+    slug: &str,
+    actor: &str,
+    operator_note: &str,
+) -> Result<bool> {
     if !is_valid_registry_slug(slug) {
         bail!("invalid mineral slug '{slug}'");
     }
+    validate_mineral_ingestion_actor(actor)?;
     validate_text("operator_note", operator_note, 1, 2_000)?;
+    let actor = actor.trim();
     let operator_note = operator_note.trim();
     let mut conn = open_connection(data_root, true)?;
     let tx = conn
@@ -6388,12 +6460,23 @@ pub fn withdraw_mineral(data_root: &Path, slug: &str, operator_note: &str) -> Re
     tx.execute(
         r#"
         UPDATE mineral_review_revisions
-        SET status = 'superseded', operator_note = ?1, reviewed_at = CURRENT_TIMESTAMP
-        WHERE material_slug = ?2 AND status = 'pending'
+        SET status = 'superseded', reviewer_actor = ?1, operator_note = ?2,
+            reviewed_at = CURRENT_TIMESTAMP
+        WHERE material_slug = ?3 AND status = 'pending'
         "#,
-        params![operator_note, slug],
+        params![actor, operator_note, slug],
     )
     .context("failed to supersede pending revisions for withdrawn mineral")?;
+    if changed {
+        append_material_publication_event(
+            &tx,
+            material.0,
+            None,
+            "withdrawn",
+            actor,
+            operator_note,
+        )?;
+    }
     tx.commit().context("failed to commit mineral withdrawal")?;
     Ok(changed)
 }
@@ -6586,6 +6669,7 @@ fn stage_mineral_review(
     if record.record_type != "mineral" {
         bail!("only mineral records can enter the mineral review queue");
     }
+    let target_baseline_hash = mineral_review_target_baseline_hash(tx, &record.slug)?;
     let next_revision: i64 = tx
         .query_row(
             r#"
@@ -6617,19 +6701,222 @@ fn stage_mineral_review(
     tx.execute(
         r#"
         INSERT INTO mineral_review_revisions(
-            material_slug, revision, ingestion_run_id, source_label, payload_json
-        ) VALUES (?1, ?2, ?3, ?4, ?5)
+            material_slug, revision, ingestion_run_id, source_label, payload_json,
+            target_baseline_hash
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
         "#,
         params![
             record.slug,
             next_revision,
             ingestion_run_id,
             source_label,
-            payload_json
+            payload_json,
+            target_baseline_hash,
         ],
     )
     .with_context(|| format!("failed to stage mineral '{}' for review", record.slug))?;
     Ok(tx.last_insert_rowid())
+}
+
+fn backfill_legacy_withdrawal_events(conn: &Connection) -> Result<()> {
+    let withdrawals = {
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT
+                    m.id, m.public_id, m.slug, m.withdrawal_note,
+                    COALESCE(NULLIF(m.withdrawn_at, ''), m.updated_at, m.created_at)
+                FROM materials m
+                WHERE m.record_type = 'mineral'
+                  AND m.publication_status = 'withdrawn'
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM material_publication_events mpe
+                      WHERE mpe.material_public_id = m.public_id
+                        AND mpe.event_type = 'withdrawn'
+                  )
+                ORDER BY m.id
+                "#,
+            )
+            .context("failed to prepare legacy withdrawal audit backfill")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+            ))
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()?
+    };
+
+    for (material_id, public_id, slug, operator_note, withdrawn_at) in withdrawals {
+        let material_state_hash = mineral_review_target_baseline_hash(conn, &slug)?;
+        conn.execute(
+            r#"
+            INSERT INTO material_publication_events(
+                material_public_id, material_slug, review_id, event_type, actor,
+                operator_note, material_state_hash, created_at
+            ) VALUES (?1, ?2, NULL, 'withdrawn', ?3, ?4, ?5, ?6)
+            "#,
+            params![
+                public_id,
+                slug,
+                LEGACY_WITHDRAWAL_AUDIT_ACTOR,
+                operator_note,
+                material_state_hash,
+                withdrawn_at,
+            ],
+        )
+        .with_context(|| {
+            format!("failed to backfill withdrawal audit for material id {material_id}")
+        })?;
+    }
+    Ok(())
+}
+
+fn mineral_review_target_baseline_hash(conn: &Connection, slug: &str) -> Result<String> {
+    let material = conn
+        .query_row(
+            r#"
+            SELECT id, json_array(
+                COALESCE(public_id, ''), slug, record_type, canonical_name, formula,
+                description, mineral_family, COALESCE(cas_number, ''), identifiers_json,
+                synonyms_json, properties_json, safety_json, search_text,
+                verification_status, data_quality_score, source_kind, license_spdx,
+                publication_status, withdrawal_note, COALESCE(withdrawn_at, ''),
+                nomenclature_status, is_valid_species, COALESCE(image_id, ''),
+                metadata_schema_version, embeddings_json, created_at, updated_at
+            )
+            FROM materials
+            WHERE slug = ?1
+            "#,
+            params![slug],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .context("failed to load mineral review target baseline")?;
+
+    let mut context = DigestContext::new(&SHA256);
+    update_baseline_digest(&mut context, "ordinary-mineral-review-target-v1");
+    update_baseline_digest(&mut context, slug);
+    let Some((material_id, material_state)) = material else {
+        update_baseline_digest(&mut context, "absent");
+        return Ok(format_sha256_digest(context.finish().as_ref()));
+    };
+    update_baseline_digest(&mut context, "present");
+    update_baseline_digest(&mut context, &material_state);
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT state_kind, state_json
+            FROM (
+                SELECT 'external_identity' AS state_kind,
+                       json_array(dataset_key, source_record_id, created_batch_id, created_at) AS state_json
+                FROM mineral_external_identities
+                WHERE material_id = ?1
+                UNION ALL
+                SELECT 'dataset_identifier',
+                       json_array(dataset_key, identifier_key, identifier_value,
+                                  normalized_value, source_release_id, created_at)
+                FROM mineral_dataset_identifiers
+                WHERE material_id = ?1
+                UNION ALL
+                SELECT 'dataset_fact',
+                       json_array(dataset_key, fact_key, fact_value, source_release_id,
+                                  created_at, updated_at)
+                FROM mineral_dataset_facts
+                WHERE material_id = ?1
+                UNION ALL
+                SELECT 'alias',
+                       json_array(id, alias, alias_normalized, language_code, alias_type,
+                                  origin, dataset_key, source_release_id)
+                FROM material_aliases
+                WHERE material_id = ?1
+                UNION ALL
+                SELECT 'evidence',
+                       json_array(id, source_id, claim_scope, claim_json, confidence,
+                                  review_status, source_title, source_publisher,
+                                  source_license_spdx, source_retrieved_at, source_content_hash,
+                                  source_attribution_party, source_work_title, source_work_url,
+                                  source_license_url, source_changes_notice,
+                                  source_no_endorsement_notice,
+                                  source_derived_output_license_spdx, dataset_key,
+                                  source_release_id, created_at, updated_at)
+                FROM material_evidence
+                WHERE material_id = ?1
+                UNION ALL
+                SELECT 'active_offer',
+                       json_array(id, provider_id, external_id, active, updated_at)
+                FROM offers
+                WHERE material_id = ?1 AND active = 1
+                UNION ALL
+                SELECT 'media',
+                       json_array(id, image_id, media_role, origin_kind, synthetic,
+                                  generator_model, prompt_hash, source_url, license_spdx,
+                                  alt_text, verification_status, created_at)
+                FROM material_media
+                WHERE material_id = ?1
+            )
+            ORDER BY state_kind, state_json
+            "#,
+        )
+        .context("failed to prepare mineral review association baseline")?;
+    let mut rows = stmt.query(params![material_id])?;
+    while let Some(row) = rows.next()? {
+        update_baseline_digest(&mut context, &row.get::<_, String>(0)?);
+        update_baseline_digest(&mut context, &row.get::<_, String>(1)?);
+    }
+    Ok(format_sha256_digest(context.finish().as_ref()))
+}
+
+fn update_baseline_digest(context: &mut DigestContext, value: &str) {
+    context.update(value.len().to_string().as_bytes());
+    context.update(b":");
+    context.update(value.as_bytes());
+    context.update(b";");
+}
+
+fn append_material_publication_event(
+    conn: &Connection,
+    material_id: i64,
+    review_id: Option<i64>,
+    event_type: &str,
+    actor: &str,
+    operator_note: &str,
+) -> Result<()> {
+    if !matches!(event_type, "published" | "withdrawn") {
+        bail!("unsupported material publication event '{event_type}'");
+    }
+    let (public_id, slug): (String, String) = conn
+        .query_row(
+            "SELECT public_id, slug FROM materials WHERE id = ?1",
+            params![material_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .context("failed to load material publication event identity")?;
+    let material_state_hash = mineral_review_target_baseline_hash(conn, &slug)?;
+    conn.execute(
+        r#"
+        INSERT INTO material_publication_events(
+            material_public_id, material_slug, review_id, event_type, actor,
+            operator_note, material_state_hash
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        "#,
+        params![
+            public_id,
+            slug,
+            review_id,
+            event_type,
+            actor,
+            operator_note,
+            material_state_hash,
+        ],
+    )
+    .context("failed to append material publication event")?;
+    Ok(())
 }
 
 struct StoredMineralReview {
@@ -6637,7 +6924,9 @@ struct StoredMineralReview {
     revision: i64,
     mineral_slug: String,
     payload_json: String,
+    target_baseline_hash: Option<String>,
     status: MineralReviewStatus,
+    reviewer_actor: Option<String>,
     operator_note: String,
     submitted_at: String,
     reviewed_at: Option<String>,
@@ -6651,8 +6940,8 @@ fn load_stored_mineral_review(
         .query_row(
             r#"
             SELECT
-                id, revision, material_slug, payload_json, status,
-                operator_note, submitted_at, reviewed_at
+                id, revision, material_slug, payload_json, target_baseline_hash,
+                status, reviewer_actor, operator_note, submitted_at, reviewed_at
             FROM mineral_review_revisions
             WHERE id = ?1
             "#,
@@ -6663,10 +6952,12 @@ fn load_stored_mineral_review(
                     row.get::<_, i64>(1)?,
                     row.get::<_, String>(2)?,
                     row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<String>>(4)?,
                     row.get::<_, String>(5)?,
-                    row.get::<_, String>(6)?,
-                    row.get::<_, Option<String>>(7)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, String>(8)?,
+                    row.get::<_, Option<String>>(9)?,
                 ))
             },
         )
@@ -6678,7 +6969,9 @@ fn load_stored_mineral_review(
             revision,
             mineral_slug,
             payload_json,
+            target_baseline_hash,
             status,
+            reviewer_actor,
             operator_note,
             submitted_at,
             reviewed_at,
@@ -6688,7 +6981,9 @@ fn load_stored_mineral_review(
                 revision,
                 mineral_slug,
                 payload_json,
+                target_baseline_hash,
                 status: MineralReviewStatus::from_database(&status)?,
+                reviewer_actor,
                 operator_note,
                 submitted_at,
                 reviewed_at,
@@ -6702,6 +6997,7 @@ fn decide_mineral_review(
     data_root: &Path,
     review_id: i64,
     decision: MineralReviewStatus,
+    actor: &str,
     operator_note: &str,
 ) -> Result<MineralReviewOutcome> {
     if review_id <= 0 {
@@ -6713,7 +7009,9 @@ fn decide_mineral_review(
     ) {
         bail!("mineral review decision must be approved or rejected");
     }
+    validate_mineral_ingestion_actor(actor)?;
     validate_text("operator_note", operator_note, 1, 2_000)?;
+    let actor = actor.trim();
     let operator_note = operator_note.trim();
 
     let mut conn = open_connection(data_root, true)?;
@@ -6738,6 +7036,15 @@ fn decide_mineral_review(
     }
 
     if decision == MineralReviewStatus::Approved {
+        let expected_baseline = stored.target_baseline_hash.as_deref().with_context(|| {
+            format!("mineral review {review_id} predates target preconditions and must be restaged")
+        })?;
+        let current_baseline = mineral_review_target_baseline_hash(&tx, &stored.mineral_slug)?;
+        if current_baseline != expected_baseline {
+            bail!(
+                "mineral review {review_id} is stale because its target changed after staging; restage the revision"
+            );
+        }
         let record: MaterialImport = serde_json::from_str(&stored.payload_json)
             .with_context(|| format!("review {review_id} contains an invalid payload"))?;
         if record.record_type != "mineral" || record.slug != stored.mineral_slug {
@@ -6748,21 +7055,39 @@ fn decide_mineral_review(
         // Applying the payload and recording approval share one IMMEDIATE
         // transaction: either both the public record and its evidence snapshot
         // become visible, or neither does.
-        upsert_material(&tx, &record)?;
+        apply_approved_mineral_review(&tx, &record)?;
     }
 
     let changed = tx
         .execute(
             r#"
             UPDATE mineral_review_revisions
-            SET status = ?1, operator_note = ?2, reviewed_at = CURRENT_TIMESTAMP
-            WHERE id = ?3 AND status = 'pending'
+            SET status = ?1, reviewer_actor = ?2, operator_note = ?3,
+                reviewed_at = CURRENT_TIMESTAMP
+            WHERE id = ?4 AND status = 'pending'
             "#,
-            params![decision.as_str(), operator_note, review_id],
+            params![decision.as_str(), actor, operator_note, review_id],
         )
         .context("failed to record mineral review decision")?;
     if changed != 1 {
         bail!("mineral review {review_id} changed during the decision");
+    }
+    if decision == MineralReviewStatus::Approved {
+        let material_id: i64 = tx
+            .query_row(
+                "SELECT id FROM materials WHERE slug = ?1",
+                params![stored.mineral_slug],
+                |row| row.get(0),
+            )
+            .context("approved mineral disappeared before publication audit")?;
+        append_material_publication_event(
+            &tx,
+            material_id,
+            Some(review_id),
+            "published",
+            actor,
+            operator_note,
+        )?;
     }
 
     let outcome = load_stored_mineral_review(&tx, review_id)?
@@ -6780,6 +7105,7 @@ impl StoredMineralReview {
             revision: usize::try_from(self.revision).context("invalid mineral review revision")?,
             mineral_slug: self.mineral_slug,
             status: self.status,
+            reviewer_actor: self.reviewer_actor,
             operator_note: self.operator_note,
             submitted_at: self.submitted_at,
             reviewed_at: self.reviewed_at,
@@ -6788,7 +7114,108 @@ impl StoredMineralReview {
     }
 }
 
-fn upsert_material(tx: &Transaction<'_>, record: &MaterialImport) -> Result<()> {
+fn apply_approved_mineral_review(tx: &Transaction<'_>, record: &MaterialImport) -> Result<()> {
+    let mapped = tx
+        .query_row(
+            r#"
+            SELECT m.id, m.identifiers_json
+            FROM materials m
+            WHERE m.slug = ?1
+              AND EXISTS (
+                  SELECT 1 FROM mineral_external_identities mei
+                  WHERE mei.material_id = m.id
+              )
+            "#,
+            params![record.slug],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()
+        .context("failed to inspect reviewed mineral ownership")?;
+    let Some((material_id, _current_identifiers_json)) = mapped else {
+        upsert_material(tx, record)?;
+        return Ok(());
+    };
+
+    let mut identifiers = record
+        .identifiers
+        .as_object()
+        .cloned()
+        .context("reviewed mineral identifiers must be a JSON object")?;
+    let mut official_identifiers = BTreeMap::<String, String>::new();
+    let mut stmt = tx
+        .prepare(
+            r#"
+            SELECT identifier_key, identifier_value
+            FROM mineral_dataset_identifiers
+            WHERE material_id = ?1
+            ORDER BY dataset_key, identifier_key
+            "#,
+        )
+        .context("failed to prepare dataset-owned identifier query")?;
+    let rows = stmt
+        .query_map(params![material_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    drop(stmt);
+    for (key, value) in rows {
+        if official_identifiers
+            .insert(key.clone(), value.clone())
+            .is_some_and(|existing| existing != value)
+        {
+            bail!("dataset-owned identifier '{key}' has conflicting persisted values");
+        }
+    }
+    for (key, value) in official_identifiers {
+        identifiers.insert(key, Value::String(value));
+    }
+
+    tx.execute(
+        r#"
+        UPDATE materials
+        SET description = ?1,
+            mineral_family = ?2,
+            cas_number = ?3,
+            identifiers_json = ?4,
+            synonyms_json = ?5,
+            properties_json = ?6,
+            safety_json = ?7,
+            verification_status = ?8,
+            data_quality_score = ?9,
+            license_spdx = ?10,
+            publication_status = 'published',
+            withdrawal_note = '',
+            withdrawn_at = NULL,
+            image_id = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?11 AND record_type = 'mineral'
+        "#,
+        params![
+            record.description.trim(),
+            record.mineral_family.trim(),
+            record.cas_number.as_deref(),
+            serde_json::to_string(&identifiers)?,
+            serde_json::to_string(&record.synonyms)?,
+            serde_json::to_string(&record.properties)?,
+            serde_json::to_string(&record.safety)?,
+            record.verification_status,
+            record.data_quality_score,
+            record.license_spdx.trim(),
+            material_id,
+        ],
+    )
+    .with_context(|| {
+        format!(
+            "failed to update curator-owned fields for '{}'",
+            record.slug
+        )
+    })?;
+    replace_import_owned_associations(tx, record, material_id, true)?;
+    rebuild_material_search_text(tx, material_id)?;
+    Ok(())
+}
+
+fn upsert_material(tx: &Transaction<'_>, record: &MaterialImport) -> Result<i64> {
     let identifiers_json = serde_json::to_string(&record.identifiers)?;
     let synonyms_json = serde_json::to_string(&record.synonyms)?;
     let properties_json = serde_json::to_string(&record.properties)?;
@@ -6857,6 +7284,16 @@ fn upsert_material(tx: &Transaction<'_>, record: &MaterialImport) -> Result<()> 
         )
         .context("failed to resolve imported material id")?;
 
+    replace_import_owned_associations(tx, record, material_id, false)?;
+    Ok(material_id)
+}
+
+fn replace_import_owned_associations(
+    tx: &Transaction<'_>,
+    record: &MaterialImport,
+    material_id: i64,
+    preserve_dataset_owned: bool,
+) -> Result<()> {
     // Offers describe the previously reviewed identity/version. Retire them
     // whenever a new mineral revision is published so a slug cannot carry
     // stale commercial listings into materially different content.
@@ -6866,12 +7303,19 @@ fn upsert_material(tx: &Transaction<'_>, record: &MaterialImport) -> Result<()> 
     )
     .context("failed to retire offers from the prior mineral revision")?;
 
-    // An import is a complete evidence snapshot for this material. Source rows
-    // remain reusable, while omitted material/source associations are retired.
-    tx.execute(
-        "DELETE FROM material_evidence WHERE material_id = ?1",
-        params![material_id],
-    )?;
+    // An import is a complete curator-owned evidence snapshot. Dataset-owned
+    // associations are replaced only by their reviewed release workflow.
+    if preserve_dataset_owned {
+        tx.execute(
+            "DELETE FROM material_evidence WHERE material_id = ?1 AND dataset_key IS NULL",
+            params![material_id],
+        )?;
+    } else {
+        tx.execute(
+            "DELETE FROM material_evidence WHERE material_id = ?1",
+            params![material_id],
+        )?;
+    }
 
     tx.execute(
         "DELETE FROM material_aliases WHERE material_id = ?1 AND origin = 'import'",
@@ -6913,6 +7357,26 @@ fn upsert_material(tx: &Transaction<'_>, record: &MaterialImport) -> Result<()> 
             params![canonical_url],
             |row| row.get(0),
         )?;
+        if preserve_dataset_owned {
+            let conflicts_with_dataset: bool = tx.query_row(
+                r#"
+                SELECT EXISTS(
+                    SELECT 1 FROM material_evidence
+                    WHERE material_id = ?1 AND source_id = ?2 AND claim_scope = ?3
+                      AND dataset_key IS NOT NULL
+                )
+                "#,
+                params![material_id, source_id, claim_scope],
+                |row| Ok(row.get::<_, i64>(0)? == 1),
+            )?;
+            if conflicts_with_dataset {
+                bail!(
+                    "review evidence '{}' conflicts with dataset-owned scope '{}'",
+                    canonical_url,
+                    claim_scope
+                );
+            }
+        }
         tx.execute(
             r#"
             INSERT INTO material_evidence(
@@ -7252,8 +7716,16 @@ fn validate_provider_import(provider: &ProviderImport) -> Result<()> {
     if provider.offers.len() > 10_000 {
         bail!("provider import exceeds the 10000-offer batch limit");
     }
+    let mut external_ids = HashSet::with_capacity(provider.offers.len());
     for offer in &provider.offers {
         validate_offer_import(offer)?;
+        let normalized_external_id = offer.external_id.trim();
+        if !external_ids.insert(normalized_external_id) {
+            bail!(
+                "provider import contains duplicate external_id '{}'",
+                normalized_external_id
+            );
+        }
     }
     Ok(())
 }
@@ -8018,6 +8490,11 @@ fn table_has_column(conn: &Connection, table: &str, column: &str) -> Result<bool
 }
 
 fn open_connection(data_root: &Path, write: bool) -> Result<Connection> {
+    let durability = if write {
+        Some(sqlite_durability_mode()?)
+    } else {
+        None
+    };
     let db_path = data_root.join(DATABASE_FILE);
     let conn = if write {
         Connection::open(&db_path)
@@ -8031,8 +8508,7 @@ fn open_connection(data_root: &Path, write: bool) -> Result<Connection> {
     conn.busy_timeout(Duration::from_secs(5))
         .context("failed to configure registry busy timeout")?;
     conn.execute_batch("PRAGMA foreign_keys = ON;")?;
-    if write {
-        let durability = sqlite_durability_mode()?;
+    if let Some(durability) = durability {
         conn.execute_batch("PRAGMA journal_mode = WAL;")?;
         match durability {
             "FULL" => conn.execute_batch("PRAGMA synchronous = FULL;")?,
@@ -8044,13 +8520,20 @@ fn open_connection(data_root: &Path, write: bool) -> Result<Connection> {
 }
 
 fn sqlite_durability_mode() -> Result<&'static str> {
-    let configured = std::env::var("SQLITE_DURABILITY").unwrap_or_else(|_| {
-        if cfg!(debug_assertions) {
-            "NORMAL".to_string()
+    sqlite_durability_mode_from(std::env::var_os("SQLITE_DURABILITY"))
+}
+
+fn sqlite_durability_mode_from(configured: Option<std::ffi::OsString>) -> Result<&'static str> {
+    let Some(configured) = configured else {
+        return Ok(if cfg!(debug_assertions) {
+            "NORMAL"
         } else {
-            "FULL".to_string()
-        }
-    });
+            "FULL"
+        });
+    };
+    let configured = configured
+        .into_string()
+        .map_err(|_| anyhow::anyhow!("SQLITE_DURABILITY must be valid Unicode"))?;
     match configured.trim().to_ascii_uppercase().as_str() {
         "FULL" => Ok("FULL"),
         "NORMAL" => Ok("NORMAL"),
@@ -8541,8 +9024,13 @@ mod tests {
                 break;
             }
             for item in page.items {
-                approve_mineral_review(data_root, item.review_id, "Approved by registry test")
-                    .expect("approve mineral review");
+                approve_mineral_review(
+                    data_root,
+                    item.review_id,
+                    "reviewer:registry-test",
+                    "Approved by registry test",
+                )
+                .expect("approve mineral review");
             }
         }
     }
@@ -9474,6 +9962,128 @@ mod tests {
             )
             .expect("former name count");
         assert_eq!(former_name, 1);
+        drop(conn);
+
+        let stale_review = pending_review(root.path(), "mineral.bulk-cobalt");
+        let error = approve_mineral_review(
+            root.path(),
+            stale_review.review_id,
+            "reviewer:curator",
+            "Approve the now-stale curator payload",
+        )
+        .expect_err("a bulk activation must stale the pending ordinary review");
+        assert!(error.to_string().contains("target changed after staging"));
+        assert_eq!(
+            pending_review(root.path(), "mineral.bulk-cobalt").review_id,
+            stale_review.review_id,
+            "failed stale approval leaves the exact review pending for explicit restaging"
+        );
+        let conn = Connection::open(root.path().join(DATABASE_FILE)).expect("database");
+        let unchanged: (String, String, i64) = conn
+            .query_row(
+                r#"
+                SELECT canonical_name, formula,
+                       (SELECT COUNT(*) FROM material_evidence me WHERE me.material_id = m.id)
+                FROM materials m WHERE slug = 'mineral.bulk-cobalt'
+                "#,
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("unchanged bulk-owned target");
+        assert_eq!(
+            unchanged,
+            ("Bulk carbon monoxide".to_string(), "CO".to_string(), 2)
+        );
+    }
+
+    #[test]
+    fn ordinary_review_updates_only_curator_owned_fields_on_a_bulk_mapped_mineral() {
+        let root = prepare_data_root();
+        init_registry_database(root.path()).expect("registry init");
+        let items = vec![MineralIngestionItem {
+            formula: "Be2SiO4".to_string(),
+            synonyms: vec!["Official synonym".to_string()],
+            official_facts: MineralOfficialFacts {
+                discovery_country: "Testland".to_string(),
+                source_status: "A".to_string(),
+                ..MineralOfficialFacts::default()
+            },
+            ..bulk_item(
+                "IMA-CURATOR-OWNERSHIP",
+                "mineral.curator-ownership",
+                "Official identity",
+            )
+        }];
+        let manifest = bulk_manifest(&items, MineralIngestionPolicy::ImaIdentityV1, None);
+        let batch = stage_finalize_bulk(root.path(), &manifest, items);
+        approve_finalized_bulk(root.path(), &batch);
+
+        let curated = MaterialImport {
+            slug: "mineral.curator-ownership".to_string(),
+            canonical_name: "Attempted curator rename".to_string(),
+            formula: "WrongFormula".to_string(),
+            description: "Curator-owned description".to_string(),
+            mineral_family: "Curated family".to_string(),
+            cas_number: Some("14808-60-7".to_string()),
+            identifiers: json!({
+                "ima_number": "WRONG-IMA-NUMBER",
+                "curator_code": "CUR-42"
+            }),
+            synonyms: vec!["Curator synonym".to_string()],
+            properties: json!({"hardness_mohs": 7.0}),
+            safety: json!({"handling": "Curator precautions"}),
+            verification_status: "sourced".to_string(),
+            license_spdx: "CC0-1.0".to_string(),
+            sources: vec![source("https://curator.example/ownership")],
+            ..MaterialImport::default()
+        };
+        import_material_batch(root.path(), "curator enrichment", &[curated])
+            .expect("stage curator enrichment");
+        let review_id = pending_review(root.path(), "mineral.curator-ownership").review_id;
+        approve_mineral_review(
+            root.path(),
+            review_id,
+            "reviewer:curator",
+            "Approve curator-owned enrichment",
+        )
+        .expect("approve curator enrichment");
+
+        let detail = get_material_detail(root.path(), "mineral.curator-ownership")
+            .expect("detail")
+            .expect("published mineral");
+        assert_eq!(detail.canonical_name, "Official identity");
+        assert_eq!(detail.formula, "Be2SiO4");
+        assert_eq!(detail.description, "Curator-owned description");
+        assert_eq!(detail.mineral_family, "Curated family");
+        assert_eq!(detail.official_facts.discovery_country, "Testland");
+        assert_eq!(detail.evidence.len(), 2);
+
+        let conn = Connection::open(root.path().join(DATABASE_FILE)).expect("database");
+        let identifiers_json: String = conn
+            .query_row(
+                "SELECT identifiers_json FROM materials WHERE slug = 'mineral.curator-ownership'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("material identifiers");
+        let identifiers: Value = serde_json::from_str(&identifiers_json).expect("identifier JSON");
+        assert_eq!(identifiers["ima_number"], "IMA-CURATOR-OWNERSHIP");
+        assert_eq!(identifiers["curator_code"], "CUR-42");
+        let owned_state: (i64, i64, i64, i64) = conn
+            .query_row(
+                r#"
+                SELECT
+                    (SELECT COUNT(*) FROM mineral_external_identities WHERE material_id = m.id),
+                    (SELECT COUNT(*) FROM material_evidence WHERE material_id = m.id AND dataset_key IS NOT NULL),
+                    (SELECT COUNT(*) FROM material_evidence WHERE material_id = m.id AND dataset_key IS NULL),
+                    (SELECT COUNT(*) FROM material_aliases WHERE material_id = m.id AND origin = 'bulk_dataset')
+                FROM materials m WHERE slug = 'mineral.curator-ownership'
+                "#,
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("owned association state");
+        assert_eq!(owned_state, (1, 1, 1, 1));
     }
 
     #[test]
@@ -10102,6 +10712,7 @@ mod tests {
         withdraw_mineral(
             root.path(),
             "mineral.withdrawn-collision",
+            "reviewer:test",
             "Withdrawn for conflict test",
         )
         .expect("withdraw mineral");
@@ -10602,11 +11213,13 @@ mod tests {
         let outcome = approve_mineral_review(
             root.path(),
             review.review_id,
+            "reviewer:test",
             "Identity and source checked.",
         )
         .expect("approve review");
         assert!(outcome.changed);
         assert_eq!(outcome.status, MineralReviewStatus::Approved);
+        assert_eq!(outcome.reviewer_actor.as_deref(), Some("reviewer:test"));
         assert_eq!(outcome.operator_note, "Identity and source checked.");
         assert!(outcome.reviewed_at.is_some());
         let detail = get_material_detail(root.path(), "mineral.approved")
@@ -10650,11 +11263,13 @@ mod tests {
         let outcome = reject_mineral_review(
             root.path(),
             review.review_id,
+            "reviewer:test",
             "Name conflicts with the reviewed identity.",
         )
         .expect("reject review");
         assert!(outcome.changed);
         assert_eq!(outcome.status, MineralReviewStatus::Rejected);
+        assert_eq!(outcome.reviewer_actor.as_deref(), Some("reviewer:test"));
         let after = get_material_detail(root.path(), "mineral.stable")
             .expect("detail")
             .expect("published mineral");
@@ -10724,7 +11339,12 @@ mod tests {
 
         let data_root = root.path().to_path_buf();
         std::thread::spawn(move || {
-            approve_mineral_review(&data_root, review_id, "Approve replacement")
+            approve_mineral_review(
+                &data_root,
+                review_id,
+                "reviewer:test",
+                "Approve replacement",
+            )
         })
         .join()
         .expect("approval worker")
@@ -10793,7 +11413,12 @@ mod tests {
         assert_eq!(published, 1);
         let data_root = root.path().to_path_buf();
         std::thread::spawn(move || {
-            withdraw_mineral(&data_root, "mineral.stats-snapshot", "Snapshot test")
+            withdraw_mineral(
+                &data_root,
+                "mineral.stats-snapshot",
+                "reviewer:test",
+                "Snapshot test",
+            )
         })
         .join()
         .expect("withdrawal worker")
@@ -11101,18 +11726,21 @@ mod tests {
         assert!(withdraw_mineral(
             root.path(),
             "mineral.withdraw-legacy",
+            "reviewer:withdrawal",
             "Legacy record withdrawn."
         )
         .expect("withdraw legacy"));
         assert!(withdraw_mineral(
             root.path(),
             "mineral.withdraw-imported",
+            "reviewer:withdrawal",
             "Registry record withdrawn."
         )
         .expect("withdraw imported"));
         assert!(!withdraw_mineral(
             root.path(),
             "mineral.withdraw-imported",
+            "reviewer:other",
             "Repeated withdrawal must not rewrite the audit note."
         )
         .expect("repeat withdrawal"));
@@ -11169,8 +11797,138 @@ mod tests {
         };
         import_material_batch(root.path(), "compound compatibility", &[compound])
             .expect("compound import");
-        assert!(withdraw_mineral(root.path(), "compound.not-a-mineral", "Not allowed").is_err());
-        assert!(withdraw_mineral(root.path(), "mineral.unknown", "Not found").is_err());
+        assert!(withdraw_mineral(
+            root.path(),
+            "compound.not-a-mineral",
+            "reviewer:test",
+            "Not allowed"
+        )
+        .is_err());
+        assert!(
+            withdraw_mineral(root.path(), "mineral.unknown", "reviewer:test", "Not found").is_err()
+        );
+    }
+
+    #[test]
+    fn audit_migration_backfills_a_legacy_withdrawal_once_and_preserves_it_on_republication() {
+        let root = prepare_data_root();
+        init_registry_database(root.path()).expect("registry init");
+        import_material_batch(
+            root.path(),
+            "legacy withdrawal seed",
+            &[draft_material(
+                "mineral.legacy-withdrawal-audit",
+                "Legacy withdrawal",
+            )],
+        )
+        .expect("initial material import");
+        approve_all_pending(root.path());
+        assert!(withdraw_mineral(
+            root.path(),
+            "mineral.legacy-withdrawal-audit",
+            "reviewer:pre-migration",
+            "Legacy identity dispute",
+        )
+        .expect("withdraw material"));
+
+        let conn = Connection::open(root.path().join(DATABASE_FILE)).expect("database");
+        let withdrawn_at: String = conn
+            .query_row(
+                "SELECT withdrawn_at FROM materials WHERE slug = 'mineral.legacy-withdrawal-audit'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("legacy withdrawal time");
+        let marker_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM schema_migrations WHERE name = ?1",
+                params![MINERAL_REVIEW_AUDIT_MIGRATION],
+                |row| row.get(0),
+            )
+            .expect("audit migration marker");
+        assert_eq!(marker_count, 1);
+        conn.execute_batch(
+            r#"
+            DROP TRIGGER material_publication_events_immutable_update;
+            DROP TRIGGER material_publication_events_immutable_delete;
+            DELETE FROM material_publication_events;
+            "#,
+        )
+        .expect("simulate the pre-backfill audit migration");
+        drop(conn);
+
+        // The first fixed initialization repairs a database that already has
+        // the audit marker; the second proves the seed is idempotent.
+        init_registry_database(root.path()).expect("backfill legacy withdrawal");
+        init_registry_database(root.path()).expect("idempotent audit migration");
+        let conn = Connection::open(root.path().join(DATABASE_FILE)).expect("database");
+        let events = conn
+            .prepare(
+                r#"
+                SELECT actor, operator_note, created_at, material_state_hash
+                FROM material_publication_events
+                WHERE material_slug = 'mineral.legacy-withdrawal-audit'
+                  AND event_type = 'withdrawn'
+                ORDER BY id
+                "#,
+            )
+            .expect("legacy audit query")
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .expect("legacy audit rows")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("legacy audit history");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].0, LEGACY_WITHDRAWAL_AUDIT_ACTOR);
+        assert_eq!(events[0].1, "Legacy identity dispute");
+        assert_eq!(events[0].2, withdrawn_at);
+        assert!(events[0].3.starts_with("sha256:"));
+        drop(conn);
+
+        import_material_batch(
+            root.path(),
+            "legacy withdrawal republication",
+            &[draft_material(
+                "mineral.legacy-withdrawal-audit",
+                "Restored legacy withdrawal",
+            )],
+        )
+        .expect("republication import");
+        approve_all_pending(root.path());
+        let conn = Connection::open(root.path().join(DATABASE_FILE)).expect("database");
+        let live_state: (String, String, Option<String>) = conn
+            .query_row(
+                r#"
+                SELECT publication_status, withdrawal_note, withdrawn_at
+                FROM materials WHERE slug = 'mineral.legacy-withdrawal-audit'
+                "#,
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("republished live state");
+        assert_eq!(live_state, ("published".to_string(), String::new(), None));
+        let preserved: (i64, String, String, String) = conn
+            .query_row(
+                r#"
+                SELECT COUNT(*), MIN(actor), MIN(operator_note), MIN(created_at)
+                FROM material_publication_events
+                WHERE material_slug = 'mineral.legacy-withdrawal-audit'
+                  AND event_type = 'withdrawn'
+                "#,
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("preserved withdrawal audit");
+        assert_eq!(preserved.0, 1);
+        assert_eq!(preserved.1, LEGACY_WITHDRAWAL_AUDIT_ACTOR);
+        assert_eq!(preserved.2, "Legacy identity dispute");
+        assert_eq!(preserved.3, withdrawn_at);
     }
 
     #[test]
@@ -11194,15 +11952,24 @@ mod tests {
         )
         .expect("pending import");
         let superseded_id = pending_review(root.path(), "mineral.republish").review_id;
-        assert!(
-            withdraw_mineral(root.path(), "mineral.republish", "Identity disputed")
-                .expect("withdraw mineral")
-        );
+        assert!(withdraw_mineral(
+            root.path(),
+            "mineral.republish",
+            "reviewer:withdrawal",
+            "Identity disputed",
+        )
+        .expect("withdraw mineral"));
         assert!(list_pending_mineral_reviews(root.path(), 10, 0)
             .expect("review queue")
             .items
             .is_empty());
-        assert!(approve_mineral_review(root.path(), superseded_id, "Stale approval").is_err());
+        assert!(approve_mineral_review(
+            root.path(),
+            superseded_id,
+            "reviewer:test",
+            "Stale approval"
+        )
+        .is_err());
 
         import_material_batch(
             root.path(),
@@ -11211,8 +11978,13 @@ mod tests {
         )
         .expect("republication import");
         let review_id = pending_review(root.path(), "mineral.republish").review_id;
-        approve_mineral_review(root.path(), review_id, "Identity re-established")
-            .expect("approve republication");
+        approve_mineral_review(
+            root.path(),
+            review_id,
+            "reviewer:republication",
+            "Identity re-established",
+        )
+        .expect("approve republication");
         let detail = get_material_detail(root.path(), "mineral.republish")
             .expect("detail")
             .expect("republished mineral");
@@ -11228,6 +12000,55 @@ mod tests {
         assert_eq!(state.0, "published");
         assert!(state.1.is_empty());
         assert!(state.2.is_none());
+
+        let superseded_actor: Option<String> = conn
+            .query_row(
+                "SELECT reviewer_actor FROM mineral_review_revisions WHERE id = ?1",
+                params![superseded_id],
+                |row| row.get(0),
+            )
+            .expect("superseded review actor");
+        assert_eq!(superseded_actor.as_deref(), Some("reviewer:withdrawal"));
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT event_type, actor, operator_note, material_state_hash
+                FROM material_publication_events
+                WHERE material_slug = 'mineral.republish'
+                ORDER BY id
+                "#,
+            )
+            .expect("publication event query");
+        let history = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .expect("publication history")
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .expect("publication history rows");
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0].0, "published");
+        assert_eq!(history[0].1, "reviewer:registry-test");
+        assert_eq!(history[1].0, "withdrawn");
+        assert_eq!(history[1].1, "reviewer:withdrawal");
+        assert_eq!(history[1].2, "Identity disputed");
+        assert_eq!(history[2].0, "published");
+        assert_eq!(history[2].1, "reviewer:republication");
+        assert!(history
+            .iter()
+            .all(|event| event.3.starts_with("sha256:") && event.3.len() == 71));
+        drop(stmt);
+        assert!(conn
+            .execute(
+                "DELETE FROM material_publication_events WHERE material_slug = 'mineral.republish'",
+                [],
+            )
+            .is_err());
     }
 
     #[test]
@@ -11251,7 +12072,12 @@ mod tests {
                 let barrier = Arc::clone(&barrier);
                 std::thread::spawn(move || {
                     barrier.wait();
-                    approve_mineral_review(&data_root, review_id, "Concurrent approval")
+                    approve_mineral_review(
+                        &data_root,
+                        review_id,
+                        "reviewer:concurrent",
+                        "Concurrent approval",
+                    )
                 })
             })
             .collect::<Vec<_>>();
@@ -11265,10 +12091,46 @@ mod tests {
         assert!(outcomes
             .iter()
             .all(|outcome| outcome.status == MineralReviewStatus::Approved));
-        assert!(reject_mineral_review(root.path(), review_id, "Conflicting decision").is_err());
+        assert!(reject_mineral_review(
+            root.path(),
+            review_id,
+            "reviewer:conflict",
+            "Conflicting decision"
+        )
+        .is_err());
         assert!(get_material_detail(root.path(), "mineral.concurrent")
             .expect("detail")
             .is_some());
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn sqlite_durability_rejects_non_unicode_configuration() {
+        #[cfg(unix)]
+        let invalid = {
+            use std::os::unix::ffi::OsStringExt;
+            std::ffi::OsString::from_vec(vec![0xff])
+        };
+        #[cfg(windows)]
+        let invalid = {
+            use std::os::windows::ffi::OsStringExt;
+            std::ffi::OsString::from_wide(&[0xd800])
+        };
+
+        let error = sqlite_durability_mode_from(Some(invalid))
+            .expect_err("non-Unicode durability configuration must fail closed");
+        assert!(error
+            .to_string()
+            .contains("SQLITE_DURABILITY must be valid Unicode"));
+        assert_eq!(
+            sqlite_durability_mode_from(Some(" full ".into()))
+                .expect("valid configured durability"),
+            "FULL"
+        );
+        assert!(matches!(
+            sqlite_durability_mode_from(None).expect("default durability"),
+            "FULL" | "NORMAL"
+        ));
     }
 
     #[test]
@@ -11683,6 +12545,47 @@ mod tests {
             .expect("detail")
             .expect("record");
         assert!(detail.offers.is_empty());
+    }
+
+    #[test]
+    fn provider_import_rejects_trim_equivalent_external_ids_before_writing() {
+        let root = prepare_data_root();
+        init_registry_database(root.path()).expect("registry init");
+        let offer = OfferImport {
+            material_slug: "compound.first".to_string(),
+            external_id: "provider-item-1".to_string(),
+            title: "First listing".to_string(),
+            product_url: "https://provider.example/first".to_string(),
+            ..OfferImport::default()
+        };
+        let provider = ProviderImport {
+            slug: "provider.duplicate-ids".to_string(),
+            name: "Duplicate ID provider".to_string(),
+            website_url: "https://provider.example".to_string(),
+            offers: vec![
+                offer.clone(),
+                OfferImport {
+                    material_slug: "compound.second".to_string(),
+                    external_id: " provider-item-1 ".to_string(),
+                    title: "Conflicting listing".to_string(),
+                    product_url: "https://provider.example/second".to_string(),
+                    ..OfferImport::default()
+                },
+            ],
+            ..ProviderImport::default()
+        };
+        let error = import_provider(root.path(), &provider)
+            .expect_err("trim-equivalent external ids must be rejected");
+        assert!(error.to_string().contains("duplicate external_id"));
+        let conn = Connection::open(root.path().join(DATABASE_FILE)).expect("database");
+        let provider_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM providers WHERE slug = 'provider.duplicate-ids'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("provider count");
+        assert_eq!(provider_count, 0);
     }
 
     #[test]

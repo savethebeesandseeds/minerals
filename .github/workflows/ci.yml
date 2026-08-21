@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Native, WASM, and static release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
+      RUSTUP_TOOLCHAIN: 1.96.0
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        run: >-
+          rustup toolchain install "$RUSTUP_TOOLCHAIN"
+          --profile minimal
+          --component rustfmt
+          --component clippy
+          --target wasm32-unknown-unknown
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check Rust formatting
+        run: |
+          cargo fmt --all -- --check
+          cargo fmt --manifest-path map-wasm/Cargo.toml -- --check
+
+      - name: Test native workspace
+        run: cargo test --locked --workspace
+
+      - name: Lint native workspace
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Test and rebuild map WebAssembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --locked --manifest-path map-wasm/Cargo.toml
+          cargo clippy --locked --manifest-path map-wasm/Cargo.toml --all-targets -- -D warnings
+          cargo build --locked --manifest-path map-wasm/Cargo.toml --target wasm32-unknown-unknown --release
+
+          built=map-wasm/target/wasm32-unknown-unknown/release/minerals_map.wasm
+          checked_in=public-app/map/minerals_map.wasm
+          expected=f095257a885fe1545c7ccf1b18e480da4685b0726f5b9a2532c2cecd6212799f
+          actual="$(sha256sum "$built" | cut -d' ' -f1)"
+          test "$actual" = "$expected"
+          cmp "$built" "$checked_in"
+          node map-wasm/test-wasm-abi.mjs
+
+      - name: Build private admin and public exporter
+        run: >-
+          cargo build --locked
+          -p minerals-admin --bin minerals
+          -p minerals-public-catalog --bin export-public
+
+      - name: Export and test an isolated static release
+        run: bash tools/ci-static-release.sh

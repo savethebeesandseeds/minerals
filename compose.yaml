@@ -15,8 +15,10 @@ services:
       BIND_ADDRESS: "0.0.0.0"
       DATA_ROOT: /app/data
       PORT: "7979"
-      RUST_LOG: ${RUST_LOG:-minerals=info,tower_http=info}
-    user: "${MINERALS_UID:-10001}:${MINERALS_GID:-10001}"
+    # Root exists only for the exact /app/data permission bootstrap. The
+    # entrypoint then drops to the bind mount owner (or 10001 on Desktop),
+    # clears all capabilities, and execs the service.
+    user: "0:0"
     ports:
       - "${MINERALS_BIND_ADDRESS:-127.0.0.1}:${MINERALS_HOST_PORT:-7979}:7979"
     volumes:
@@ -28,6 +30,14 @@ services:
       - /tmp:rw,nosuid,nodev,size=512m
     cap_drop:
       - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      # Required only so setpriv can remove the bounding capability set.
+      - SETPCAP
+      - SETUID
     security_opt:
       - no-new-privileges:true
     pids_limit: 256

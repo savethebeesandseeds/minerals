@@ -346,7 +346,7 @@
 <body>
   <nav class="topbar" aria-label="Main">
     <div class="topbar-inner">
-      <a class="brand" href="/" aria-label="Minerals Home">
+      <a class="brand" href="/admin" aria-label="Minerals Admin">
         <img
           src="/static/logo_transparent.png"
           alt="Minerals logo"
@@ -355,8 +355,11 @@
         />
         <span>MINERALS</span>
       </a>
-      <a class="menu" href="/">{{ txt.nav_home }}</a>
-      <a class="menu" href="/minerals">{{ txt.nav_all_minerals }}</a>
+      <a class="menu" href="/admin">{{ txt.nav_admin }}</a>
+      {% match public_catalog_url %}
+        {% when Some with (href) %}<a class="menu" href="{{ href }}">{{ txt.nav_all_minerals }}</a>
+        {% when None %}
+      {% endmatch %}
       <div class="top-tools">
         <a class="login-link" href="/admin">{% if has_admin_session %}{{ txt.nav_admin }}{% else %}{{ txt.nav_login }}{% endif %}</a>
         <button class="theme-toggle" type="button" data-theme-toggle aria-label="{{ txt.registry.theme_toggle }}" aria-pressed="false">◐</button>
@@ -580,9 +583,11 @@
   <footer class="site-footer">
     <div class="footer-inner">
       <nav class="footer-col-links" aria-label="Footer" style="display:flex; flex-wrap:wrap; gap:0.3rem 0.8rem;">
-        <a href="/">{{ txt.nav_home }}</a>
-        <a href="/minerals">{{ txt.nav_all_minerals }}</a>
-        <a href="/about">{{ txt.footer_about_us }}</a>
+        <a href="/admin">{{ txt.nav_admin }}</a>
+        {% match public_catalog_url %}
+          {% when Some with (href) %}<a href="{{ href }}">{{ txt.nav_all_minerals }}</a>
+          {% when None %}
+        {% endmatch %}
       </nav>
       <p class="footer-note">{{ txt.footer_powered_trust_by }} <a href="https://www.waajacu.com" target="_blank" rel="noopener">www.waajacu.com</a></p>
     </div>

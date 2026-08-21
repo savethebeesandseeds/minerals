@@ -13,16 +13,27 @@ operational constraints.
   concurrently mounted by another application instance.
 - Put a TLS-terminating reverse proxy in front of the loopback-bound host port.
 - Treat `/app/data` as private. It contains the registry, pending candidates,
-  review history, raw-source metadata, images when present, and reports.
+  review history, raw-source metadata, and images when present.
 - Images are optional. An image-free catalog is fully valid and is the expected
   first complete release.
 - Run media on object storage and move the writer to PostgreSQL only when the
   product actually needs multiple independent writers or horizontal replicas.
 
-The image runs as unprivileged UID/GID `10001:10001`. Compose makes the root
-filesystem read-only, gives `/tmp` a bounded disposable mount, drops all Linux
-capabilities, prevents privilege escalation, and limits PIDs, CPU, memory, and
-local log growth.
+Static catalog releases use a separate immutable deployment root. Follow
+[`deploy/README.md`](../deploy/README.md) to export under
+`/srv/waajacu/releases/<release-id>`, validate the content-addressed database,
+and atomically switch `/srv/waajacu/current`. The included nginx configuration
+listens on port 8080 and supplies the required SQLite/WASM MIME types, cache
+policy, CSP response header, and gzip transfer compression. When nginx runs in
+a container, mount all of `/srv/waajacu` read-only so a host-side `current`
+symlink switch becomes visible without restarting the container.
+
+The image defaults to unprivileged UID/GID `10001:10001`. Compose starts a
+minimal root entrypoint with only the capabilities required to normalize the
+exact `/app/data` bind mount, then drops its identity and complete capability
+bounding set before executing application code. The root filesystem is
+read-only, `/tmp` is bounded and disposable, privilege escalation is disabled,
+and PIDs, CPU, memory, and local log growth are limited.
 
 ## Probes
 
@@ -41,9 +52,21 @@ period for the active, at-most-500-record chunk to finish.
 
 ## Configuration and secrets
 
-Compose loads `.env` and then `.env.local`; the latter takes precedence. Keep
+The service's `env_file` list loads `.env` and then `.env.local`; the latter
+takes precedence for application variables such as `RUST_LOG`. Keep
 development secrets in the gitignored `.env.local` and use the platform secret
-store in production. Neither file is sent to the Docker builder.
+store in production. Neither file is sent to the Docker builder. This loading
+is performed by Docker Compose: the Rust binary itself reads only its process
+environment and never opens `.env` files.
+
+Compose `${MINERALS_*}` interpolation for ports and resource limits is a
+separate phase: it reads the invoking shell and the project `.env`, not the
+service's `env_file` list. To put those deployment values in `.env.local`, pass
+both files explicitly, with the local file last:
+
+```bash
+docker compose --env-file .env --env-file .env.local up -d --build
+```
 
 `docker compose config` expands and prints environment values. Use its
 `--quiet` form for validation and never attach full rendered output to a ticket
@@ -62,7 +85,9 @@ Application settings:
 | `INGESTION_ABANDONED_HOURS` | Inactive, never-finalized `receiving` batches are tombstoned and their payload reclaimed; defaults to 336 hours (14 days), accepted range 1-8,760 hours. |
 | `SQLITE_DURABILITY` | Use `FULL` in production. A less durable mode is acceptable only for disposable development data. |
 | `COOKIE_SECURE` | Set `true` behind HTTPS. |
+| `TRUSTED_PROXY_IPS` | Comma-separated exact IP allowlist for direct reverse-proxy TCP peers. `X-Forwarded-For` is ignored when the peer is not listed. Keep empty without a proxy; a same-host TLS proxy commonly uses `127.0.0.1,::1`. |
 | `ADMIN_SQL_ENABLED` | Keep `false`; enable only for short, supervised, read-only diagnostics. |
+| `PUBLIC_CATALOG_BASE_URL` | HTTPS base URL for links to the deployed static catalog. The tracked Compose `.env` points at the local nginx example on `http://127.0.0.1:8080`; native runs default to unset, and literal-loopback HTTP is accepted only for development. |
 | `DEFAULT_LANG` | Default UI language; `en` when unset. |
 | `OPENAI_API_KEY` | Optional for drafting/translation; not required to serve or ingest an image-free catalog. |
 | `RUST_LOG` | Structured log filter. Never log credentials, bearer tokens, raw payloads, source URLs with secrets, or full review notes. |
@@ -93,31 +118,19 @@ rotation; a higher safety ceiling is not evidence of higher capacity.
 
 ## Data-directory permissions
 
-On Linux, run with the UID/GID that own `./data`:
+No UID/GID exports or `chmod 777` workaround are needed. On each Compose start,
+the entrypoint targets only the real `/app/data` directory, retains a non-root
+bind mount owner's numeric UID/GID (or uses `10001:10001` for a root-owned
+Docker Desktop mount), and normalizes ownership without following symlinks.
+It sets every private directory to `0700`, every regular file to `0600`, and a
+`077` umask for new database, WAL, image, and backup files. The process
+then clears all capabilities and executes the service under that non-root
+identity.
 
-```bash
-export MINERALS_UID="$(id -u)"
-export MINERALS_GID="$(id -g)"
-docker compose up -d --build
-```
-
-Alternatively, make the directory belong to `10001:10001`. Never make it
-world-writable or run the service as root to bypass permissions. Check the
-mount before a first production start:
-
-```bash
-docker compose run --rm --entrypoint sh minerals -c \
-  'test -w /app/data && echo "data mount is writable"'
-```
-
-Docker Desktop may present an existing bind-mounted database as owned by root.
-If the preflight fails, use a short-lived helper that targets only this mount,
-then start the application under its normal identity:
-
-```powershell
-docker run --rm --mount "type=bind,source=$PWD\data,target=/data" `
-  debian:bookworm-slim chown -R 10001:10001 /data
-```
+The tracked `data/minerals/` tree is the immutable legacy import seed for a
+clean checkout. `data/minerals.db`, its sidecars, and backups are private
+runtime state and are ignored by Git. Never add a live database to
+source control; take backups using the database procedure below.
 
 ## Build and start
 
@@ -145,6 +158,10 @@ access outside the container.
 The durable release API is resumable and idempotent; details and payload
 contracts are in [INGESTION.md](INGESTION.md). Operationally:
 
+The official IMA extractor requires exactly CPython `3.12.13` as well as every
+pin in `scripts/ima-requirements.txt`; it exits before either PDF engine runs
+when the implementation or patch version differs.
+
 1. Archive the exact raw source outside the application data directory. Record
    its checksum, retrieval time, license, source release, parser version, and
    adapter version.
@@ -157,6 +174,8 @@ contracts are in [INGESTION.md](INGESTION.md). Operationally:
    manifest hash is the idempotency identity. Machine callers may stage with
    `Authorization: Bearer <token>`; never put the token in a URL, fixture, log,
    or error report, and avoid interactive shell history in production.
+   `ima-release stage` permits remote HTTPS only, never follows redirects, and
+   permits HTTP solely for a literal loopback IP with proxy use disabled.
 4. Upload chunks in index order. Retry an uncertain response with the exact
    same release, chunk index, and payload. Never mutate a chunk after another
    chunk has been accepted.
@@ -296,12 +315,15 @@ docker compose exec minerals sh -c \
   'du -h /app/data/minerals.db /app/data/minerals.db-wal 2>/dev/null || true'
 ```
 
-During a quiet maintenance window, verify and optimize:
+The production image intentionally has no `sqlite3` executable. Use a pinned
+operator workstation/container with access to the bind-mounted `./data` path
+and run it as the same numeric UID/GID as the service. During a quiet
+maintenance window, stop request traffic, then verify and optimize:
 
 ```bash
-docker compose exec minerals sqlite3 /app/data/minerals.db \
+sqlite3 ./data/minerals.db \
   'PRAGMA quick_check; PRAGMA foreign_key_check; PRAGMA optimize;'
-docker compose exec minerals sqlite3 /app/data/minerals.db \
+sqlite3 ./data/minerals.db \
   'PRAGMA wal_checkpoint(TRUNCATE);'
 ```
 
@@ -328,9 +350,8 @@ Before browser approval, create an additional consistent operator snapshot
 while the service is running:
 
 ```bash
-docker compose exec minerals sqlite3 /app/data/minerals.db \
-  ".backup '/app/data/minerals.db.pre-activation'"
-docker compose exec minerals sha256sum /app/data/minerals.db.pre-activation
+sqlite3 ./data/minerals.db ".backup './data/minerals.db.pre-activation'"
+sha256sum ./data/minerals.db.pre-activation
 ```
 
 Copy the snapshot, source manifest/raw archives, and any referenced media to
@@ -415,12 +436,14 @@ cargo run --locked --example generate_ingestion_fixture -- generate \
 ```
 
 Add `--inject-conflicts` and use a separate empty output directory to generate
-an intentional conflict batch. Test maximum legal field sizes with targeted
-fixtures; do not bloat every capacity record.
+an intentional conflict batch. Conflict injection requires `--variant changed`
+and a `--count` of at least 2 so the request cannot silently produce a
+non-conflicting fixture. Test maximum legal field sizes with targeted fixtures;
+do not bloat every capacity record.
 
 Required destructive scenarios include identical retry, invalid final record,
 disconnect/resume, kill during staging and activation, concurrent submissions,
-50-user public traffic during ingestion, backup/restore, disk full, read-only
+concurrent admin reads during ingestion, backup/restore, disk full, read-only
 storage, and a long-lived reader during checkpoint.
 
 Acceptance targets on a 2-vCPU/1-GiB instance:
@@ -429,7 +452,7 @@ Acceptance targets on a 2-vCPU/1-GiB instance:
 |---|---|
 | 500-record chunk | p95 at or below 5 seconds |
 | 6,500-record staging | at or below 90 seconds |
-| Browse/search/detail | p95 at or below 250 ms normally and 500 ms during ingestion |
+| Admin reads | p95 at or below 250 ms normally and 500 ms during ingestion |
 | Errors | no leaked `SQLITE_BUSY`; below 0.1% 5xx |
 | Memory | RSS below 512 MiB |
 | WAL after checkpoint | below 256 MiB |
@@ -445,8 +468,8 @@ the reports with the tested image digest and host specification.
 ## Updates and shutdown
 
 Before an image update, make and verify a complete backup, run the new image
-against a copy, and exercise probes, search/detail, admin authentication,
-ingestion status, and PDF generation. Image rollback does not roll back the
+against a copy, and exercise probes, admin authentication, ingestion status,
+and a verified public export. Image rollback does not roll back the
 bind-mounted database; restore the matching data snapshot if a migration is not
 backward compatible.
 

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#0b2d2a">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; child-src 'self'; manifest-src 'self'; form-action 'self'"
+    >
+    <meta name="waajacu-map-module" content="./map/map-loader.js">
+    <meta
+      name="description"
+      content="Browse Waajacu's verified public mineral catalog, evidence, and market offers."
+    >
+    <title>Waajacu's Minerals</title>
+    <link rel="stylesheet" href="./app.css">
+    <script type="module" src="./app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#app-main">Skip to main content</a>
+
+    <header class="site-header">
+      <a class="brand" href="#/" data-route-link aria-label="Waajacu's Minerals, home">
+        <span class="brand-mark" aria-hidden="true">W</span>
+        <span class="brand-copy">
+          <span class="brand-name">Waajacu's Minerals</span>
+          <span class="brand-tagline">Open mineral knowledge</span>
+        </span>
+      </a>
+
+      <nav class="primary-nav" aria-label="Primary navigation">
+        <a href="#/" data-route-link data-nav="home">Home</a>
+        <a href="#/minerals" data-route-link data-nav="minerals">Minerals</a>
+        <a href="#/map" data-route-link data-nav="map">Map</a>
+        <a href="#/about" data-route-link data-nav="about">About</a>
+      </nav>
+
+      <div class="site-preferences" aria-label="Display preferences">
+        <label class="visually-hidden" for="locale-select">Language</label>
+        <select id="locale-select" name="locale" autocomplete="off">
+          <option value="en">English</option>
+          <option value="es">Español</option>
+          <option value="de">Deutsch</option>
+          <option value="fr">Français</option>
+          <option value="cs">Čeština</option>
+          <option value="zh">中文</option>
+          <option value="ar">العربية</option>
+          <option value="pt">Português</option>
+          <option value="hi">हिन्दी</option>
+          <option value="ja">日本語</option>
+        </select>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Change color theme">
+          <span aria-hidden="true">◐</span>
+          <span data-theme-label>Theme</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="app-main" tabindex="-1">
+      <section class="loading-view" aria-labelledby="loading-title">
+        <p class="eyebrow">Public catalog</p>
+        <h1 id="loading-title">Opening the mineral collection…</h1>
+        <p>The catalog is checked locally before it is displayed.</p>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Public mineral records with source and license context.</p>
+      <p id="release-summary">Catalog release loading…</p>
+    </footer>
+
+    <div id="app-status" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>

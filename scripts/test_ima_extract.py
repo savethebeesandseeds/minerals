@@ -150,6 +150,35 @@ class ReconciliationTests(unittest.TestCase):
             ima.normalize_text("Fe\ufffdO", field="formula")
 
 
+class RuntimeContractTests(unittest.TestCase):
+    def test_exact_cpython_runtime_is_required(self):
+        ima.validate_python_runtime("CPython", "3.12.13")
+        for implementation, version in [
+            ("PyPy", "3.12.13"),
+            ("CPython", "3.12.12"),
+            ("CPython", "3.13.0"),
+        ]:
+            with self.subTest(implementation=implementation, version=version):
+                with self.assertRaisesRegex(
+                    ima.ExtractionError, "requires CPython 3.12.13"
+                ):
+                    ima.validate_python_runtime(implementation, version)
+
+    def test_interpreter_is_checked_before_package_metadata(self):
+        with (
+            mock.patch.object(
+                ima.platform, "python_implementation", return_value="CPython"
+            ),
+            mock.patch.object(ima.platform, "python_version", return_value="3.12.12"),
+            mock.patch.object(ima.importlib.metadata, "version") as package_version,
+        ):
+            with self.assertRaisesRegex(
+                ima.ExtractionError, "requires CPython 3.12.13"
+            ):
+                ima.pinned_runtime(b"pdfplumber==0.11.9\n")
+        package_version.assert_not_called()
+
+
 class OverrideValidationTests(unittest.TestCase):
     def test_tracked_override_set_is_valid_and_complete(self):
         path = Path(__file__).with_name("ima-2026-07-overrides.json")

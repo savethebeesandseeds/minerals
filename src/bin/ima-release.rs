@@ -1,11 +1,11 @@
 use anyhow::{bail, Context, Result};
-use minerals::ima_adapter::{
+use minerals::registry::MAX_MINERAL_INGESTION_CHUNK_ITEMS;
+use minerals_ima_release::{
     build_release_bundle, evolve_identity_ledger, initialize_identity_ledger,
     initialize_identity_ledger_with_overrides, load_identity_ledger, load_identity_overrides,
     load_verified_extraction, stage_release_bundle, verify_release_bundle, write_identity_ledger,
     ImaBundleBuildOptions,
 };
-use minerals::registry::MAX_MINERAL_INGESTION_CHUNK_ITEMS;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
 use std::env;
@@ -240,6 +240,8 @@ Safety:
   ledger-evolve rejects new identities unless --allow-new is explicit.
   stage creates/reuses a quarantine batch, uploads chunks, and finalizes it.
   stage never approves or activates a release; operator review remains required.
+  Remote staging requires HTTPS and never follows redirects. Literal loopback
+  IPs may use HTTP for local development; that exception bypasses all proxies.
   The token is read from INGESTION_API_TOKEN by default and is never accepted
   as a command-line value.
 "#

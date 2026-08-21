@@ -1,12 +1,9 @@
-mod agent;
 mod i18n;
 mod models;
-mod pdf;
 mod web;
 
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
-    ffi::OsString,
     net::{IpAddr, SocketAddr},
     path::PathBuf,
     sync::{Arc, Mutex, RwLock},
@@ -27,53 +24,43 @@ use axum::{
     Form, Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use i18n::{language_options, material_fact_label, ui_text, Language};
+use i18n::{material_fact_label, ui_text, Language};
 use models::{
     delete_mineral_records, execute_admin_sql, init_minerals_database,
-    is_valid_mineral_folder_name, load_minerals, load_registered_image, major_elements_to_text,
-    mineral_slug_exists, parse_major_elements, save_localized_mineral_records, Mineral,
-    MineralDiskRecord, MineralFormData, NewImageRecord, ReportRequest,
+    is_valid_mineral_folder_name, load_minerals, major_elements_to_text, mineral_slug_exists,
+    parse_major_elements, save_localized_mineral_records, Mineral, MineralDiskRecord,
+    MineralFormData, NewImageRecord,
 };
-use pdf::GeneratedArtifacts;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use subtle::ConstantTimeEq;
 use thiserror::Error;
 use tokio::{
     fs,
     net::TcpListener,
     sync::{OwnedSemaphorePermit, Semaphore},
 };
-use tower_http::services::ServeDir;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-use crate::{
-    agent::run_agentic_chain,
-    pdf::PdfGenerator,
-    web::{
-        AboutTemplate, AdminIngestionAnomalyView, AdminIngestionBatchView, AdminIngestionCountView,
-        AdminIngestionDecisionView, AdminIngestionReviewSampleView, AdminIngestionTemplate,
-        AdminReviewCandidateView, AdminReviewEvidenceView, AdminReviewFactView, AdminTemplate,
-        AllMineralsTemplate, HomeTemplate, InfoTemplate, MineralDiscoveryItem, MineralTemplate,
-        RegistryMineralTemplate, ReviewQueueTemplate, TemplateResponse,
-    },
+use crate::web::{
+    AdminIngestionAnomalyView, AdminIngestionBatchView, AdminIngestionCountView,
+    AdminIngestionDecisionView, AdminIngestionReviewSampleView, AdminIngestionTemplate,
+    AdminReviewCandidateView, AdminReviewEvidenceView, AdminReviewFactView, AdminTemplate,
+    ReviewQueueTemplate, TemplateResponse,
 };
 use minerals::registry;
 use minerals::registry::{
     approve_mineral_ingestion_batch, approve_mineral_review, canonical_mineral_chunk_hash,
     create_mineral_ingestion_batch, finalize_mineral_ingestion_batch, get_material_detail,
     get_mineral_ingestion_batch, import_material_batch, import_provider, init_registry_database,
-    legacy_report_folder_is_public, list_mineral_ingestion_batches, list_pending_mineral_reviews,
-    offers_for_material, put_mineral_ingestion_chunk, registered_image_is_public,
+    list_mineral_ingestion_batches, list_pending_mineral_reviews, put_mineral_ingestion_chunk,
     registry_is_ready, registry_stats, reject_mineral_ingestion_batch, reject_mineral_review,
-    search_materials, search_materials_page, withdraw_mineral, MaterialImport,
-    MineralBatchDecisionRequest, MineralDatasetManifest, MineralIngestionBatchDetail,
-    MineralIngestionBatchStatus, MineralIngestionChunk, MineralIngestionClassification,
-    MineralIngestionProblem, MineralIngestionProblemKind, PendingMineralReview, ProviderImport,
+    validate_registry_configuration, withdraw_mineral, MaterialImport, MineralBatchDecisionRequest,
+    MineralDatasetManifest, MineralIngestionBatchDetail, MineralIngestionBatchStatus,
+    MineralIngestionChunk, MineralIngestionClassification, MineralIngestionProblem,
+    MineralIngestionProblemKind, PendingMineralReview, ProviderImport,
 };
 
-const MINERALS_PAGE_SIZE: usize = 24;
 const ADMIN_REVIEW_PAGE_SIZE: usize = 20;
 const ADMIN_REVIEW_BODY_MAX_BYTES: usize = 16 * 1024;
 const ADMIN_INGESTION_PAGE_SIZE: usize = 20;
@@ -91,7 +78,6 @@ struct AppState {
     admin_sessions: Arc<Mutex<HashMap<String, Instant>>>,
     admin_login_failures: Arc<Mutex<HashMap<IpAddr, Vec<Instant>>>>,
     admin_drafts: Arc<Mutex<HashMap<String, AdminDraft>>>,
-    pdf_generator: Arc<PdfGenerator>,
     data_root: Arc<PathBuf>,
     admin_password: Arc<String>,
     openai_api_key: Arc<Option<String>>,
@@ -99,12 +85,12 @@ struct AppState {
     openai_translation_model: Arc<String>,
     default_language: Language,
     http_client: Arc<Client>,
-    report_slots: Arc<Semaphore>,
     ingestion_writer: Arc<Semaphore>,
-    report_attempts: Arc<Mutex<HashMap<IpAddr, Vec<Instant>>>>,
     admin_reviewer_id: Arc<String>,
     ingestion_api_token: Arc<Option<String>>,
     ingestion_adapter_id: Arc<String>,
+    trusted_proxy_ips: Arc<BTreeSet<IpAddr>>,
+    public_catalog_base_url: Arc<Option<String>>,
     secure_cookies: bool,
     admin_sql_enabled: bool,
 }
@@ -120,12 +106,6 @@ struct AdminDraft {
 #[derive(Debug, Clone, Default)]
 struct MineralCatalog {
     by_slug: HashMap<String, Mineral>,
-    ordered: Vec<Mineral>,
-}
-
-#[derive(Debug, Deserialize)]
-struct LanguageSelectionRequest {
-    lang: String,
 }
 
 impl MineralCatalog {
@@ -136,10 +116,7 @@ impl MineralCatalog {
             .map(|mineral| (mineral.slug.clone(), mineral))
             .collect::<HashMap<_, _>>();
 
-        Self {
-            by_slug,
-            ordered: minerals,
-        }
+        Self { by_slug }
     }
 }
 
@@ -204,13 +181,6 @@ impl IntoResponse for AppError {
     }
 }
 
-#[derive(Debug, Serialize)]
-struct PdfApiResponse {
-    pdf_path: String,
-    html_path: String,
-    summary: String,
-}
-
 #[derive(Debug, Deserialize)]
 struct AdminLoginRequest {
     password: String,
@@ -258,20 +228,6 @@ struct AdminDbQueryResponse {
     affected_rows: usize,
     truncated: bool,
     message: String,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct MaterialSearchQuery {
-    #[serde(default)]
-    q: String,
-    limit: Option<usize>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct MineralDiscoveryQuery {
-    #[serde(default)]
-    q: String,
-    page: Option<usize>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -400,8 +356,6 @@ struct SuggestInput {
 const ADMIN_UPLOAD_MAX_MB: usize = 20;
 const ADMIN_UPLOAD_MAX_BYTES: usize = ADMIN_UPLOAD_MAX_MB * 1024 * 1024;
 const ADMIN_IMPORT_MAX_BYTES: usize = 50 * 1024 * 1024;
-const REPORT_ATTEMPTS_PER_MINUTE: usize = 12;
-
 #[derive(Debug, Deserialize)]
 struct AiMineralSuggestion {
     common_name: String,
@@ -501,26 +455,16 @@ struct ChatChoiceMessage {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    load_environment_files();
-
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("minerals=info,tower_http=info"));
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("minerals=info"));
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
-    let data_root = std::env::var("DATA_ROOT")
+    let data_root = std::env::var_os("DATA_ROOT")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("data"));
-    fs::create_dir_all(data_root.join("minerals"))
-        .await
-        .context("failed to create data/minerals directory")?;
-    fs::create_dir_all(data_root.join("reports"))
-        .await
-        .context("failed to create data/reports directory")?;
-    init_minerals_database(&data_root).context("failed to initialize data/minerals.db")?;
-    init_registry_database(&data_root).context("failed to initialize material registry schema")?;
+        .unwrap_or_else(|| PathBuf::from("data"));
 
     let admin_password = std::env::var("ADMIN_PASSWORD")
-        .context("ADMIN_PASSWORD is required. Set it in .env.local (or env) before starting.")?;
+        .context("ADMIN_PASSWORD is required in the process environment")?;
     if admin_password.trim().is_empty() {
         return Err(anyhow!("ADMIN_PASSWORD cannot be empty"));
     }
@@ -561,56 +505,73 @@ async fn main() -> Result<()> {
             return Err(anyhow!("INGESTION_ADAPTER_ID must be valid Unicode"))
         }
     };
+    let trusted_proxy_ips = configured_trusted_proxy_ips()?;
+    let port = match std::env::var("PORT") {
+        Ok(value) => value
+            .parse::<u16>()
+            .context("PORT must be an integer between 0 and 65535")?,
+        Err(std::env::VarError::NotPresent) => 7979,
+        Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(anyhow!("PORT must be valid Unicode"))
+        }
+    };
+    let bind_address = match std::env::var("BIND_ADDRESS") {
+        Ok(value) => value
+            .parse::<IpAddr>()
+            .context("BIND_ADDRESS must be a valid IP address")?,
+        Err(std::env::VarError::NotPresent) => "127.0.0.1"
+            .parse::<IpAddr>()
+            .expect("hard-coded loopback address is valid"),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(anyhow!("BIND_ADDRESS must be valid Unicode"))
+        }
+    };
+    let secure_cookies = configured_env_flag("COOKIE_SECURE", false)?;
+    let admin_sql_enabled = configured_env_flag("ADMIN_SQL_ENABLED", false)?;
+    let public_catalog_base_url = configured_public_catalog_base_url()?;
+    validate_registry_configuration()?;
+    let http_client = Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(90))
+        .build()
+        .context("failed to initialize HTTP client")?;
+
+    // All required and fallible process configuration is validated before any
+    // directories, databases, or migrations are created or changed.
+    fs::create_dir_all(data_root.join("minerals"))
+        .await
+        .context("failed to create data/minerals directory")?;
+    init_minerals_database(&data_root).context("failed to initialize data/minerals.db")?;
+    init_registry_database(&data_root).context("failed to initialize material registry schema")?;
 
     let state = AppState {
         catalogs_by_lang: Arc::new(RwLock::new(HashMap::new())),
         admin_sessions: Arc::new(Mutex::new(HashMap::new())),
         admin_login_failures: Arc::new(Mutex::new(HashMap::new())),
         admin_drafts: Arc::new(Mutex::new(HashMap::new())),
-        pdf_generator: Arc::new(PdfGenerator::new(&data_root)),
         data_root: Arc::new(data_root),
         admin_password: Arc::new(admin_password),
         openai_api_key: Arc::new(std::env::var("OPENAI_API_KEY").ok()),
         openai_model: Arc::new(openai_model),
         openai_translation_model: Arc::new(openai_translation_model),
         default_language,
-        http_client: Arc::new(
-            Client::builder()
-                .connect_timeout(std::time::Duration::from_secs(10))
-                .timeout(std::time::Duration::from_secs(90))
-                .build()
-                .context("failed to initialize HTTP client")?,
-        ),
-        report_slots: Arc::new(Semaphore::new(2)),
+        http_client: Arc::new(http_client),
         ingestion_writer: Arc::new(Semaphore::new(1)),
-        report_attempts: Arc::new(Mutex::new(HashMap::new())),
         admin_reviewer_id: Arc::new(admin_reviewer_id),
         ingestion_api_token: Arc::new(ingestion_api_token),
         ingestion_adapter_id: Arc::new(ingestion_adapter_id),
-        secure_cookies: env_flag("COOKIE_SECURE", false),
-        admin_sql_enabled: env_flag("ADMIN_SQL_ENABLED", false),
+        trusted_proxy_ips: Arc::new(trusted_proxy_ips),
+        public_catalog_base_url: Arc::new(public_catalog_base_url),
+        secure_cookies,
+        admin_sql_enabled,
     };
 
     let app = Router::new()
-        .route("/", get(home_page))
+        .route("/", get(admin_root))
         .route("/livez", get(livez))
         .route("/readyz", get(readyz))
         .route("/healthz", get(healthz))
-        .route("/language", post(set_language))
-        .route("/materials", get(legacy_materials_redirect))
-        .route("/materials/:slug", get(legacy_material_redirect))
-        .route("/artifacts/:folder/:run_id/:file", get(report_artifact))
-        .route("/media/images/:file", get(registered_image))
-        .route("/minerals", get(all_minerals_page))
-        .route("/catalog", get(catalog_page))
-        .route("/about", get(about_page))
-        .route("/pages/:slug", get(info_page))
-        .route("/minerals/:slug", get(mineral_page))
-        .route("/minerals/:slug/pdf", post(generate_pdf_form))
-        .route("/api/minerals", get(minerals_api))
-        .route("/api/minerals/:slug", get(mineral_registry_api))
-        .route("/api/minerals/:slug/offers", get(mineral_offers_api))
-        .route("/api/minerals/:slug/pdf", post(generate_pdf_api))
+        .route("/static/:asset", get(admin_static_asset))
         .route("/admin", get(admin_page))
         .route("/admin/reviews", get(admin_review_queue))
         .route("/admin/ingestion", get(admin_ingestion_page))
@@ -665,7 +626,12 @@ async fn main() -> Result<()> {
         .route("/admin/db/query", post(admin_db_query))
         .route(
             "/admin/minerals/import",
-            post(admin_import_minerals).layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES)),
+            post(admin_import_minerals)
+                .layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES))
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    admit_admin_write_request,
+                )),
         )
         .route(
             "/admin/minerals/review",
@@ -673,21 +639,16 @@ async fn main() -> Result<()> {
         )
         .route(
             "/admin/providers/import",
-            post(admin_import_provider).layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES)),
+            post(admin_import_provider)
+                .layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES))
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    admit_admin_write_request,
+                )),
         )
-        .nest_service("/static", ServeDir::new("static"))
         .layer(middleware::from_fn(security_headers))
         .with_state(state);
 
-    let port: u16 = std::env::var("PORT")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(7979);
-
-    let bind_address = std::env::var("BIND_ADDRESS")
-        .unwrap_or_else(|_| "127.0.0.1".to_string())
-        .parse()
-        .context("BIND_ADDRESS must be a valid IP address")?;
     let address = SocketAddr::new(bind_address, port);
     let listener = TcpListener::bind(address)
         .await
@@ -705,18 +666,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn load_environment_files() {
-    // Precedence is: explicit process/container variables, .env.local, then .env.
-    // dotenvy's override loader supplies the middle tier; restoring the original
-    // process environment afterward keeps orchestrator-injected secrets authoritative.
-    let process_environment: Vec<(OsString, OsString)> = std::env::vars_os().collect();
-    let _ = dotenvy::from_filename(".env");
-    let _ = dotenvy::from_filename_override(".env.local");
-    for (key, value) in process_environment {
-        std::env::set_var(key, value);
-    }
-}
-
 async fn run_blocking<T, F>(task: F) -> Result<T>
 where
     T: Send + 'static,
@@ -727,21 +676,8 @@ where
         .context("blocking worker failed")?
 }
 
-async fn home_page(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> TemplateResponse<HomeTemplate> {
-    let language = resolve_language(&state, &headers);
-    let has_admin = has_admin_session(&state, &headers);
-
-    TemplateResponse(HomeTemplate {
-        lang_code: language.code().to_string(),
-        lang_dir: language.dir().to_string(),
-        txt: ui_text(language),
-        has_admin_session: has_admin,
-        language_options: language_options(),
-        current_lang_code: language.code(),
-    })
+async fn admin_root() -> Redirect {
+    Redirect::to("/admin")
 }
 
 async fn livez() -> Json<HealthResponse> {
@@ -769,90 +705,42 @@ async fn healthz(State(state): State<AppState>) -> Result<Json<HealthResponse>, 
     readyz(State(state)).await
 }
 
-async fn report_artifact(
-    State(state): State<AppState>,
-    AxumPath((folder, run_id, file)): AxumPath<(String, String, String)>,
-) -> Result<Response, AppError> {
-    if !is_safe_artifact_segment(&folder)
-        || !is_safe_artifact_segment(&run_id)
-        || !matches!(file.as_str(), "report.pdf" | "report.html")
-    {
-        return Err(AppError::NotFound("report artifact not found".to_string()));
-    }
-    let data_root = state.data_root.clone();
-    let publication_folder = folder.clone();
-    if !run_blocking(move || {
-        legacy_report_folder_is_public(data_root.as_path(), &publication_folder)
-    })
-    .await?
-    {
-        return Err(AppError::NotFound("report artifact not found".to_string()));
-    }
-
-    let reports_root = fs::canonicalize(state.data_root.join("reports"))
-        .await
-        .context("failed to resolve reports root")?;
-    let candidate = state
-        .data_root
-        .join("reports")
-        .join(folder)
-        .join(run_id)
-        .join(&file);
-    let resolved = match fs::canonicalize(&candidate).await {
-        Ok(path) if path.starts_with(&reports_root) => path,
-        Ok(_) => return Err(AppError::NotFound("report artifact not found".to_string())),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            return Err(AppError::NotFound("report artifact not found".to_string()))
-        }
-        Err(err) => return Err(AppError::Internal(err.into())),
+async fn admin_static_asset(AxumPath(asset): AxumPath<String>) -> Result<Response, AppError> {
+    let (body, content_type) = match asset.as_str() {
+        "app.css" => (
+            include_bytes!("../static/app.css").as_slice(),
+            "text/css; charset=utf-8",
+        ),
+        "theme.js" => (
+            include_bytes!("../static/theme.js").as_slice(),
+            "text/javascript; charset=utf-8",
+        ),
+        "favicon.ico" => (
+            include_bytes!("../static/favicon.ico").as_slice(),
+            "image/x-icon",
+        ),
+        "logo_transparent.png" => (
+            include_bytes!("../static/logo_transparent.png").as_slice(),
+            "image/png",
+        ),
+        "logo_transparent_dark.png" => (
+            include_bytes!("../static/logo_transparent_dark.png").as_slice(),
+            "image/png",
+        ),
+        "loading_1.png" => (
+            include_bytes!("../static/loading_1.png").as_slice(),
+            "image/png",
+        ),
+        "loading_2.png" => (
+            include_bytes!("../static/loading_2.png").as_slice(),
+            "image/png",
+        ),
+        _ => return Err(AppError::NotFound("admin asset not found".to_string())),
     };
-    let body = fs::read(&resolved)
-        .await
-        .with_context(|| format!("failed to read report artifact {}", resolved.display()))?;
-    let mut response = (StatusCode::OK, body).into_response();
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static(if file == "report.pdf" {
-            "application/pdf"
-        } else {
-            "text/html; charset=utf-8"
-        }),
-    );
-    response.headers_mut().insert(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("private, no-store, max-age=0"),
-    );
-    Ok(response)
-}
-
-async fn registered_image(
-    State(state): State<AppState>,
-    AxumPath(file): AxumPath<String>,
-) -> Result<Response, AppError> {
-    let data_root = state.data_root.clone();
-    let publication_file = file.clone();
-    if !run_blocking(move || registered_image_is_public(data_root.as_path(), &publication_file))
-        .await?
-    {
-        return Err(AppError::NotFound("registered image not found".to_string()));
-    }
-    let data_root = state.data_root.clone();
-    let Some((body, content_type)) =
-        run_blocking(move || load_registered_image(data_root.as_path(), &file)).await?
-    else {
-        return Err(AppError::NotFound("registered image not found".to_string()));
-    };
-    let content_type = match content_type.as_str() {
-        "image/png" => HeaderValue::from_static("image/png"),
-        "image/jpeg" => HeaderValue::from_static("image/jpeg"),
-        "image/gif" => HeaderValue::from_static("image/gif"),
-        "image/webp" => HeaderValue::from_static("image/webp"),
-        _ => return Err(AppError::NotFound("registered image not found".to_string())),
-    };
-    let mut response = (StatusCode::OK, body).into_response();
+    let mut response = (StatusCode::OK, Bytes::from_static(body)).into_response();
     response
         .headers_mut()
-        .insert(header::CONTENT_TYPE, content_type);
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
     response.headers_mut().insert(
         header::CACHE_CONTROL,
         HeaderValue::from_static("public, no-cache, max-age=0, must-revalidate"),
@@ -860,34 +748,10 @@ async fn registered_image(
     Ok(response)
 }
 
-fn is_safe_artifact_segment(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 255
-        && value
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_'))
-        && value != "."
-        && value != ".."
-}
-
-fn is_private_static_template_path(path: &str) -> bool {
-    let Some(relative) = path.strip_prefix("/static/") else {
-        return false;
-    };
-    relative
-        .rsplit_once('.')
-        .is_some_and(|(_, extension)| matches!(extension, "html" | "tex"))
-}
-
 async fn security_headers(request: Request, next: Next) -> Response {
     let path = request.uri().path();
-    let private_template = is_private_static_template_path(path);
     let private_admin_response = is_admin_path(path);
-    let mut response = if private_template {
-        StatusCode::NOT_FOUND.into_response()
-    } else {
-        next.run(request).await
-    };
+    let mut response = next.run(request).await;
     let headers = response.headers_mut();
     if private_admin_response {
         headers.insert(
@@ -897,9 +761,7 @@ async fn security_headers(request: Request, next: Next) -> Response {
     }
     headers.insert(
         header::CONTENT_SECURITY_POLICY,
-        HeaderValue::from_static(
-            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
-        ),
+        HeaderValue::from_static("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"),
     );
     headers.insert(
         header::X_CONTENT_TYPE_OPTIONS,
@@ -919,189 +781,6 @@ async fn security_headers(request: Request, next: Next) -> Response {
 
 fn is_admin_path(path: &str) -> bool {
     path == "/admin" || path.starts_with("/admin/")
-}
-
-async fn legacy_materials_redirect() -> Redirect {
-    Redirect::permanent("/minerals")
-}
-
-async fn legacy_material_redirect(
-    State(state): State<AppState>,
-    AxumPath(slug): AxumPath<String>,
-) -> Result<Redirect, AppError> {
-    if !is_safe_artifact_segment(&slug) {
-        return Ok(Redirect::permanent("/minerals"));
-    }
-    let data_root = state.data_root.clone();
-    let lookup_slug = slug.clone();
-    let is_registry_mineral = run_blocking(move || {
-        Ok(get_material_detail(data_root.as_path(), &lookup_slug)?
-            .is_some_and(|record| record.record_type == "mineral"))
-    })
-    .await?;
-    if is_registry_mineral {
-        Ok(Redirect::permanent(&format!("/minerals/{slug}")))
-    } else {
-        Ok(Redirect::permanent("/minerals"))
-    }
-}
-
-async fn minerals_api(
-    State(state): State<AppState>,
-    Query(query): Query<MaterialSearchQuery>,
-) -> Result<Json<Vec<registry::MaterialSearchItem>>, AppError> {
-    if query.q.chars().count() > 500 {
-        return Err(AppError::BadRequest(
-            "mineral search query exceeds 500 characters".to_string(),
-        ));
-    }
-    let data_root = state.data_root.clone();
-    let search_query = query.q;
-    let limit = query.limit.unwrap_or(50);
-    let minerals = run_blocking(move || {
-        search_materials(data_root.as_path(), &search_query, Some("mineral"), limit)
-    })
-    .await?;
-    Ok(Json(minerals))
-}
-
-async fn mineral_registry_api(
-    State(state): State<AppState>,
-    AxumPath(slug): AxumPath<String>,
-) -> Result<Json<registry::MaterialDetail>, AppError> {
-    let data_root = state.data_root.clone();
-    let lookup_slug = slug.clone();
-    let mineral = run_blocking(move || get_material_detail(data_root.as_path(), &lookup_slug))
-        .await?
-        .filter(|record| record.record_type == "mineral")
-        .ok_or_else(|| AppError::NotFound(format!("mineral '{slug}' not found")))?;
-    Ok(Json(mineral))
-}
-
-async fn mineral_offers_api(
-    State(state): State<AppState>,
-    AxumPath(slug): AxumPath<String>,
-) -> Result<Json<Vec<registry::ProviderOffer>>, AppError> {
-    let data_root = state.data_root.clone();
-    let lookup_slug = slug.clone();
-    let offers = run_blocking(move || {
-        let Some(record) = get_material_detail(data_root.as_path(), &lookup_slug)? else {
-            return Ok(None);
-        };
-        if record.record_type != "mineral" {
-            return Ok(None);
-        }
-        offers_for_material(data_root.as_path(), &lookup_slug)
-    })
-    .await?
-    .ok_or_else(|| AppError::NotFound(format!("mineral '{slug}' not found")))?;
-    Ok(Json(offers))
-}
-
-async fn localized_registry_mineral(
-    state: &AppState,
-    language: Language,
-    slug: &str,
-    published: Option<&Mineral>,
-) -> Result<Option<registry::MaterialDetail>, AppError> {
-    let data_root = state.data_root.clone();
-    let lookup_slug = slug.to_string();
-    let Some(mut detail) =
-        run_blocking(move || get_material_detail(data_root.as_path(), &lookup_slug)).await?
-    else {
-        return Ok(None);
-    };
-    if detail.record_type != "mineral" {
-        return Ok(None);
-    }
-
-    // A legacy catalog profile may supply localized display text only while it
-    // is still the authority for this row. Once an imported revision is
-    // reviewed and published, overlaying legacy values would make the HTML
-    // disagree with the approved registry record and its API representation.
-    if !detail.registry_authoritative {
-        if let Some(published) = published {
-            detail.canonical_name.clone_from(&published.common_name);
-            detail.description.clone_from(&published.description);
-            detail.mineral_family.clone_from(&published.mineral_family);
-            for fact in &mut detail.properties {
-                let localized_value = match fact.key.as_str() {
-                    "color" | "colour" => Some(published.color.clone()),
-                    "crystal_system" => Some(published.crystal_system.clone()),
-                    "density_g_cm3" => Some(published.density_g_cm3.to_string()),
-                    "hardness_mohs" => Some(published.hardness_mohs.to_string()),
-                    "luster" | "lustre" => Some(published.luster.clone()),
-                    "major_elements_pct" => Some(
-                        published
-                            .major_elements_pct
-                            .iter()
-                            .map(|(element, percent)| format!("{element} {percent}%"))
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                    ),
-                    "notes" => Some(published.notes.clone()),
-                    "streak" => Some(published.streak.clone()),
-                    _ => None,
-                };
-                if let Some(value) = localized_value.filter(|value| !value.trim().is_empty()) {
-                    fact.value = value;
-                }
-            }
-        }
-    }
-    for fact in detail.properties.iter_mut().chain(detail.safety.iter_mut()) {
-        if let Some(label) = material_fact_label(language, &fact.key) {
-            fact.name = label.to_string();
-        }
-    }
-    for source in &mut detail.evidence {
-        source.claim_label = review_claim_scope_display(language, &source.claim_scope);
-    }
-    Ok(Some(detail))
-}
-
-fn expand_localized_mineral_query(
-    query: &str,
-    language: Language,
-    localized_catalog: &MineralCatalog,
-    english_catalog: &MineralCatalog,
-) -> String {
-    let trimmed = query.trim();
-    if trimmed.is_empty() || language == Language::En {
-        return trimmed.to_string();
-    }
-
-    let needle = trimmed.to_lowercase();
-    let mut canonical_terms = BTreeSet::new();
-    for localized in &localized_catalog.ordered {
-        let matches_displayed_text = localized.common_name.to_lowercase().contains(&needle)
-            || localized.mineral_family.to_lowercase().contains(&needle)
-            || localized.formula.to_lowercase().contains(&needle);
-        if !matches_displayed_text {
-            continue;
-        }
-        let Some(english) = english_catalog.by_slug.get(&localized.slug) else {
-            continue;
-        };
-        canonical_terms.insert(english.common_name.trim().to_string());
-        canonical_terms.insert(english.mineral_family.trim().to_string());
-        if canonical_terms.len() >= 8 {
-            break;
-        }
-    }
-
-    let mut expanded = trimmed.to_string();
-    for term in canonical_terms {
-        if term.is_empty() || expanded.to_lowercase().contains(&term.to_lowercase()) {
-            continue;
-        }
-        let candidate = format!("{expanded} {term}");
-        if candidate.chars().count() > 500 {
-            break;
-        }
-        expanded = candidate;
-    }
-    expanded
 }
 
 fn mineral_status_display<'a>(status: &str, text: &'a i18n::RegistryText) -> &'a str {
@@ -1181,6 +860,7 @@ fn admin_review_candidate_for_ui(
     review: PendingMineralReview,
     language: Language,
     is_update: bool,
+    public_catalog_base_url: Option<&str>,
 ) -> AdminReviewCandidateView {
     let registry_text = ui_text(language).registry;
     let quality = if review.record.data_quality_score.is_finite() {
@@ -1252,7 +932,9 @@ fn admin_review_candidate_for_ui(
     let safety = admin_review_facts_for_ui(language, &review.record.safety);
     let payload_json = serde_json::to_string_pretty(&review.record).unwrap_or_default();
     let current_profile_path = if is_update {
-        format!("/minerals/{}", review.record.slug)
+        public_catalog_base_url
+            .map(|base| format!("{base}/#/minerals/{}", review.record.slug))
+            .unwrap_or_default()
     } else {
         String::new()
     };
@@ -1286,318 +968,45 @@ fn admin_review_candidate_for_ui(
     }
 }
 
-async fn set_language(
-    State(state): State<AppState>,
-    Form(request): Form<LanguageSelectionRequest>,
-) -> Result<Response, AppError> {
-    let selected = Language::from_code(&request.lang).unwrap_or(state.default_language);
-    let mut response = Redirect::to("/").into_response();
-    append_set_cookie(
-        &mut response,
-        &format!(
-            "lang={}; Path=/; SameSite=Lax; Max-Age=31536000",
-            selected.code()
-        ),
-    )?;
-    Ok(response)
+fn client_ip_for_rate_limit(state: &AppState, peer_ip: IpAddr, headers: &HeaderMap) -> IpAddr {
+    resolve_client_ip(peer_ip, headers, state.trusted_proxy_ips.as_ref())
 }
 
-async fn all_minerals_page(
-    State(state): State<AppState>,
-    Query(request): Query<MineralDiscoveryQuery>,
-    headers: HeaderMap,
-) -> Result<TemplateResponse<AllMineralsTemplate>, AppError> {
-    let language = resolve_language(&state, &headers);
-    let has_admin = has_admin_session(&state, &headers);
-    if request.q.chars().count() > 500 {
-        return Err(AppError::BadRequest(
-            "mineral search query exceeds 500 characters".to_string(),
-        ));
+fn resolve_client_ip(
+    peer_ip: IpAddr,
+    headers: &HeaderMap,
+    trusted_proxy_ips: &BTreeSet<IpAddr>,
+) -> IpAddr {
+    if !trusted_proxy_ips.contains(&peer_ip) {
+        return peer_ip;
     }
 
-    let localized_catalog = catalog_for_language(&state, language)?;
-    let english_catalog = if language == Language::En {
-        localized_catalog.clone()
-    } else {
-        catalog_for_language(&state, Language::En)?
-    };
-    let expanded_query =
-        expand_localized_mineral_query(&request.q, language, &localized_catalog, &english_catalog);
-    let requested_page = request.page.unwrap_or(1).max(1);
-    let data_root = state.data_root.clone();
-    let (result_page, stats, current_page) = run_blocking(move || {
-        let stats = registry_stats(data_root.as_path())?;
-        let first_page = search_materials_page(
-            data_root.as_path(),
-            &expanded_query,
-            Some("mineral"),
-            MINERALS_PAGE_SIZE,
-            0,
-        )?;
-        let total_pages = first_page.total_count.div_ceil(MINERALS_PAGE_SIZE).max(1);
-        let current_page = requested_page.min(total_pages);
-        let result_page = if current_page == 1 {
-            first_page
-        } else {
-            let clamped_offset = (current_page - 1) * MINERALS_PAGE_SIZE;
-            search_materials_page(
-                data_root.as_path(),
-                &expanded_query,
-                Some("mineral"),
-                MINERALS_PAGE_SIZE,
-                clamped_offset,
-            )?
+    let forwarded_values: Vec<_> = headers.get_all("x-forwarded-for").iter().collect();
+    let mut inspected_hops = 0_usize;
+    for value in forwarded_values.into_iter().rev() {
+        let Ok(value) = value.to_str() else {
+            return peer_ip;
         };
-        Ok((result_page, stats, current_page))
-    })
-    .await?;
-
-    let txt = ui_text(language);
-    let minerals = result_page
-        .items
-        .into_iter()
-        .map(|item| {
-            let legacy_profile = localized_catalog.by_slug.get(&item.slug);
-            let localized = if item.registry_authoritative {
-                None
-            } else {
-                legacy_profile
+        for hop in value.rsplit(',') {
+            let hop = hop.trim();
+            if hop.is_empty() || inspected_hops >= 32 {
+                return peer_ip;
+            }
+            inspected_hops += 1;
+            let Ok(ip) = hop.parse::<IpAddr>() else {
+                return peer_ip;
             };
-            MineralDiscoveryItem {
-                slug: item.slug,
-                common_name: localized
-                    .map(|mineral| mineral.common_name.clone())
-                    .unwrap_or(item.canonical_name),
-                mineral_family: localized
-                    .map(|mineral| mineral.mineral_family.clone())
-                    .unwrap_or(item.mineral_family),
-                formula: item.formula,
+            if !trusted_proxy_ips.contains(&ip) {
+                return ip;
             }
-        })
-        .collect::<Vec<_>>();
-    let total_results = result_page.total_count;
-    let total_pages = total_results.div_ceil(MINERALS_PAGE_SIZE).max(1);
-    let page_start = if total_results == 0 {
-        0
-    } else {
-        result_page.offset + 1
-    };
-    let page_end = result_page.offset + minerals.len();
-    Ok(TemplateResponse(AllMineralsTemplate {
-        lang_code: language.code().to_string(),
-        lang_dir: language.dir().to_string(),
-        txt,
-        has_admin_session: has_admin,
-        minerals,
-        query: request.q,
-        total_results,
-        published_count: stats.mineral_count,
-        current_page,
-        total_pages,
-        page_start,
-        page_end,
-        has_previous_page: current_page > 1,
-        previous_page: current_page.saturating_sub(1).max(1),
-        has_next_page: current_page < total_pages,
-        next_page: (current_page + 1).min(total_pages),
-    }))
-}
-
-async fn catalog_page() -> Redirect {
-    Redirect::permanent("/minerals")
-}
-
-async fn about_page(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> TemplateResponse<AboutTemplate> {
-    let language = resolve_language(&state, &headers);
-    let has_admin = has_admin_session(&state, &headers);
-    TemplateResponse(AboutTemplate {
-        lang_code: language.code().to_string(),
-        lang_dir: language.dir().to_string(),
-        txt: ui_text(language),
-        has_admin_session: has_admin,
-    })
-}
-
-async fn info_page(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    AxumPath(slug): AxumPath<String>,
-) -> TemplateResponse<InfoTemplate> {
-    let language = resolve_language(&state, &headers);
-    let has_admin = has_admin_session(&state, &headers);
-    let (page_title, page_body) = footer_page_content(&slug);
-
-    TemplateResponse(InfoTemplate {
-        lang_code: language.code().to_string(),
-        lang_dir: language.dir().to_string(),
-        txt: ui_text(language),
-        has_admin_session: has_admin,
-        page_title: page_title.to_string(),
-        page_body: page_body.to_string(),
-    })
-}
-
-async fn mineral_page(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-    AxumPath(slug): AxumPath<String>,
-) -> Result<Response, AppError> {
-    let language = resolve_language(&state, &headers);
-    let has_admin = has_admin_session(&state, &headers);
-    let mineral = catalog_for_language(&state, language)?
-        .by_slug
-        .get(&slug)
-        .cloned();
-    let registry = localized_registry_mineral(&state, language, &slug, mineral.as_ref())
-        .await?
-        .ok_or_else(|| AppError::NotFound(format!("mineral '{slug}' not found")))?;
-    if registry.registry_authoritative || mineral.is_none() {
-        return Ok(TemplateResponse(RegistryMineralTemplate {
-            lang_code: language.code().to_string(),
-            lang_dir: language.dir().to_string(),
-            txt: ui_text(language),
-            has_admin_session: has_admin,
-            material: registry,
-        })
-        .into_response());
+        }
     }
-    let mineral = mineral.expect("legacy mineral checked above");
-    let request = default_report_request(language);
-    let report = run_agentic_chain(&mineral, &request, language);
 
-    Ok(TemplateResponse(MineralTemplate {
-        lang_code: language.code().to_string(),
-        lang_dir: language.dir().to_string(),
-        txt: ui_text(language),
-        has_admin_session: has_admin,
-        mineral,
-        registry: Some(registry),
-        request,
-        report,
-        generated_pdf_path: None,
-        generated_html_path: None,
-        generation_error: None,
-    })
-    .into_response())
-}
-
-async fn generate_pdf_form(
-    State(state): State<AppState>,
-    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    AxumPath(slug): AxumPath<String>,
-    Form(request): Form<ReportRequest>,
-) -> Result<TemplateResponse<MineralTemplate>, AppError> {
-    let language = resolve_language(&state, &headers);
-    let has_admin = has_admin_session(&state, &headers);
-    let mineral = get_mineral(&state, language, &slug)?;
-    let registry = localized_registry_mineral(&state, language, &slug, Some(&mineral))
-        .await?
-        .filter(|record| !record.registry_authoritative)
-        .ok_or_else(|| AppError::NotFound(format!("mineral '{slug}' not found")))?;
-    validate_report_request(&request)?;
-    check_report_rate_limit(&state, peer_addr.ip())?;
-    let report = run_agentic_chain(&mineral, &request, language);
-
-    let (artifacts, generation_error): (Option<GeneratedArtifacts>, Option<String>) =
-        match generate_report_artifacts(&state, &report, language).await {
-            Ok(paths) => (Some(paths), None),
-            Err(err) => {
-                warn!(mineral_slug = %slug, error = %err, "PDF generation failed");
-                (None, Some(String::new()))
-            }
-        };
-
-    Ok(TemplateResponse(MineralTemplate {
-        lang_code: language.code().to_string(),
-        lang_dir: language.dir().to_string(),
-        txt: ui_text(language),
-        has_admin_session: has_admin,
-        mineral,
-        registry: Some(registry),
-        request,
-        report,
-        generated_pdf_path: artifacts.as_ref().map(|value| value.pdf_path.clone()),
-        generated_html_path: artifacts.as_ref().map(|value| value.html_path.clone()),
-        generation_error,
-    }))
-}
-
-async fn generate_pdf_api(
-    State(state): State<AppState>,
-    ConnectInfo(peer_addr): ConnectInfo<SocketAddr>,
-    headers: HeaderMap,
-    AxumPath(slug): AxumPath<String>,
-    Json(request): Json<ReportRequest>,
-) -> Result<Json<PdfApiResponse>, AppError> {
-    let language = resolve_language(&state, &headers);
-    let data_root = state.data_root.clone();
-    let lookup_slug = slug.clone();
-    let reportable = run_blocking(move || {
-        Ok(
-            get_material_detail(data_root.as_path(), &lookup_slug)?.is_some_and(|record| {
-                record.record_type == "mineral" && !record.registry_authoritative
-            }),
-        )
-    })
-    .await?;
-    if !reportable {
-        return Err(AppError::NotFound(format!("mineral '{slug}' not found")));
-    }
-    let mineral = get_mineral(&state, language, &slug)?;
-    validate_report_request(&request)?;
-    check_report_rate_limit(&state, peer_addr.ip())?;
-    let report = run_agentic_chain(&mineral, &request, language);
-    let artifacts = generate_report_artifacts(&state, &report, language)
-        .await
-        .with_context(|| format!("failed to generate pdf for slug '{slug}'"))?;
-
-    Ok(Json(PdfApiResponse {
-        pdf_path: artifacts.pdf_path,
-        html_path: artifacts.html_path,
-        summary: report.summary,
-    }))
-}
-
-async fn generate_report_artifacts(
-    state: &AppState,
-    report: &agent::MineralReport,
-    language: Language,
-) -> Result<GeneratedArtifacts> {
-    let _permit = state
-        .report_slots
-        .clone()
-        .try_acquire_owned()
-        .map_err(|_| anyhow!("report generator is busy; retry shortly"))?;
-    let run_id = generate_secure_hex(16).map_err(|err| anyhow!(err.to_string()))?;
-    tokio::time::timeout(
-        std::time::Duration::from_secs(60),
-        state.pdf_generator.generate_pdf(report, language, &run_id),
-    )
-    .await
-    .map_err(|_| anyhow!("report generation exceeded 60 seconds"))?
-}
-
-fn check_report_rate_limit(state: &AppState, client_ip: IpAddr) -> Result<(), AppError> {
-    let mut attempts_by_ip = state
-        .report_attempts
-        .lock()
-        .map_err(|_| anyhow!("report rate-limit store lock poisoned"))?;
-    attempts_by_ip.retain(|_, attempts| {
-        attempts.retain(|created_at| created_at.elapsed().as_secs() < 60);
-        !attempts.is_empty()
-    });
-    let attempts = attempts_by_ip.entry(client_ip).or_default();
-    if attempts.len() >= REPORT_ATTEMPTS_PER_MINUTE {
-        return Err(AppError::TooManyRequests(
-            "report generation limit reached for this address; retry in one minute".to_string(),
-        ));
-    }
-    attempts.push(Instant::now());
-    Ok(())
+    // A trusted proxy appends or overwrites X-Forwarded-For. Walk from the
+    // nearest hop toward the client and stop at the first address outside the
+    // configured trust boundary. Do not parse anything farther left: that
+    // prefix came from outside the trust boundary and may be attacker supplied.
+    peer_ip
 }
 
 async fn admin_page(
@@ -1609,6 +1018,7 @@ async fn admin_page(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        public_catalog_url: public_catalog_minerals_url(&state),
         has_admin_session: has_admin_session(&state, &headers),
         error_message: None,
         success_message: None,
@@ -1697,6 +1107,16 @@ async fn admit_ingestion_write_request(
 ) -> Result<Response, AppError> {
     let admission = require_ingestion_write_admission(&state, request.headers())?;
     request.extensions_mut().insert(Arc::new(admission));
+    Ok(next.run(request).await)
+}
+
+async fn admit_admin_write_request(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Result<Response, AppError> {
+    require_admin_session(&state, request.headers())?;
+    require_same_origin(request.headers())?;
     Ok(next.run(request).await)
 }
 
@@ -2284,6 +1704,7 @@ async fn admin_ingestion_page(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        public_catalog_url: public_catalog_minerals_url(&state),
         has_admin_session: true,
         error_message: None,
         success_message: admin_ingestion_notice(language, query.notice.as_deref()),
@@ -2368,7 +1789,12 @@ async fn admin_review_queue(
         .into_iter()
         .map(|review| {
             let is_update = published_slugs.contains(&review.record.slug);
-            admin_review_candidate_for_ui(review, language, is_update)
+            admin_review_candidate_for_ui(
+                review,
+                language,
+                is_update,
+                state.public_catalog_base_url.as_deref(),
+            )
         })
         .collect();
 
@@ -2376,6 +1802,7 @@ async fn admin_review_queue(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        public_catalog_url: public_catalog_minerals_url(&state),
         has_admin_session: true,
         error_message: None,
         success_message,
@@ -2416,12 +1843,13 @@ async fn admin_review_mineral(
     };
 
     let data_root = state.data_root.clone();
+    let reviewer_id = state.admin_reviewer_id.as_str().to_string();
     let review_id = request.review_id;
     let outcome = run_blocking(move || {
         if approve {
-            approve_mineral_review(data_root.as_path(), review_id, &operator_note)
+            approve_mineral_review(data_root.as_path(), review_id, &reviewer_id, &operator_note)
         } else {
-            reject_mineral_review(data_root.as_path(), review_id, &operator_note)
+            reject_mineral_review(data_root.as_path(), review_id, &reviewer_id, &operator_note)
         }
     })
     .await
@@ -2452,6 +1880,7 @@ async fn admin_login(
 ) -> Result<Response, AppError> {
     let language = resolve_language(&state, &headers);
     require_same_origin(&headers)?;
+    let client_ip = client_ip_for_rate_limit(&state, peer_addr.ip(), &headers);
     // Once an address exhausts its initial burst, reserve at most one password
     // comparison per interval. This limits brute-force guesses without making
     // a correct password permanently unusable after an attacker fills a
@@ -2465,7 +1894,7 @@ async fn admin_login(
             failures.retain(|created_at| created_at.elapsed().as_secs() < 60);
             !failures.is_empty()
         });
-        let failures = failures_by_ip.entry(peer_addr.ip()).or_default();
+        let failures = failures_by_ip.entry(client_ip).or_default();
         if failures.len() >= ADMIN_LOGIN_BURST
             && failures.last().is_some_and(|attempt| {
                 attempt.elapsed().as_secs() < ADMIN_LOGIN_THROTTLED_INTERVAL_SECS
@@ -2486,6 +1915,7 @@ async fn admin_login(
             lang_code: language.code().to_string(),
             lang_dir: language.dir().to_string(),
             txt: ui_text(language),
+            public_catalog_url: public_catalog_minerals_url(&state),
             has_admin_session: false,
             error_message: Some("Invalid admin password.".to_string()),
             success_message: None,
@@ -2498,7 +1928,7 @@ async fn admin_login(
         .admin_login_failures
         .lock()
         .map_err(|_| anyhow!("admin login failure store lock poisoned"))?
-        .remove(&peer_addr.ip());
+        .remove(&client_ip);
 
     let token = generate_secure_hex(24)?;
     {
@@ -2513,6 +1943,7 @@ async fn admin_login(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        public_catalog_url: public_catalog_minerals_url(&state),
         has_admin_session: true,
         error_message: None,
         success_message: Some("Admin session created.".to_string()),
@@ -2556,6 +1987,7 @@ async fn admin_logout(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        public_catalog_url: public_catalog_minerals_url(&state),
         has_admin_session: false,
         error_message: None,
         success_message: Some("Admin session closed.".to_string()),
@@ -2593,6 +2025,7 @@ async fn admin_suggest_mineral(
                 lang_code: language.code().to_string(),
                 lang_dir: language.dir().to_string(),
                 txt: ui_text(language),
+                public_catalog_url: public_catalog_minerals_url(&state),
                 has_admin_session: true,
                 error_message: Some(format!("AI suggestion failed: {err}")),
                 success_message: None,
@@ -2658,6 +2091,7 @@ async fn admin_suggest_mineral(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        public_catalog_url: public_catalog_minerals_url(&state),
         has_admin_session: true,
         error_message: None,
         success_message: Some("AI suggestion generated. Review and publish.".to_string()),
@@ -2727,6 +2161,7 @@ async fn admin_publish_mineral(
                 lang_code: language.code().to_string(),
                 lang_dir: language.dir().to_string(),
                 txt: ui_text(language),
+                public_catalog_url: public_catalog_minerals_url(&state),
                 has_admin_session: true,
                 error_message: Some(err.to_string()),
                 success_message: None,
@@ -2762,6 +2197,7 @@ async fn admin_publish_mineral(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        public_catalog_url: public_catalog_minerals_url(&state),
         has_admin_session: true,
         error_message: None,
         success_message: Some(success_message),
@@ -2791,6 +2227,7 @@ async fn admin_delete_mineral(
                 lang_code: language.code().to_string(),
                 lang_dir: language.dir().to_string(),
                 txt: ui_text(language),
+                public_catalog_url: public_catalog_minerals_url(&state),
                 has_admin_session: true,
                 error_message: Some(format!("mineral '{slug}' not found")),
                 success_message: None,
@@ -2809,10 +2246,12 @@ async fn admin_delete_mineral(
 
     let data_root = state.data_root.clone();
     let withdraw_slug = slug.clone();
+    let reviewer_id = state.admin_reviewer_id.as_str().to_string();
     run_blocking(move || {
         withdraw_mineral(
             data_root.as_path(),
             &withdraw_slug,
+            &reviewer_id,
             "Withdrawn by the legacy catalog delete action.",
         )
     })
@@ -2821,24 +2260,28 @@ async fn admin_delete_mineral(
     let delete_slug = slug.clone();
     run_blocking(move || delete_mineral_records(data_root.as_path(), &delete_slug)).await?;
     reload_catalog(&state)?;
-    let mut removed_directories = 0usize;
+    let folder_path = state.data_root.join("minerals").join(&folder_name);
     let mut cleanup_warnings = Vec::new();
-    for folder_path in [
-        state.data_root.join("minerals").join(&folder_name),
-        state.data_root.join("reports").join(&folder_name),
-    ] {
-        match fs::metadata(&folder_path).await {
-            Ok(metadata) if metadata.is_dir() => match fs::remove_dir_all(&folder_path).await {
-                Ok(()) => removed_directories += 1,
-                Err(err) => cleanup_warnings.push(format!("{}: {err}", folder_path.display())),
-            },
-            Ok(_) => cleanup_warnings.push(format!("{} is not a directory", folder_path.display())),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            Err(err) => cleanup_warnings.push(format!("{}: {err}", folder_path.display())),
+    let removed_directory = match fs::metadata(&folder_path).await {
+        Ok(metadata) if metadata.is_dir() => match fs::remove_dir_all(&folder_path).await {
+            Ok(()) => true,
+            Err(err) => {
+                cleanup_warnings.push(format!("{}: {err}", folder_path.display()));
+                false
+            }
+        },
+        Ok(_) => {
+            cleanup_warnings.push(format!("{} is not a directory", folder_path.display()));
+            false
         }
-    }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => false,
+        Err(err) => {
+            cleanup_warnings.push(format!("{}: {err}", folder_path.display()));
+            false
+        }
+    };
     let mut success_message = format!(
-        "Mineral deleted: {slug}. Metadata committed; {removed_directories} artifact directory/directories removed."
+        "Mineral deleted: {slug}. Metadata committed; image directory removed: {removed_directory}."
     );
     if !cleanup_warnings.is_empty() {
         success_message.push_str(" Cleanup will need a retry: ");
@@ -2849,6 +2292,7 @@ async fn admin_delete_mineral(
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        public_catalog_url: public_catalog_minerals_url(&state),
         has_admin_session: true,
         error_message: None,
         success_message: Some(success_message),
@@ -2869,21 +2313,28 @@ async fn admin_withdraw_mineral(
     let operator_note = required_string_limited(&request.operator_note, "operator_note", 2_000)?;
     let data_root = state.data_root.clone();
     let withdraw_slug = slug.clone();
-    let changed =
-        run_blocking(move || withdraw_mineral(data_root.as_path(), &withdraw_slug, &operator_note))
-            .await
-            .map_err(|err| {
-                warn!(mineral_slug = %slug, error = %err, "mineral withdrawal failed");
-                AppError::BadRequest(
-                    "This mineral could not be withdrawn. Check the slug and try again."
-                        .to_string(),
-                )
-            })?;
+    let reviewer_id = state.admin_reviewer_id.as_str().to_string();
+    let changed = run_blocking(move || {
+        withdraw_mineral(
+            data_root.as_path(),
+            &withdraw_slug,
+            &reviewer_id,
+            &operator_note,
+        )
+    })
+    .await
+    .map_err(|err| {
+        warn!(mineral_slug = %slug, error = %err, "mineral withdrawal failed");
+        AppError::BadRequest(
+            "This mineral could not be withdrawn. Check the slug and try again.".to_string(),
+        )
+    })?;
 
     Ok(TemplateResponse(AdminTemplate {
         lang_code: language.code().to_string(),
         lang_dir: language.dir().to_string(),
         txt: ui_text(language),
+        public_catalog_url: public_catalog_minerals_url(&state),
         has_admin_session: true,
         error_message: None,
         success_message: Some(if changed {
@@ -3126,7 +2577,9 @@ async fn request_openai_suggestion(
     input: &SuggestInput,
 ) -> Result<AiMineralSuggestion, AppError> {
     let api_key = state.openai_api_key.as_ref().as_ref().ok_or_else(|| {
-        AppError::BadRequest("OPENAI_API_KEY is not configured. Add it to .env.local".to_string())
+        AppError::BadRequest(
+            "OPENAI_API_KEY is not configured in the process environment".to_string(),
+        )
     })?;
 
     let image_data_url = format!(
@@ -3287,14 +2740,6 @@ fn catalog_for_language(state: &AppState, language: Language) -> Result<MineralC
     Ok(loaded)
 }
 
-fn get_mineral(state: &AppState, language: Language, slug: &str) -> Result<Mineral, AppError> {
-    catalog_for_language(state, language)?
-        .by_slug
-        .get(slug)
-        .cloned()
-        .ok_or_else(|| AppError::NotFound(format!("mineral '{slug}' not found")))
-}
-
 fn reload_catalog(state: &AppState) -> Result<()> {
     let mut guard = state
         .catalogs_by_lang
@@ -3385,10 +2830,12 @@ fn require_same_origin(headers: &HeaderMap) -> Result<(), AppError> {
 }
 
 fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
-    if left.len() != right.len() {
-        return false;
-    }
-    left.ct_eq(right).into()
+    let key = ring::hmac::Key::new(
+        ring::hmac::HMAC_SHA256,
+        b"waajacu-minerals.constant-time-equality.v1",
+    );
+    let expected = ring::hmac::sign(&key, left);
+    ring::hmac::verify(&key, right, expected.as_ref()).is_ok()
 }
 
 fn bearer_token_from_headers(headers: &HeaderMap) -> Result<Option<&str>, AppError> {
@@ -3499,57 +2946,6 @@ fn resolve_language(state: &AppState, headers: &HeaderMap) -> Language {
         .unwrap_or(state.default_language)
 }
 
-fn default_report_request(language: Language) -> ReportRequest {
-    match language {
-        Language::En => ReportRequest::default(),
-        Language::Es => ReportRequest {
-            audience: "geologo tecnico".to_string(),
-            purpose: "briefing de exploracion".to_string(),
-            site_context: "campana piloto de perforacion".to_string(),
-        },
-        Language::Cs => ReportRequest {
-            audience: "technicky geolog".to_string(),
-            purpose: "pruzkumny briefing".to_string(),
-            site_context: "pilotni vrtna kampan".to_string(),
-        },
-        Language::Zh => ReportRequest {
-            audience: "技术地质人员".to_string(),
-            purpose: "勘查简报".to_string(),
-            site_context: "试点钻探活动".to_string(),
-        },
-        Language::Ar => ReportRequest {
-            audience: "جيولوجي تقني".to_string(),
-            purpose: "احاطة استكشافية".to_string(),
-            site_context: "حملة حفر تجريبية".to_string(),
-        },
-        Language::Fr => ReportRequest {
-            audience: "geologue technique".to_string(),
-            purpose: "briefing d'exploration".to_string(),
-            site_context: "campagne pilote de forage".to_string(),
-        },
-        Language::De => ReportRequest {
-            audience: "technischer geologe".to_string(),
-            purpose: "explorations briefing".to_string(),
-            site_context: "pilotbohrkampagne".to_string(),
-        },
-        Language::Pt => ReportRequest {
-            audience: "geologo tecnico".to_string(),
-            purpose: "briefing de exploracao".to_string(),
-            site_context: "campanha piloto de perfuracao".to_string(),
-        },
-        Language::Hi => ReportRequest {
-            audience: "takniki bhugarbha vaigyanik".to_string(),
-            purpose: "anveshan briefing".to_string(),
-            site_context: "pilot drilling abhiyan".to_string(),
-        },
-        Language::Ja => ReportRequest {
-            audience: "技術地質担当者".to_string(),
-            purpose: "探査ブリーフィング".to_string(),
-            site_context: "パイロット掘削キャンペーン".to_string(),
-        },
-    }
-}
-
 fn cookie_value(headers: &HeaderMap, key: &str) -> Option<String> {
     let cookie_header = headers.get(header::COOKIE)?.to_str().ok()?;
 
@@ -3589,13 +2985,6 @@ fn required_string_limited(value: &str, key: &str, max_chars: usize) -> Result<S
         )));
     }
     Ok(value)
-}
-
-fn validate_report_request(request: &ReportRequest) -> Result<(), AppError> {
-    required_string_limited(&request.audience, "audience", 200)?;
-    required_string_limited(&request.purpose, "purpose", 500)?;
-    required_string_limited(&request.site_context, "site_context", 2_000)?;
-    Ok(())
 }
 
 fn parse_f32_from_str(value: &str, key: &str) -> Result<f32, AppError> {
@@ -3907,55 +3296,6 @@ fn translated_or_source(value: String, fallback: &str) -> String {
     }
 }
 
-fn footer_page_content(slug: &str) -> (&'static str, &'static str) {
-    match slug {
-        "contact-us" => (
-            "Contact Us",
-            "For sales, partnerships, and operations queries, contact support@waajacu.com.",
-        ),
-        "support" => (
-            "Support",
-            "For platform issues, account access, and report troubleshooting, open a support request with your mineral record id.",
-        ),
-        "frequently-asked-questions" => (
-            "Frequently Asked Questions",
-            "This section answers common questions about publishing minerals, report generation, and account operations.",
-        ),
-        "legal" => (
-            "Legal",
-            "Legal notices, jurisdiction terms, platform liabilities, and content governance policies.",
-        ),
-        "shipping" => (
-            "Shipping",
-            "Shipping policy, logistics windows, and custody documentation requirements for listed mineral products.",
-        ),
-        "account" => (
-            "Account",
-            "Manage account identity, organization profile, login security, and notification settings.",
-        ),
-        "conflict-free-minerals" => (
-            "Conflict Free Minerals",
-            "Conflict-free sourcing statement and compliance position across mineral provenance workflows.",
-        ),
-        "privacy-policy" => (
-            "Privacy Policy",
-            "Data handling, retention, operational logs, and personal information usage policy.",
-        ),
-        "terms-of-service" => (
-            "Terms of Service",
-            "Terms governing access, use, and publication of mineral records on this platform.",
-        ),
-        "returns-and-refunds" => (
-            "Returns and Refunds",
-            "Return eligibility, refund conditions, and resolution paths for disputed transactions.",
-        ),
-        _ => (
-            "Information",
-            "This page is part of the WAAJACU information center for operational, legal, and customer support topics.",
-        ),
-    }
-}
-
 fn create_unique_slug(state: &AppState, family_slug: &str) -> Result<String, AppError> {
     for _ in 0..16 {
         let id = generate_secure_hex(4)?;
@@ -4051,16 +3391,112 @@ fn configured_ingestion_api_token() -> Result<Option<String>> {
     validate_ingestion_api_token(&value).map(Some)
 }
 
-fn env_flag(name: &str, default: bool) -> bool {
-    std::env::var(name)
-        .ok()
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes" | "on"
-            )
+fn validate_public_catalog_base_url(value: &str) -> Result<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(anyhow!("PUBLIC_CATALOG_BASE_URL cannot be empty when set"));
+    }
+    let url =
+        reqwest::Url::parse(value).context("PUBLIC_CATALOG_BASE_URL must be an absolute URL")?;
+    if url.username() != "" || url.password().is_some() {
+        return Err(anyhow!(
+            "PUBLIC_CATALOG_BASE_URL must not contain credentials"
+        ));
+    }
+    if url.query().is_some() || url.fragment().is_some() {
+        return Err(anyhow!(
+            "PUBLIC_CATALOG_BASE_URL must not contain a query or fragment"
+        ));
+    }
+    let host = url
+        .host_str()
+        .ok_or_else(|| anyhow!("PUBLIC_CATALOG_BASE_URL must contain a host"))?;
+    match url.scheme() {
+        "https" => {}
+        "http" => {
+            let is_literal_loopback = host
+                .parse::<IpAddr>()
+                .is_ok_and(|address| address.is_loopback());
+            if !is_literal_loopback {
+                return Err(anyhow!(
+                    "PUBLIC_CATALOG_BASE_URL may use http only with a literal loopback address"
+                ));
+            }
+        }
+        _ => {
+            return Err(anyhow!(
+                "PUBLIC_CATALOG_BASE_URL must use https (or loopback http for development)"
+            ))
+        }
+    }
+    Ok(url.as_str().trim_end_matches('/').to_string())
+}
+
+fn public_catalog_minerals_url(state: &AppState) -> Option<String> {
+    state
+        .public_catalog_base_url
+        .as_deref()
+        .map(|base| format!("{base}/#/minerals"))
+}
+
+fn configured_public_catalog_base_url() -> Result<Option<String>> {
+    match std::env::var("PUBLIC_CATALOG_BASE_URL") {
+        Ok(value) => validate_public_catalog_base_url(&value).map(Some),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            Err(anyhow!("PUBLIC_CATALOG_BASE_URL must be valid Unicode"))
+        }
+    }
+}
+
+fn parse_trusted_proxy_ips(value: &str) -> Result<BTreeSet<IpAddr>> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(BTreeSet::new());
+    }
+
+    value
+        .split(',')
+        .map(|entry| {
+            let entry = entry.trim();
+            if entry.is_empty() {
+                return Err(anyhow!(
+                    "TRUSTED_PROXY_IPS must be a comma-separated list of IP addresses"
+                ));
+            }
+            entry
+                .parse::<IpAddr>()
+                .with_context(|| format!("invalid trusted proxy IP '{entry}'"))
         })
-        .unwrap_or(default)
+        .collect()
+}
+
+fn configured_trusted_proxy_ips() -> Result<BTreeSet<IpAddr>> {
+    match std::env::var("TRUSTED_PROXY_IPS") {
+        Ok(value) => parse_trusted_proxy_ips(&value),
+        Err(std::env::VarError::NotPresent) => Ok(BTreeSet::new()),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            Err(anyhow!("TRUSTED_PROXY_IPS must be valid Unicode"))
+        }
+    }
+}
+
+fn parse_env_flag(name: &str, value: &str) -> Result<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Ok(true),
+        "0" | "false" | "no" | "off" => Ok(false),
+        _ => Err(anyhow!(
+            "{name} must be one of true/false, 1/0, yes/no, or on/off"
+        )),
+    }
+}
+
+fn configured_env_flag(name: &str, default: bool) -> Result<bool> {
+    match std::env::var(name) {
+        Ok(value) => parse_env_flag(name, &value),
+        Err(std::env::VarError::NotPresent) => Ok(default),
+        Err(std::env::VarError::NotUnicode(_)) => Err(anyhow!("{name} must be valid Unicode")),
+    }
 }
 
 async fn shutdown_signal() {
@@ -4093,9 +3529,9 @@ async fn shutdown_signal() {
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::{BTreeMap, HashMap},
+        collections::{BTreeSet, HashMap},
         io::{Read, Write},
-        net::{SocketAddr, TcpStream},
+        net::{IpAddr, SocketAddr, TcpStream},
         path::Path,
         sync::{Arc, Mutex, RwLock},
         time::Duration,
@@ -4106,44 +3542,26 @@ mod tests {
         http::{header, HeaderMap, HeaderValue},
         middleware,
         response::IntoResponse,
-        routing::post,
+        routing::{get, post},
         Router,
     };
     use reqwest::Client;
     use tokio::sync::Semaphore;
 
     use super::{
-        admin_create_ingestion_batch, admin_review_notice, admit_ingestion_write_request,
-        authenticate_ingestion_bearer, constant_time_eq, expand_localized_mineral_query,
-        is_admin_path, is_private_static_template_path, is_safe_artifact_segment,
-        map_ingestion_backend_error, mineral_status_display, require_ingestion_reader_actor,
-        require_ingestion_reviewer_actor, require_ingestion_writer_actor, require_same_origin,
-        require_valid_ingestion_batch_id, review_claim_scope_display, try_ingestion_writer_permit,
-        ui_text, validate_actor_id, validate_ingestion_api_token, AppError, AppState,
-        IngestionAuthKind, Language, Mineral, MineralCatalog, PdfGenerator,
-        ADMIN_INGESTION_CHUNK_MAX_BYTES, ADMIN_INGESTION_MANIFEST_MAX_BYTES,
+        admin_create_ingestion_batch, admin_import_minerals, admin_import_provider,
+        admin_review_notice, admin_static_asset, admit_admin_write_request,
+        admit_ingestion_write_request, authenticate_ingestion_bearer, constant_time_eq,
+        is_admin_path, map_ingestion_backend_error, mineral_status_display, parse_env_flag,
+        parse_trusted_proxy_ips, require_ingestion_reader_actor, require_ingestion_reviewer_actor,
+        require_ingestion_writer_actor, require_same_origin, require_valid_ingestion_batch_id,
+        resolve_client_ip, review_claim_scope_display, security_headers,
+        try_ingestion_writer_permit, ui_text, validate_actor_id, validate_ingestion_api_token,
+        validate_public_catalog_base_url, AppError, AppState, IngestionAuthKind, Language,
+        ADMIN_IMPORT_MAX_BYTES, ADMIN_INGESTION_CHUNK_MAX_BYTES,
+        ADMIN_INGESTION_MANIFEST_MAX_BYTES,
     };
     use minerals::registry::{MineralIngestionProblem, MineralIngestionProblemKind};
-
-    fn mineral(slug: &str, name: &str, family: &str, formula: &str) -> Mineral {
-        Mineral {
-            slug: slug.to_string(),
-            folder_name: slug.to_string(),
-            common_name: name.to_string(),
-            description: String::new(),
-            mineral_family: family.to_string(),
-            formula: formula.to_string(),
-            hardness_mohs: 0.0,
-            density_g_cm3: 0.0,
-            crystal_system: String::new(),
-            color: String::new(),
-            streak: String::new(),
-            luster: String::new(),
-            major_elements_pct: BTreeMap::new(),
-            notes: String::new(),
-            image_path: None,
-        }
-    }
 
     fn ingestion_test_state(data_root: &Path) -> AppState {
         let sessions = HashMap::from([("test-session".to_string(), std::time::Instant::now())]);
@@ -4152,7 +3570,6 @@ mod tests {
             admin_sessions: Arc::new(Mutex::new(sessions)),
             admin_login_failures: Arc::new(Mutex::new(HashMap::new())),
             admin_drafts: Arc::new(Mutex::new(HashMap::new())),
-            pdf_generator: Arc::new(PdfGenerator::new(data_root)),
             data_root: Arc::new(data_root.to_path_buf()),
             admin_password: Arc::new("test-admin-password".to_string()),
             openai_api_key: Arc::new(None),
@@ -4160,12 +3577,12 @@ mod tests {
             openai_translation_model: Arc::new("test-model".to_string()),
             default_language: Language::En,
             http_client: Arc::new(Client::new()),
-            report_slots: Arc::new(Semaphore::new(2)),
             ingestion_writer: Arc::new(Semaphore::new(1)),
-            report_attempts: Arc::new(Mutex::new(HashMap::new())),
             admin_reviewer_id: Arc::new("reviewer.primary".to_string()),
             ingestion_api_token: Arc::new(Some("0123456789abcdef0123456789abcdef".to_string())),
             ingestion_adapter_id: Arc::new("adapter.primary".to_string()),
+            trusted_proxy_ips: Arc::new(BTreeSet::new()),
+            public_catalog_base_url: Arc::new(None),
             secure_cookies: false,
             admin_sql_enabled: false,
         }
@@ -4196,24 +3613,49 @@ mod tests {
         String::from_utf8_lossy(&response[..count]).into_owned()
     }
 
-    #[test]
-    fn artifact_segments_reject_traversal() {
-        assert!(is_safe_artifact_segment("mineral.silicates"));
-        assert!(is_safe_artifact_segment("0123456789abcdef0123456789abcdef"));
-        assert!(!is_safe_artifact_segment(".."));
-        assert!(!is_safe_artifact_segment("../minerals.db"));
-        assert!(!is_safe_artifact_segment("reports/secret"));
+    fn send_incomplete_admin_import(
+        address: SocketAddr,
+        path: &str,
+        cookie: Option<&str>,
+        origin: Option<&str>,
+    ) -> String {
+        let mut stream = TcpStream::connect(address).expect("connect to admin admission server");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("set admin admission response timeout");
+        let cookie = cookie
+            .map(|value| format!("Cookie: admin_session={value}\r\n"))
+            .unwrap_or_default();
+        let origin = origin
+            .map(|value| format!("Origin: {value}\r\n"))
+            .unwrap_or_default();
+        let request = format!(
+            "POST {path} HTTP/1.1\r\nHost: minerals.test\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{cookie}{origin}Connection: close\r\n\r\n",
+            ADMIN_IMPORT_MAX_BYTES,
+        );
+        stream
+            .write_all(request.as_bytes())
+            .expect("write admin import headers without body");
+        let mut response = [0_u8; 2_048];
+        let count = stream
+            .read(&mut response)
+            .expect("admin admission must respond before reading the declared body");
+        String::from_utf8_lossy(&response[..count]).into_owned()
     }
 
-    #[test]
-    fn askama_source_templates_are_not_public_static_assets() {
-        assert!(is_private_static_template_path("/static/all_minerals.html"));
-        assert!(is_private_static_template_path(
-            "/static/admin_ingestion.html"
-        ));
-        assert!(is_private_static_template_path("/static/report.tex"));
-        assert!(!is_private_static_template_path("/static/app.css"));
-        assert!(!is_private_static_template_path("/minerals"));
+    fn send_get(address: SocketAddr, path: &str) -> String {
+        let mut stream = TcpStream::connect(address).expect("connect to static test server");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("set static response timeout");
+        let request =
+            format!("GET {path} HTTP/1.1\r\nHost: minerals.test\r\nConnection: close\r\n\r\n");
+        stream
+            .write_all(request.as_bytes())
+            .expect("write static request");
+        let mut response = [0_u8; 2_048];
+        let count = stream.read(&mut response).expect("read static response");
+        String::from_utf8_lossy(&response[..count]).into_owned()
     }
 
     #[test]
@@ -4221,6 +3663,84 @@ mod tests {
         assert!(constant_time_eq(b"waajacu", b"waajacu"));
         assert!(!constant_time_eq(b"waajacu", b"minerals"));
         assert!(!constant_time_eq(b"waajacu", b"waajacu-longer"));
+    }
+
+    #[test]
+    fn forwarded_client_ip_is_used_only_across_configured_proxy_hops() {
+        let direct_peer = "192.0.2.10".parse().expect("direct peer IP");
+        let proxy = "127.0.0.1".parse().expect("proxy IP");
+        let upstream_proxy = "10.0.0.8".parse().expect("upstream proxy IP");
+        let client: IpAddr = "198.51.100.24".parse().expect("client IP");
+        let spoofed_prefix = "203.0.113.99";
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-forwarded-for",
+            HeaderValue::from_str(&format!("{spoofed_prefix}, {client}, {upstream_proxy}"))
+                .expect("forwarded chain"),
+        );
+
+        let no_trusted_proxies = BTreeSet::new();
+        assert_eq!(
+            resolve_client_ip(direct_peer, &headers, &no_trusted_proxies),
+            direct_peer,
+            "an untrusted peer must not choose a bucket through forwarded headers"
+        );
+
+        let trusted = BTreeSet::from([proxy, upstream_proxy]);
+        assert_eq!(resolve_client_ip(proxy, &headers, &trusted), client);
+
+        headers.insert(
+            "x-forwarded-for",
+            HeaderValue::from_str(&format!("not-an-ip, {client}, {upstream_proxy}"))
+                .expect("forwarded chain with an untrusted prefix"),
+        );
+        assert_eq!(
+            resolve_client_ip(proxy, &headers, &trusted),
+            client,
+            "an untrusted prefix must not collapse every proxied client into one bucket"
+        );
+
+        headers.insert("x-forwarded-for", HeaderValue::from_static("not-an-ip"));
+        assert_eq!(
+            resolve_client_ip(proxy, &headers, &trusted),
+            proxy,
+            "malformed metadata at the trust boundary must fail closed"
+        );
+    }
+
+    #[test]
+    fn trusted_proxy_and_boolean_configuration_are_strict() {
+        let proxies = parse_trusted_proxy_ips("127.0.0.1, 2001:db8::1")
+            .expect("valid trusted proxy configuration");
+        assert!(proxies.contains(&"127.0.0.1".parse().expect("IPv4")));
+        assert!(proxies.contains(&"2001:db8::1".parse().expect("IPv6")));
+        assert!(parse_trusted_proxy_ips("")
+            .expect("empty means disabled")
+            .is_empty());
+        assert!(parse_trusted_proxy_ips("127.0.0.1,").is_err());
+        assert!(parse_trusted_proxy_ips("127.0.0.0/8").is_err());
+
+        assert!(parse_env_flag("FLAG", "true").expect("true flag"));
+        assert!(!parse_env_flag("FLAG", "OFF").expect("false flag"));
+        assert!(parse_env_flag("FLAG", "sometimes").is_err());
+    }
+
+    #[test]
+    fn public_catalog_links_require_a_safe_absolute_origin() {
+        assert_eq!(
+            validate_public_catalog_base_url("https://minerals.example/catalog/")
+                .expect("https catalog URL"),
+            "https://minerals.example/catalog"
+        );
+        assert_eq!(
+            validate_public_catalog_base_url("http://127.0.0.1:8080/")
+                .expect("loopback development URL"),
+            "http://127.0.0.1:8080"
+        );
+        assert!(validate_public_catalog_base_url("http://minerals.example").is_err());
+        assert!(validate_public_catalog_base_url("http://localhost:8080").is_err());
+        assert!(validate_public_catalog_base_url("https://user:secret@minerals.example").is_err());
+        assert!(validate_public_catalog_base_url("https://minerals.example/#/wrong").is_err());
     }
 
     #[test]
@@ -4383,6 +3903,124 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn legacy_admin_imports_authenticate_before_reading_large_json_bodies() {
+        let temp = tempfile::tempdir().expect("temporary data root");
+        let state = ingestion_test_state(temp.path());
+        let app = Router::new()
+            .route(
+                "/admin/minerals/import",
+                post(admin_import_minerals)
+                    .layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES))
+                    .layer(middleware::from_fn_with_state(
+                        state.clone(),
+                        admit_admin_write_request,
+                    )),
+            )
+            .route(
+                "/admin/providers/import",
+                post(admin_import_provider)
+                    .layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES))
+                    .layer(middleware::from_fn_with_state(
+                        state.clone(),
+                        admit_admin_write_request,
+                    )),
+            )
+            .with_state(state);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind admin admission test server");
+        let address = listener.local_addr().expect("admin admission address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("admin admission test server");
+        });
+
+        for path in ["/admin/minerals/import", "/admin/providers/import"] {
+            let unauthorized_path = path.to_string();
+            let unauthorized = tokio::task::spawn_blocking(move || {
+                send_incomplete_admin_import(address, &unauthorized_path, None, None)
+            })
+            .await
+            .expect("unauthorized import request task");
+            assert!(
+                unauthorized.starts_with("HTTP/1.1 401"),
+                "unexpected unauthenticated response: {unauthorized:?}"
+            );
+
+            let cross_origin_path = path.to_string();
+            let cross_origin = tokio::task::spawn_blocking(move || {
+                send_incomplete_admin_import(
+                    address,
+                    &cross_origin_path,
+                    Some("test-session"),
+                    Some("https://attacker.invalid"),
+                )
+            })
+            .await
+            .expect("cross-origin import request task");
+            assert!(
+                cross_origin.starts_with("HTTP/1.1 401"),
+                "unexpected cross-origin response: {cross_origin:?}"
+            );
+        }
+
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn only_embedded_admin_assets_are_served() {
+        let app = Router::new()
+            .route("/static/:asset", get(admin_static_asset))
+            .layer(middleware::from_fn(security_headers));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind static test server");
+        let address = listener.local_addr().expect("static test address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("static test server");
+        });
+
+        for path in [
+            "/static/admin.html",
+            "/static/admin%2ehtml",
+            "/static/admin.ht%6dl",
+            "/static/report%2etex",
+            "/static/map.html",
+            "/static/map.css",
+            "/static/map-loader.js",
+        ] {
+            let path = path.to_string();
+            let response = tokio::task::spawn_blocking(move || send_get(address, &path))
+                .await
+                .expect("private static request task");
+            assert!(
+                response.starts_with("HTTP/1.1 404"),
+                "private static path was served: {response:?}"
+            );
+        }
+
+        for path in [
+            "/static/app.css",
+            "/static/theme.js",
+            "/static/loading_1.png",
+        ] {
+            let path = path.to_string();
+            let response = tokio::task::spawn_blocking(move || send_get(address, &path))
+                .await
+                .expect("public static request task");
+            assert!(
+                response.starts_with("HTTP/1.1 200"),
+                "allowlisted static path was blocked: {response:?}"
+            );
+        }
+
+        server.abort();
+    }
+
+    #[tokio::test]
     async fn ingestion_admission_rejects_oversized_requests_before_reading_the_body() {
         let temp = tempfile::tempdir().expect("temporary data root");
         let state = ingestion_test_state(temp.path());
@@ -4523,55 +4161,6 @@ mod tests {
     }
 
     #[test]
-    fn public_navigation_is_minerals_only() {
-        let templates = [
-            include_str!("../static/home.html"),
-            include_str!("../static/all_minerals.html"),
-            include_str!("../static/mineral.html"),
-            include_str!("../static/about.html"),
-            include_str!("../static/info.html"),
-            include_str!("../static/report.html"),
-        ];
-
-        for template in templates {
-            assert!(template.contains("href=\"/minerals\">{{ txt.nav_all_minerals }}"));
-            assert!(!template.contains("href=\"/materials\""));
-            assert!(!template.contains("href=\"/catalog\""));
-        }
-    }
-
-    #[test]
-    fn public_pages_do_not_expose_internal_implementation_copy() {
-        let templates = [
-            include_str!("../static/home.html"),
-            include_str!("../static/all_minerals.html"),
-            include_str!("../static/about.html"),
-        ];
-        let blocked_phrases = [
-            "data/minerals.db",
-            "sqlite",
-            "truth boundary",
-            "invented knowledge",
-            "provider adapters",
-            "exploration scaffold",
-            "source_kind",
-            "data_quality_score",
-            "provider_trust_score",
-            "license_spdx",
-        ];
-
-        for template in templates {
-            let normalized = template.to_ascii_lowercase();
-            for phrase in blocked_phrases {
-                assert!(
-                    !normalized.contains(phrase),
-                    "public template exposes internal phrase: {phrase}"
-                );
-            }
-        }
-    }
-
-    #[test]
     fn mineral_registry_actions_are_localized() {
         let english = ui_text(Language::En).registry;
 
@@ -4606,31 +4195,6 @@ mod tests {
                 assert_ne!(text.price_package, english.price_package);
             }
         }
-    }
-
-    #[test]
-    fn localized_display_names_expand_to_canonical_mineral_search_terms() {
-        let english = MineralCatalog::new(vec![mineral(
-            "mineral.silicates.phenakite",
-            "Phenakite",
-            "Silicates",
-            "Be2SiO4",
-        )]);
-        let spanish = MineralCatalog::new(vec![mineral(
-            "mineral.silicates.phenakite",
-            "Fenaquita",
-            "Silicatos",
-            "Be2SiO4",
-        )]);
-
-        let expanded =
-            expand_localized_mineral_query("Fenaquita", Language::Es, &spanish, &english);
-        assert!(expanded.contains("Fenaquita"));
-        assert!(expanded.contains("Phenakite"));
-        assert_eq!(
-            expand_localized_mineral_query("Phenakite", Language::En, &english, &english),
-            "Phenakite"
-        );
     }
 
     #[test]

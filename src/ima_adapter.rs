@@ -1,4 +1,6 @@
-use crate::registry::{
+use anyhow::{bail, Context, Result};
+use chrono::{DateTime, NaiveDate};
+use minerals::registry::{
     canonical_mineral_chunk_hash, canonical_mineral_manifest_hash, canonical_mineral_records_hash,
     MineralArtifactDescriptor, MineralDatasetDescriptor, MineralDatasetManifest,
     MineralIngestionChunk, MineralIngestionItem, MineralIngestionPolicy, MineralOfficialFacts,
@@ -6,13 +8,13 @@ use crate::registry::{
     MineralSnapshotKind, MineralSourceAttribution, MineralSourceDescriptor,
     MAX_MINERAL_INGESTION_CHUNK_ITEMS, MINERAL_INGESTION_SCHEMA_VERSION,
 };
-use anyhow::{bail, Context, Result};
-use chrono::{DateTime, NaiveDate};
 use ring::digest::{digest, SHA256};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
+use std::io::Write;
+use std::net::IpAddr;
 use std::path::{Component, Path, PathBuf};
 use unicode_normalization::UnicodeNormalization;
 
@@ -897,14 +899,51 @@ fn evolve_identity_ledger_internal(
 
 pub fn write_identity_ledger(path: &Path, ledger: &ImaIdentityLedger) -> Result<()> {
     validate_identity_ledger(ledger)?;
-    if path.exists() {
-        bail!("refusing to overwrite identity ledger {}", path.display());
-    }
+    // Serialize before creating the destination so serialization failure cannot
+    // leave an empty path that blocks a corrected retry.
+    let mut bytes = serde_json::to_vec_pretty(ledger)?;
+    bytes.push(b'\n');
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("failed to create {}", parent.display()))?;
     }
-    write_pretty_json(path, ledger)
+    let mut file = match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            bail!("refusing to overwrite identity ledger {}", path.display())
+        }
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to create identity ledger {}", path.display()))
+        }
+    };
+
+    let write_result = (|| -> Result<()> {
+        file.write_all(&bytes)
+            .with_context(|| format!("failed to write identity ledger {}", path.display()))?;
+        file.flush()
+            .with_context(|| format!("failed to flush identity ledger {}", path.display()))?;
+        file.sync_all()
+            .with_context(|| format!("failed to sync identity ledger {}", path.display()))?;
+        Ok(())
+    })();
+    if let Err(error) = write_result {
+        drop(file);
+        if let Err(cleanup_error) = fs::remove_file(path) {
+            if cleanup_error.kind() != std::io::ErrorKind::NotFound {
+                return Err(error).context(format!(
+                    "also failed to remove partial identity ledger {}: {cleanup_error}",
+                    path.display()
+                ));
+            }
+        }
+        return Err(error);
+    }
+    Ok(())
 }
 
 pub fn build_release_bundle(options: &ImaBundleBuildOptions) -> Result<ImaReleaseBundleIndex> {
@@ -1391,14 +1430,19 @@ pub async fn stage_release_bundle(
     if token.chars().count() < 32 || token.trim() != token {
         bail!("staging token must be an unpadded 32-plus-character secret");
     }
-    let base = validate_server_url(server)?;
-    let client = reqwest::Client::builder()
+    let server = validate_server_url(server)?;
+    let mut client_builder = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
         .timeout(std::time::Duration::from_secs(90))
+        .redirect(reqwest::redirect::Policy::none());
+    if server.direct_loopback_http {
+        client_builder = client_builder.no_proxy();
+    }
+    let client = client_builder
         .build()
         .context("failed to initialize staging client")?;
     let manifest_bytes = fs::read(directory.join("manifest.json"))?;
-    let create_url = format!("{base}/admin/ingestion/batches");
+    let create_url = format!("{}/admin/ingestion/batches", server.base_url);
     let mut status = send_json(
         client
             .post(&create_url)
@@ -1408,12 +1452,13 @@ pub async fn stage_release_bundle(
     )
     .await?;
     validate_mutation_response(&status, &index)?;
+    ensure_stage_response_is_successful(&status)?;
     if status.status == "receiving" {
         for metadata in &index.chunks {
             let body = fs::read(directory.join(&metadata.file))?;
             let url = format!(
-                "{base}/admin/ingestion/batches/{}/chunks/{}",
-                status.batch_id, metadata.chunk_index
+                "{}/admin/ingestion/batches/{}/chunks/{}",
+                server.base_url, status.batch_id, metadata.chunk_index
             );
             let response = client
                 .put(url)
@@ -1427,8 +1472,8 @@ pub async fn stage_release_bundle(
             ensure_success(response, "stage IMA release chunk").await?;
         }
         let finalize_url = format!(
-            "{base}/admin/ingestion/batches/{}/finalize",
-            status.batch_id
+            "{}/admin/ingestion/batches/{}/finalize",
+            server.base_url, status.batch_id
         );
         status = send_json(
             client
@@ -1439,6 +1484,7 @@ pub async fn stage_release_bundle(
         )
         .await?;
         validate_mutation_response(&status, &index)?;
+        ensure_stage_response_is_successful(&status)?;
         if status.status == "receiving" {
             bail!("server left the complete IMA batch in receiving state after finalization");
         }
@@ -1462,23 +1508,87 @@ fn validate_mutation_response(
             .strip_prefix("sha256:")
             .context("bundle manifest hash is malformed")?
     );
+    let expected_record_count = index
+        .chunks
+        .iter()
+        .map(|chunk| chunk.item_count)
+        .sum::<usize>();
     if response.batch_id != expected_batch_id
         || response.manifest_hash != index.manifest_sha256
         || response.expected_chunk_count != index.chunks.len()
-        || response.expected_record_count
-            != index
+        || response.expected_record_count != expected_record_count
+        || response.received_chunk_count > response.expected_chunk_count
+        || response.received_record_count > response.expected_record_count
+        || !is_possible_received_count(
+            &index
                 .chunks
                 .iter()
                 .map(|chunk| chunk.item_count)
-                .sum::<usize>()
-        || response.received_chunk_count > response.expected_chunk_count
-        || response.received_record_count > response.expected_record_count
+                .collect::<Vec<_>>(),
+            response.received_chunk_count,
+            response.received_record_count,
+        )
         || !matches!(
             response.status.as_str(),
             "receiving" | "ready" | "needs_attention" | "approved" | "rejected"
         )
     {
         bail!("server returned an inconsistent IMA staging response");
+    }
+    validate_mutation_status(response)?;
+    Ok(())
+}
+
+fn is_possible_received_count(
+    chunk_item_counts: &[usize],
+    received_chunk_count: usize,
+    received_record_count: usize,
+) -> bool {
+    if received_chunk_count > chunk_item_counts.len() {
+        return false;
+    }
+    let mut possible = vec![HashSet::new(); received_chunk_count + 1];
+    possible[0].insert(0usize);
+    for &item_count in chunk_item_counts {
+        for count in (0..received_chunk_count).rev() {
+            let additions = possible[count]
+                .iter()
+                .filter_map(|value| value.checked_add(item_count))
+                .collect::<Vec<_>>();
+            possible[count + 1].extend(additions);
+        }
+    }
+    possible[received_chunk_count].contains(&received_record_count)
+}
+
+fn validate_mutation_status(response: &IngestionMutationResponse) -> Result<()> {
+    let counts_complete = response.received_chunk_count == response.expected_chunk_count
+        && response.received_record_count == response.expected_record_count;
+    match response.status.as_str() {
+        "receiving" if response.report_hash.is_some() => {
+            bail!("server returned a report hash for a receiving IMA batch")
+        }
+        "ready" | "needs_attention" | "approved"
+            if response.report_hash.is_none() || !counts_complete =>
+        {
+            bail!("server returned an incomplete finalized IMA batch")
+        }
+        // An abandoned receiving batch is compacted directly to rejected and has
+        // no report. A reviewer-rejected finalized batch has both a report and
+        // complete counts.
+        "rejected" if response.report_hash.is_some() && !counts_complete => {
+            bail!("server returned an incomplete reviewed IMA batch")
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn ensure_stage_response_is_successful(response: &IngestionMutationResponse) -> Result<()> {
+    if response.status == "rejected" && response.report_hash.is_none() {
+        bail!(
+            "server reports that the IMA staging batch was rejected before finalization (it may have expired while abandoned)"
+        );
     }
     Ok(())
 }
@@ -2840,13 +2950,30 @@ fn validate_http_url(label: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_server_url(value: &str) -> Result<String> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct StagingServerUrl {
+    base_url: String,
+    direct_loopback_http: bool,
+}
+
+fn validate_server_url(value: &str) -> Result<StagingServerUrl> {
     validate_http_url("server URL", value)?;
     let url = reqwest::Url::parse(value)?;
     if url.query().is_some() {
         bail!("server URL cannot contain a query");
     }
-    Ok(value.trim_end_matches('/').to_string())
+    let direct_loopback_http = url.scheme() == "http"
+        && url
+            .host_str()
+            .and_then(|host| host.trim_matches(['[', ']']).parse::<IpAddr>().ok())
+            .is_some_and(|address| address.is_loopback());
+    if url.scheme() != "https" && !direct_loopback_http {
+        bail!("server URL must use HTTPS except for a literal loopback IP over HTTP");
+    }
+    Ok(StagingServerUrl {
+        base_url: url.as_str().trim_end_matches('/').to_string(),
+        direct_loopback_http,
+    })
 }
 
 fn release_version(label: &str) -> Result<String> {
@@ -3165,6 +3292,60 @@ mod tests {
     }
 
     #[test]
+    fn identity_ledger_writer_never_overwrites_a_preexisting_file() {
+        let temp = tempfile::tempdir().expect("temporary ledger directory");
+        let path = temp.path().join("identity-ledger.json");
+        let sentinel = b"operator-owned existing ledger\n";
+        fs::write(&path, sentinel).expect("write existing ledger sentinel");
+        let document = test_document(vec![test_row("Testite", "SiO2", "A", "2026-001")]);
+        let ledger = fixed_ledger(&document);
+
+        let error = write_identity_ledger(&path, &ledger)
+            .expect_err("exclusive ledger creation must reject an existing path");
+
+        assert!(error.to_string().contains("refusing to overwrite"));
+        assert_eq!(fs::read(&path).expect("read existing ledger"), sentinel);
+    }
+
+    #[test]
+    fn concurrent_identity_ledger_writers_have_exactly_one_winner() {
+        const WRITERS: usize = 8;
+
+        let temp = tempfile::tempdir().expect("temporary ledger directory");
+        let path = std::sync::Arc::new(temp.path().join("identity-ledger.json"));
+        let document = test_document(vec![test_row("Testite", "SiO2", "A", "2026-001")]);
+        let ledger = std::sync::Arc::new(fixed_ledger(&document));
+        let expected_hash = canonical_value_sha256(ledger.as_ref()).expect("canonical ledger hash");
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(WRITERS));
+        let writers = (0..WRITERS)
+            .map(|_| {
+                let path = std::sync::Arc::clone(&path);
+                let ledger = std::sync::Arc::clone(&ledger);
+                let barrier = std::sync::Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    write_identity_ledger(path.as_ref(), ledger.as_ref())
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let results = writers
+            .into_iter()
+            .map(|writer| writer.join().expect("ledger writer did not panic"))
+            .collect::<Vec<_>>();
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(
+            results.iter().filter(|result| result.is_err()).count(),
+            WRITERS - 1
+        );
+        let stored = load_identity_ledger(path.as_ref()).expect("load winning ledger");
+        assert_eq!(
+            canonical_value_sha256(&stored).expect("stored ledger hash"),
+            expected_hash
+        );
+    }
+
+    #[test]
     fn status_mapping_is_explicit_and_a_question_is_uncertain_but_valid() {
         assert_eq!(
             map_ima_status("A?").unwrap(),
@@ -3378,5 +3559,101 @@ mod tests {
             endpoints.last().unwrap(),
             "/admin/ingestion/batches/batch_abc/finalize"
         );
+    }
+
+    fn staging_response(
+        status: &str,
+        report_hash: Option<String>,
+        received_chunk_count: usize,
+        received_record_count: usize,
+    ) -> IngestionMutationResponse {
+        IngestionMutationResponse {
+            batch_id: format!("batch_{}", "a".repeat(64)),
+            status: status.to_string(),
+            manifest_hash: format!("sha256:{}", "a".repeat(64)),
+            report_hash,
+            received_chunk_count,
+            expected_chunk_count: 2,
+            received_record_count,
+            expected_record_count: 3,
+        }
+    }
+
+    #[test]
+    fn staging_response_status_requires_matching_report_and_complete_counts() {
+        let report_hash = Some(format!("sha256:{}", "b".repeat(64)));
+        assert!(validate_mutation_status(&staging_response("receiving", None, 1, 2)).is_ok());
+        assert!(validate_mutation_status(&staging_response(
+            "receiving",
+            report_hash.clone(),
+            1,
+            2
+        ))
+        .is_err());
+
+        for status in ["ready", "needs_attention", "approved"] {
+            assert!(
+                validate_mutation_status(&staging_response(status, report_hash.clone(), 2, 3))
+                    .is_ok()
+            );
+            assert!(validate_mutation_status(&staging_response(status, None, 2, 3)).is_err());
+            assert!(
+                validate_mutation_status(&staging_response(status, report_hash.clone(), 1, 2))
+                    .is_err()
+            );
+        }
+
+        assert!(validate_mutation_status(&staging_response("rejected", None, 1, 2)).is_ok());
+        assert!(
+            ensure_stage_response_is_successful(&staging_response("rejected", None, 1, 2)).is_err()
+        );
+        assert!(
+            validate_mutation_status(&staging_response("rejected", report_hash.clone(), 1, 2))
+                .is_err()
+        );
+        let reviewed_rejection = staging_response("rejected", report_hash, 2, 3);
+        assert!(validate_mutation_status(&reviewed_rejection).is_ok());
+        assert!(ensure_stage_response_is_successful(&reviewed_rejection).is_ok());
+    }
+
+    #[test]
+    fn staging_response_record_count_must_match_a_real_chunk_subset() {
+        let item_counts = [2, 2, 1];
+        assert!(is_possible_received_count(&item_counts, 0, 0));
+        assert!(is_possible_received_count(&item_counts, 1, 1));
+        assert!(is_possible_received_count(&item_counts, 1, 2));
+        assert!(is_possible_received_count(&item_counts, 2, 3));
+        assert!(is_possible_received_count(&item_counts, 2, 4));
+        assert!(is_possible_received_count(&item_counts, 3, 5));
+        assert!(!is_possible_received_count(&item_counts, 0, 1));
+        assert!(!is_possible_received_count(&item_counts, 2, 2));
+        assert!(!is_possible_received_count(&item_counts, 3, 4));
+    }
+
+    #[test]
+    fn staging_url_requires_https_except_for_literal_loopback_http() {
+        let https = validate_server_url("https://registry.example.test/base/").unwrap();
+        assert_eq!(https.base_url, "https://registry.example.test/base");
+        assert!(!https.direct_loopback_http);
+
+        for value in [
+            "http://127.0.0.1:7979",
+            "http://127.42.0.9:7979/",
+            "http://[::1]:7979",
+        ] {
+            let server = validate_server_url(value).unwrap();
+            assert!(server.direct_loopback_http, "{value}");
+        }
+
+        for value in [
+            "http://localhost:7979",
+            "http://registry.example.test",
+            "http://192.168.1.10",
+            "https://user:secret@registry.example.test",
+            "https://registry.example.test?token=secret",
+            "https://registry.example.test/#fragment",
+        ] {
+            assert!(validate_server_url(value).is_err(), "{value}");
+        }
     }
 }
