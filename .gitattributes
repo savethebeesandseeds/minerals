@@ -1,7 +1,20 @@
+.gitattributes text eol=lf
 *.sh text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 Dockerfile text eol=lf
+
+# Public releases are built on Windows and validated/deployed on Linux. Keep
+# text assets byte-identical on every checkout so release validation is truly
+# platform-independent.
+public-app/**/*.css text eol=lf
+public-app/**/*.html text eol=lf
+public-app/**/*.js text eol=lf
+public-app/**/*.md text eol=lf
+public-app/**/*.mjs text eol=lf
+public-app/**/*.txt text eol=lf
+public-app/**/*.wasm -text
+
 # Preserve the official vendored SQLite ESM byte-for-byte; upstream contains
 # intentional trailing tabs that must not be normalized locally.
 public-app/vendor/sqlite/index.mjs whitespace=-trailing-space
