@@ -24,7 +24,12 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Enforce the public repository boundary
+        run: python3 tools/check-public-boundary.py
 
       - name: Install pinned Rust toolchain
         run: >-
@@ -35,9 +40,15 @@ jobs:
           --target wasm32-unknown-unknown
 
       - name: Install Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
+
+      - name: Test repository boundary and release extraction tools
+        run: >-
+          python3 -m unittest
+          tools/test_check_public_boundary.py
+          tools/test_extract_pages_release.py
 
       - name: Check Rust formatting
         run: |

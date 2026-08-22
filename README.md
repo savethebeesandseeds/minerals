@@ -6,7 +6,8 @@ WebAssembly application over an exported SQLite snapshot. A smaller private
 Rust/Axum service owns administration, review, ingestion, and publication.
 
 Read [the product vision](docs/VISION.md), [architecture](docs/ARCHITECTURE.md),
-[ingestion policy](docs/INGESTION.md), and [operations guide](docs/OPERATIONS.md).
+[ingestion policy](docs/INGESTION.md), [operations guide](docs/OPERATIONS.md),
+and [one-branch GitHub Pages deployment guide](docs/GITHUB_PAGES.md).
 
 ## What works
 
@@ -85,7 +86,9 @@ The public mineral experience can be deployed as ordinary static files. The
 browser loads a sanitized, content-addressed SQLite snapshot in the vendored
 SQLite WebAssembly runtime, then performs search, pagination, and detail
 queries locally. The Axum service and live `data/minerals.db` remain the private
-administration and publication control plane.
+administration and publication control plane. The source repository and
+sanitized public release may be public; credentials, service configuration,
+the live database, journals, backups, and ingestion state may not.
 
 Build the exporter when application code changes:
 
@@ -112,7 +115,8 @@ creates and verifies a public-only SQLite database plus Brotli and gzip
 sidecars, and writes `catalog-manifest.json` last. It validates the completed package and renames
 the staging directory to the requested fresh output only after every step
 succeeds; a failure leaves no output release and never changes an existing
-one. Serve the completed release directory over HTTP(S);
+one. Serve the completed release directory over HTTPS in production (plain
+HTTP is reserved for literal-loopback development);
 `file:` URLs cannot run module workers or WebAssembly. Hash routes such as
 `/#/minerals` work on basic static hosts without rewrite rules. A host with an
 SPA fallback can additionally expose clean `/minerals/:slug` routes.
@@ -123,13 +127,18 @@ Configure the static host to negotiate the generated `.sqlite3.br` and
 decoded bytes to the worker, so the manifest's uncompressed length and SHA-256
 checks remain authoritative. The uncompressed database is the safe fallback.
 See [precompressed database delivery](public-app/README.md#precompressed-database-delivery).
+GitHub Pages does not select adjacent sidecars itself; the
+[Pages and Cloudflare guide](docs/GITHUB_PAGES.md) describes verified release
+assets, dynamic edge compression, cache rules, security headers, and custom
+domain TLS without adding a deployment branch.
 
 After an admin approval, withdrawal, dataset activation, or provider update,
 export to another versioned directory and atomically switch the static host to
-that completed release. Do not rerun the exporter against an existing or live
-directory. Never publish the live database, its WAL/SHM files, backups, review
-records, or ingestion
-state. The static database contains only currently public, valid mineral rows
+that completed release, or publish it as a new immutable GitHub Release and
+manually deploy the verified asset. Do not rerun the exporter against an
+existing or live directory. Never publish the live database, its WAL/SHM
+files, backups, review records, or ingestion state. The static database
+contains only currently public, valid mineral rows
 and their public evidence and offers. See [the static app contract](public-app/README.md)
 and [the map integration handoff](docs/MAP_STATIC_APP_HANDOFF.md). A ready-to-use
 [versioned activation and nginx configuration](deploy/README.md) serves releases
@@ -321,6 +330,7 @@ bound private storage and memory exposure; they are not capacity guarantees.
 ## Tests
 
 ```bash
+python3 tools/check-public-boundary.py
 cargo fmt -- --check
 cargo test --locked --workspace
 cargo run --locked --example generate_ingestion_fixture -- generate \

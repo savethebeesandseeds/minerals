@@ -4,14 +4,14 @@ This directory is a standalone, static browser application. The browser loads a 
 
 ## Serve and deploy
 
-`public-app/` is the checked-in asset source, not a complete release: it intentionally has no manifest or catalog database. Build `export-public` and run it as documented in the root README, passing a fresh release path under an existing parent (for example, `./target/release/export-public --data-root ./data --output ./public-releases/release-2026-08-21-1`). The exporter assembles and validates a sibling staging directory before renaming it to that path; it rejects an existing output and cleans staging after failure. Atomically switch the static host to the completed release, then serve it at an origin root or same-origin directory subpath over HTTP(S). Opening `index.html` with `file:` is unsupported because module workers, WebAssembly, and `fetch()` require an HTTP origin. Application, worker, map, manifest, database, and SQLite URLs resolve from their owning modules, so a release mounted at a path such as `/catalog/` stays within that path.
+`public-app/` is the checked-in asset source, not a complete release: it intentionally has no manifest or catalog database. Build `export-public` and run it as documented in the root README, passing a fresh release path under an existing parent (for example, `./target/release/export-public --data-root ./data --output ./public-releases/release-2026-08-21-1`). The exporter assembles and validates a sibling staging directory before renaming it to that path; it rejects an existing output and cleans staging after failure. Atomically switch the static host to the completed release, then serve it at an origin root or same-origin directory subpath over HTTPS. Plain HTTP is supported only on literal loopback addresses for development. Opening `index.html` with `file:` is unsupported because module workers, WebAssembly, Web Crypto, and `fetch()` require a secure HTTP origin. Application, worker, map, manifest, database, and SQLite URLs resolve from their owning modules, so a release mounted at a path such as `/catalog/` stays within that path.
 
 The deployment must:
 
-- serve `.mjs` as `text/javascript`, `.wasm` as `application/wasm`, and `.sqlite3` as `application/vnd.sqlite3`;
+- serve `.mjs` with a JavaScript MIME type and `.wasm` as `application/wasm`; prefer `application/vnd.sqlite3` for `.sqlite3` (a generic binary MIME type is also safe because the database is fetched as bytes rather than executed);
 - use canonical hash routes for portable directory-subpath deployments; clean-path rewrites are optional and require host-specific asset-base handling;
 - send `Cache-Control: no-cache` for `catalog-manifest.json`, and may send `Cache-Control: public, max-age=31536000, immutable` for `data/catalog-<sha256>.sqlite3`;
-- negotiate the generated `.sqlite3.br` and `.sqlite3.gz` sidecars for the canonical `.sqlite3` URL, preferring Brotli, then gzip, then the uncompressed file; `fetch()` supplies the decoded bytes that the manifest size and SHA-256 checks verify;
+- when the host supports precompressed-file negotiation, select the generated `.sqlite3.br` and `.sqlite3.gz` sidecars for the canonical `.sqlite3` URL, preferring Brotli, then gzip, then the uncompressed file; `fetch()` supplies the decoded bytes that the manifest size and SHA-256 checks verify;
 - preserve same-origin URLs for the manifest, database, worker, SQLite runtime, and optional map module; and
 - reproduce the CSP in `index.html` as an HTTP response header in production, adding `frame-ancestors 'none'` (which a CSP meta element cannot enforce) and `X-Content-Type-Options: nosniff`.
 
@@ -53,9 +53,13 @@ immutable`. Use representation-specific strong ETags, or weak ETags; do not
 reuse one strong ETag across differently encoded bodies. Caddy's
 `file_server { precompressed br gzip }` and equivalent CDN
 precompressed-file features implement this negotiation. For nginx, enable
-`gzip_static on;`; a build with the optional Brotli module can additionally use
-`brotli_static on;`. A basic static server that lacks precompressed-file
-negotiation safely falls back to the uncompressed `.sqlite3` file.
+`gzip_static on;` and `gzip_vary on;`; `gzip_static` requires nginx's
+`ngx_http_gzip_static_module`, and a build with the separate Brotli module can
+additionally use `brotli_static on;`. A basic static server that lacks
+precompressed-file negotiation safely falls back to the uncompressed
+`.sqlite3` file. GitHub Pages uses that fallback; Cloudflare can dynamically
+compress the canonical response as described in the
+[Pages deployment guide](../docs/GITHUB_PAGES.md#compression-rule).
 
 HTTP Fetch transparently decodes `Content-Encoding` before the worker receives
 the response body. The worker therefore needs no decompression dependency: it

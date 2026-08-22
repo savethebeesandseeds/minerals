@@ -551,11 +551,15 @@ async function teardownMap() {
 }
 
 async function renderMap(sequence) {
-  const section = element("section", { className: "view map-shell" }, [
-    paragraph("Spatial catalog", "eyebrow"), element("h1", { text: t("map") }),
-    paragraph("Explore the optional geographic view. Catalog records remain available even when the map package is not installed.", "view-intro"),
-  ]);
-  const container = element("div", { id: "catalog-map-root", className: "map-container", attrs: { role: "region", "aria-label": "Mineral map", "aria-busy": "true" } }, [paragraph("Loading map…", "muted")]);
+  const section = element("section", {
+    className: "view map-shell",
+    attrs: { "aria-label": t("map") },
+  });
+  const container = element("div", {
+    id: "catalog-map-root",
+    className: "map-container",
+    attrs: { "aria-busy": "true" },
+  }, [paragraph("Loading map…", "visually-hidden")]);
   section.append(container);
   main.replaceChildren(section);
 

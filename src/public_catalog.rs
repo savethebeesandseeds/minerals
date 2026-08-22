@@ -20,6 +20,8 @@ pub const PUBLIC_CATALOG_FORMAT: &str = "waajacu-public-catalog-v1";
 pub const PUBLIC_CATALOG_SCHEMA_VERSION: u32 = 1;
 pub const PUBLIC_CATALOG_MANIFEST_FILE: &str = "catalog-manifest.json";
 const PUBLIC_CATALOG_PAGE_SIZE: i64 = 8192;
+const PUBLIC_CATALOG_MAX_MANIFEST_BYTES: u64 = 64 * 1024;
+const PUBLIC_CATALOG_MAX_DATABASE_BYTES: u64 = 512 * 1024 * 1024;
 
 const PUBLIC_TABLES: &[&str] = &[
     "catalog_meta",
@@ -35,6 +37,7 @@ const PUBLIC_TABLES: &[&str] = &[
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PublicCatalogManifest {
     pub format: String,
     pub schema_version: u32,
@@ -45,6 +48,7 @@ pub struct PublicCatalogManifest {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PublicCatalogDatabase {
     pub path: String,
     /// `sha256:` followed by a lowercase, 64-character SHA-256 hex digest.
@@ -209,6 +213,600 @@ pub fn export_public_catalog(data_root: &Path, output: &Path) -> Result<PublicCa
     };
     publish_manifest(&output, &manifest)?;
     Ok(manifest)
+}
+
+/// Validates a previously exported public catalog without trusting its
+/// manifest, file names, compressed representations, or SQLite schema.
+///
+/// This is intended for release publication gates. It opens the SQLite file
+/// read-only, rejects symlinks and unexpected data artifacts, and returns the
+/// validated manifest only after every public-catalog invariant has passed.
+pub fn validate_public_catalog_release(output: &Path) -> Result<PublicCatalogManifest> {
+    let output = require_real_directory(output, "public catalog release")?;
+    let manifest_path = output.join(PUBLIC_CATALOG_MANIFEST_FILE);
+    require_regular_non_symlink_file(&manifest_path, "public catalog manifest")?;
+    let manifest_bytes = fs::metadata(&manifest_path)
+        .with_context(|| {
+            format!(
+                "failed to inspect public catalog manifest {}",
+                manifest_path.display()
+            )
+        })?
+        .len();
+    if manifest_bytes == 0 || manifest_bytes > PUBLIC_CATALOG_MAX_MANIFEST_BYTES {
+        bail!(
+            "public catalog manifest size is {manifest_bytes}, expected 1..={PUBLIC_CATALOG_MAX_MANIFEST_BYTES} bytes"
+        );
+    }
+    let manifest: PublicCatalogManifest = serde_json::from_reader(io::BufReader::new(
+        File::open(&manifest_path).with_context(|| {
+            format!(
+                "failed to open public catalog manifest {}",
+                manifest_path.display()
+            )
+        })?,
+    ))
+    .context("failed to parse public catalog manifest")?;
+    validate_manifest_contract(&manifest)?;
+
+    let digest = manifest
+        .database
+        .sha256
+        .strip_prefix("sha256:")
+        .context("public catalog database digest must start with 'sha256:'")?;
+    let database_relative = PathBuf::from(format!("data/catalog-{digest}.sqlite3"));
+    if manifest.database.path != database_relative.to_string_lossy() {
+        bail!("public catalog manifest database path does not match its SHA-256 digest");
+    }
+    let data_directory = output.join("data");
+    let data_directory = require_real_directory(&data_directory, "public catalog data directory")?;
+    let database_path = data_directory.join(format!("catalog-{digest}.sqlite3"));
+    let brotli_path = data_directory.join(format!("catalog-{digest}.sqlite3.br"));
+    let gzip_path = data_directory.join(format!("catalog-{digest}.sqlite3.gz"));
+    validate_exact_data_artifacts(&data_directory, [&database_path, &brotli_path, &gzip_path])?;
+
+    let (actual_digest, actual_bytes) = hash_file(&database_path)?;
+    if actual_digest != digest || actual_bytes != manifest.database.bytes {
+        bail!(
+            "public catalog database does not match the manifest digest and size: found sha256:{actual_digest} and {actual_bytes} bytes"
+        );
+    }
+    verify_precompressed(
+        &brotli_path,
+        CompressionEncoding::Brotli,
+        digest,
+        actual_bytes,
+    )?;
+    verify_precompressed(&gzip_path, CompressionEncoding::Gzip, digest, actual_bytes)?;
+
+    let database = Connection::open_with_flags(
+        &database_path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .with_context(|| {
+        format!(
+            "failed to open public catalog database {} read-only",
+            database_path.display()
+        )
+    })?;
+    database
+        .busy_timeout(Duration::from_secs(5))
+        .context("failed to configure public catalog validation timeout")?;
+    database
+        .execute_batch(
+            "PRAGMA query_only = ON; PRAGMA trusted_schema = OFF; PRAGMA foreign_keys = ON;",
+        )
+        .context("failed to configure public catalog validation connection")?;
+    validate_public_schema(&database)?;
+    validate_public_database_invariants(&database, manifest.mineral_count)?;
+    validate_public_metadata(&database, &manifest)?;
+    validate_public_query_invariants(&database)?;
+    drop(database);
+
+    let validation_copy =
+        TemporaryValidationDatabase::create(&database_path, digest, manifest.database.bytes)?;
+    let copied_database = Connection::open_with_flags(
+        validation_copy.path(),
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .context("failed to open temporary public catalog integrity-check copy")?;
+    copied_database
+        .execute_batch("PRAGMA trusted_schema = OFF; PRAGMA foreign_keys = ON;")
+        .context("failed to configure temporary public catalog integrity-check copy")?;
+    validate_public_database_integrity(&copied_database)?;
+    drop(copied_database);
+
+    let (final_digest, final_bytes) = hash_file(&database_path)?;
+    if final_digest != digest || final_bytes != manifest.database.bytes {
+        bail!("public catalog database changed during release validation");
+    }
+    validate_exact_data_artifacts(&data_directory, [&database_path, &brotli_path, &gzip_path])?;
+    Ok(manifest)
+}
+
+fn validate_manifest_contract(manifest: &PublicCatalogManifest) -> Result<()> {
+    if manifest.format != PUBLIC_CATALOG_FORMAT {
+        bail!(
+            "public catalog manifest format is '{}', expected '{}'",
+            manifest.format,
+            PUBLIC_CATALOG_FORMAT
+        );
+    }
+    if manifest.schema_version != PUBLIC_CATALOG_SCHEMA_VERSION {
+        bail!(
+            "public catalog manifest schema version is {}, expected {}",
+            manifest.schema_version,
+            PUBLIC_CATALOG_SCHEMA_VERSION
+        );
+    }
+    let generated_at = chrono::DateTime::parse_from_rfc3339(&manifest.generated_at)
+        .context("public catalog manifest generated_at is not RFC 3339")?;
+    if generated_at.offset().local_minus_utc() != 0
+        || generated_at.to_rfc3339_opts(SecondsFormat::Millis, true) != manifest.generated_at
+    {
+        bail!("public catalog manifest generated_at is not canonical UTC millisecond RFC 3339");
+    }
+    require_sha256_identifier(&manifest.release_id, "public catalog release_id")?;
+    require_sha256_identifier(&manifest.database.sha256, "public catalog database sha256")?;
+    if manifest.mineral_count > i64::MAX as u64 {
+        bail!("public catalog mineral_count exceeds SQLite's signed integer range");
+    }
+    if manifest.database.bytes == 0 || manifest.database.bytes > PUBLIC_CATALOG_MAX_DATABASE_BYTES {
+        bail!(
+            "public catalog database size is {}, expected 1..={PUBLIC_CATALOG_MAX_DATABASE_BYTES} bytes",
+            manifest.database.bytes
+        );
+    }
+    Ok(())
+}
+
+fn require_sha256_identifier<'a>(value: &'a str, label: &str) -> Result<&'a str> {
+    let digest = value
+        .strip_prefix("sha256:")
+        .with_context(|| format!("{label} must start with 'sha256:'"))?;
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        bail!("{label} must contain exactly 64 lowercase hexadecimal characters");
+    }
+    Ok(digest)
+}
+
+fn validate_exact_data_artifacts<const N: usize>(
+    data_directory: &Path,
+    expected: [&Path; N],
+) -> Result<()> {
+    let expected = expected
+        .into_iter()
+        .map(Path::to_path_buf)
+        .collect::<std::collections::BTreeSet<_>>();
+    let mut actual = std::collections::BTreeSet::new();
+    for entry in fs::read_dir(data_directory).with_context(|| {
+        format!(
+            "failed to inspect public catalog data directory {}",
+            data_directory.display()
+        )
+    })? {
+        let entry = entry?;
+        let path = entry.path();
+        require_regular_non_symlink_file(&path, "public catalog data artifact")?;
+        actual.insert(path);
+    }
+    if actual != expected {
+        bail!(
+            "public catalog data directory must contain exactly the manifest database and its .br and .gz representations"
+        );
+    }
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PublicColumn {
+    name: &'static str,
+    data_type: &'static str,
+    not_null: i64,
+    primary_key: i64,
+}
+
+const fn column(
+    name: &'static str,
+    data_type: &'static str,
+    not_null: bool,
+    primary_key: i64,
+) -> PublicColumn {
+    PublicColumn {
+        name,
+        data_type,
+        not_null: not_null as i64,
+        primary_key,
+    }
+}
+
+const CATALOG_META_COLUMNS: &[PublicColumn] = &[
+    column("key", "TEXT", true, 1),
+    column("value", "TEXT", true, 0),
+];
+
+const MINERALS_COLUMNS: &[PublicColumn] = &[
+    column("slug", "TEXT", true, 1),
+    column("public_id", "TEXT", true, 0),
+    column("canonical_name", "TEXT", true, 0),
+    column("formula", "TEXT", true, 0),
+    column("description", "TEXT", true, 0),
+    column("mineral_family", "TEXT", true, 0),
+    column("nomenclature_status", "TEXT", true, 0),
+    column("verification_status", "TEXT", true, 0),
+    column("data_quality_score", "REAL", true, 0),
+    column("source_kind", "TEXT", true, 0),
+    column("license_spdx", "TEXT", true, 0),
+    column("cas_number", "TEXT", false, 0),
+    column("identifiers_json", "TEXT", true, 0),
+    column("properties_json", "TEXT", true, 0),
+    column("safety_json", "TEXT", true, 0),
+    column("discovery_country", "TEXT", true, 0),
+    column("first_reference", "TEXT", true, 0),
+    column("second_reference", "TEXT", true, 0),
+    column("source_status", "TEXT", true, 0),
+    column("evidence_count", "INTEGER", true, 0),
+    column("active_offer_count", "INTEGER", true, 0),
+];
+
+const EVIDENCE_COLUMNS: &[PublicColumn] = &[
+    column("mineral_slug", "TEXT", true, 1),
+    column("position", "INTEGER", true, 2),
+    column("title", "TEXT", true, 0),
+    column("publisher", "TEXT", true, 0),
+    column("canonical_url", "TEXT", true, 0),
+    column("license_spdx", "TEXT", true, 0),
+    column("claim_scope", "TEXT", true, 0),
+    column("claim_json", "TEXT", true, 0),
+    column("confidence", "REAL", true, 0),
+    column("review_status", "TEXT", true, 0),
+    column("retrieved_at", "TEXT", true, 0),
+    column("content_hash", "TEXT", true, 0),
+    column("attribution_party", "TEXT", false, 0),
+    column("work_title", "TEXT", false, 0),
+    column("work_url", "TEXT", false, 0),
+    column("license_url", "TEXT", false, 0),
+    column("changes_notice", "TEXT", false, 0),
+    column("no_endorsement_notice", "TEXT", false, 0),
+    column("derived_output_license_spdx", "TEXT", false, 0),
+];
+
+const OFFERS_COLUMNS: &[PublicColumn] = &[
+    column("mineral_slug", "TEXT", true, 1),
+    column("position", "INTEGER", true, 2),
+    column("provider_name", "TEXT", true, 0),
+    column("provider_slug", "TEXT", true, 0),
+    column("provider_verification_status", "TEXT", true, 0),
+    column("provider_trust_score", "REAL", true, 0),
+    column("title", "TEXT", true, 0),
+    column("product_url", "TEXT", true, 0),
+    column("currency_code", "TEXT", true, 0),
+    column("price_minor", "INTEGER", false, 0),
+    column("currency_exponent", "INTEGER", true, 0),
+    column("pricing_basis", "TEXT", true, 0),
+    column("minimum_order_quantity", "REAL", false, 0),
+    column("minimum_order_unit", "TEXT", true, 0),
+    column("stock_status", "TEXT", true, 0),
+    column("purity_text", "TEXT", true, 0),
+    column("grade", "TEXT", true, 0),
+    column("origin_country_code", "TEXT", true, 0),
+    column("verification_status", "TEXT", true, 0),
+    column("last_checked_at", "TEXT", true, 0),
+    column("expires_at", "TEXT", false, 0),
+];
+
+const MINERAL_SEARCH_COLUMNS: &[PublicColumn] = &[
+    column("slug", "", false, 0),
+    column("canonical_name", "", false, 0),
+    column("formula", "", false, 0),
+    column("mineral_family", "", false, 0),
+    column("search_text", "", false, 0),
+];
+
+fn validate_public_schema(database: &Connection) -> Result<()> {
+    let user_version: i64 = database
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .context("failed to inspect public catalog user_version")?;
+    if user_version != i64::from(PUBLIC_CATALOG_SCHEMA_VERSION) {
+        bail!(
+            "public catalog user_version is {user_version}, expected {PUBLIC_CATALOG_SCHEMA_VERSION}"
+        );
+    }
+    for (table, columns) in [
+        ("catalog_meta", CATALOG_META_COLUMNS),
+        ("minerals", MINERALS_COLUMNS),
+        ("evidence", EVIDENCE_COLUMNS),
+        ("offers", OFFERS_COLUMNS),
+        ("mineral_search", MINERAL_SEARCH_COLUMNS),
+    ] {
+        validate_public_columns(database, table, columns)?;
+    }
+
+    let unexpected_executable_schema: i64 = database.query_row(
+        "SELECT COUNT(*) FROM sqlite_schema WHERE type IN ('trigger', 'view')",
+        [],
+        |row| row.get(0),
+    )?;
+    if unexpected_executable_schema != 0 {
+        bail!("public catalog cannot contain triggers or views");
+    }
+    let explicit_indexes: i64 = database.query_row(
+        "SELECT COUNT(*) FROM sqlite_schema WHERE type = 'index' AND sql IS NOT NULL",
+        [],
+        |row| row.get(0),
+    )?;
+    if explicit_indexes != 0 {
+        bail!("public catalog contains unexpected explicit indexes");
+    }
+
+    for table in ["catalog_meta", "minerals", "evidence", "offers"] {
+        let definition: String = database.query_row(
+            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
+            [table],
+            |row| row.get(0),
+        )?;
+        if !definition
+            .trim_end_matches(|character: char| character.is_ascii_whitespace() || character == ';')
+            .to_ascii_uppercase()
+            .ends_with("WITHOUT ROWID")
+        {
+            bail!("public catalog table '{table}' must use WITHOUT ROWID");
+        }
+    }
+    validate_search_schema(database)?;
+    validate_public_indexes(database)?;
+    validate_public_foreign_key(database, "evidence")?;
+    validate_public_foreign_key(database, "offers")?;
+    Ok(())
+}
+
+fn validate_public_columns(
+    database: &Connection,
+    table: &str,
+    expected: &[PublicColumn],
+) -> Result<()> {
+    let mut statement = database
+        .prepare("SELECT name, type, \"notnull\", pk FROM pragma_table_info(?1) ORDER BY cid")?;
+    let actual = statement
+        .query_map([table], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let expected = expected
+        .iter()
+        .map(|column| {
+            (
+                column.name.to_string(),
+                column.data_type.to_string(),
+                column.not_null,
+                column.primary_key,
+            )
+        })
+        .collect::<Vec<_>>();
+    if actual != expected {
+        bail!("public catalog table '{table}' does not match the v1 column contract");
+    }
+    let xinfo_count: i64 = database.query_row(
+        "SELECT COUNT(*) FROM pragma_table_xinfo(?1)",
+        [table],
+        |row| row.get(0),
+    )?;
+    let expected_xinfo_count = if table == "mineral_search" {
+        expected.len() + 2
+    } else {
+        expected.len()
+    };
+    if xinfo_count != expected_xinfo_count as i64 {
+        bail!("public catalog table '{table}' contains unexpected hidden or generated columns");
+    }
+    let default_count: i64 = database.query_row(
+        "SELECT COUNT(*) FROM pragma_table_xinfo(?1) WHERE dflt_value IS NOT NULL",
+        [table],
+        |row| row.get(0),
+    )?;
+    if default_count != 0 {
+        bail!("public catalog table '{table}' contains unexpected default values");
+    }
+    Ok(())
+}
+
+fn validate_search_schema(database: &Connection) -> Result<()> {
+    let definition: String = database.query_row(
+        "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'mineral_search'",
+        [],
+        |row| row.get(0),
+    )?;
+    let compact = definition
+        .chars()
+        .filter(|character| !character.is_ascii_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect::<String>();
+    let expected = "createvirtualtablemineral_searchusingfts5(slugunindexed,canonical_name,formula,mineral_family,search_text,tokenize='unicode61remove_diacritics2')";
+    if compact != expected {
+        bail!("mineral_search does not use the public catalog v1 FTS5 tokenizer contract");
+    }
+    let hidden = database
+        .prepare(
+            "SELECT name, hidden FROM pragma_table_xinfo('mineral_search') WHERE hidden <> 0 ORDER BY cid",
+        )?
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if hidden != [("mineral_search".to_string(), 1), ("rank".to_string(), 1)] {
+        bail!("mineral_search contains unexpected hidden columns");
+    }
+    Ok(())
+}
+
+fn validate_public_indexes(database: &Connection) -> Result<()> {
+    for (table, expected) in [
+        (
+            "catalog_meta",
+            vec![(1_i64, "pk".to_string(), 0_i64, vec!["key".to_string()])],
+        ),
+        (
+            "minerals",
+            vec![
+                (1, "pk".to_string(), 0, vec!["slug".to_string()]),
+                (1, "u".to_string(), 0, vec!["public_id".to_string()]),
+            ],
+        ),
+        (
+            "evidence",
+            vec![(
+                1,
+                "pk".to_string(),
+                0,
+                vec!["mineral_slug".to_string(), "position".to_string()],
+            )],
+        ),
+        (
+            "offers",
+            vec![(
+                1,
+                "pk".to_string(),
+                0,
+                vec!["mineral_slug".to_string(), "position".to_string()],
+            )],
+        ),
+    ] {
+        let indexes = database
+            .prepare(
+                "SELECT name, \"unique\", origin, partial FROM pragma_index_list(?1) ORDER BY name COLLATE BINARY",
+            )?
+            .query_map([table], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)?,
+                ))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut actual = Vec::with_capacity(indexes.len());
+        for (name, unique, origin, partial) in indexes {
+            let columns = database
+                .prepare("SELECT name FROM pragma_index_info(?1) ORDER BY seqno")?
+                .query_map([name], |row| row.get::<_, String>(0))?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            actual.push((unique, origin, partial, columns));
+        }
+        actual.sort();
+        let mut expected = expected;
+        expected.sort();
+        if actual != expected {
+            bail!("public catalog table '{table}' has an unexpected index contract");
+        }
+    }
+    Ok(())
+}
+
+fn validate_public_foreign_key(database: &Connection, table: &str) -> Result<()> {
+    let keys = database
+        .prepare(
+            "SELECT \"table\", \"from\", \"to\", on_update, on_delete, match FROM pragma_foreign_key_list(?1)",
+        )?
+        .query_map([table], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if keys
+        != [(
+            "minerals".to_string(),
+            "mineral_slug".to_string(),
+            "slug".to_string(),
+            "NO ACTION".to_string(),
+            "CASCADE".to_string(),
+            "NONE".to_string(),
+        )]
+    {
+        bail!("public catalog table '{table}' has an unexpected foreign-key contract");
+    }
+    Ok(())
+}
+
+fn validate_public_metadata(database: &Connection, manifest: &PublicCatalogManifest) -> Result<()> {
+    let actual = database
+        .prepare("SELECT key, value FROM catalog_meta ORDER BY key COLLATE BINARY")?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
+        .collect::<rusqlite::Result<std::collections::BTreeMap<_, _>>>()?;
+    let expected = std::collections::BTreeMap::from([
+        ("format".to_string(), manifest.format.clone()),
+        ("generated_at".to_string(), manifest.generated_at.clone()),
+        (
+            "mineral_count".to_string(),
+            manifest.mineral_count.to_string(),
+        ),
+        ("release_id".to_string(), manifest.release_id.clone()),
+        (
+            "schema_version".to_string(),
+            manifest.schema_version.to_string(),
+        ),
+    ]);
+    if actual != expected {
+        bail!("public catalog metadata does not exactly match the manifest");
+    }
+    Ok(())
+}
+
+fn validate_public_query_invariants(database: &Connection) -> Result<()> {
+    for (label, query) in [
+        (
+            "invalid mineral JSON",
+            "SELECT COUNT(*) FROM minerals WHERE json_valid(identifiers_json) <> 1 OR json_valid(properties_json) <> 1 OR json_valid(safety_json) <> 1",
+        ),
+        (
+            "invalid evidence JSON",
+            "SELECT COUNT(*) FROM evidence WHERE json_valid(claim_json) <> 1",
+        ),
+        (
+            "minerals missing from search",
+            "SELECT COUNT(*) FROM minerals m LEFT JOIN mineral_search s ON s.slug = m.slug WHERE s.slug IS NULL",
+        ),
+        (
+            "search rows missing minerals",
+            "SELECT COUNT(*) FROM mineral_search s LEFT JOIN minerals m ON m.slug = s.slug WHERE m.slug IS NULL",
+        ),
+        (
+            "orphaned evidence",
+            "SELECT COUNT(*) FROM evidence e LEFT JOIN minerals m ON m.slug = e.mineral_slug WHERE m.slug IS NULL",
+        ),
+        (
+            "orphaned offers",
+            "SELECT COUNT(*) FROM offers o LEFT JOIN minerals m ON m.slug = o.mineral_slug WHERE m.slug IS NULL",
+        ),
+    ] {
+        let violations: i64 = database
+            .query_row(query, [], |row| row.get(0))
+            .with_context(|| format!("failed to validate public catalog invariant: {label}"))?;
+        if violations != 0 {
+            bail!("public catalog contains {violations} instances of {label}");
+        }
+    }
+    let mut search_probe = database
+        .prepare("SELECT slug FROM mineral_search WHERE mineral_search MATCH ?1 LIMIT 1")?;
+    let mut rows = search_probe.query(["waajacuvalidationtokenunlikelytoexist"])?;
+    let _ = rows
+        .next()
+        .context("failed to execute a public catalog FTS5 query probe")?;
+    Ok(())
 }
 
 fn validate_source_schema(source: &Transaction<'_>) -> Result<()> {
@@ -787,17 +1385,35 @@ fn copy_offers(
 }
 
 fn validate_public_database(destination: &Connection, mineral_count: u64) -> Result<()> {
-    let page_size: i64 = destination
-        .query_row("PRAGMA page_size", [], |row| row.get(0))
-        .context("failed to verify public catalog page size")?;
-    if page_size != PUBLIC_CATALOG_PAGE_SIZE {
-        bail!("public catalog page size is {page_size}, expected {PUBLIC_CATALOG_PAGE_SIZE}");
-    }
+    validate_public_database_integrity(destination)?;
+    validate_public_database_invariants(destination, mineral_count)
+}
+
+fn validate_public_database_integrity(destination: &Connection) -> Result<()> {
+    // SQLite's FTS5 integrity callback enters an internal write-command path.
+    // Existing-release validation therefore runs this full check only on an
+    // independently re-hashed temporary copy, never on the published file.
     let integrity: String = destination
         .query_row("PRAGMA integrity_check", [], |row| row.get(0))
         .context("failed to run public catalog integrity check")?;
     if integrity != "ok" {
         bail!("public catalog integrity check failed: {integrity}");
+    }
+    destination
+        .execute(
+            "INSERT INTO mineral_search(mineral_search, rank) VALUES('integrity-check', 1)",
+            [],
+        )
+        .context("public catalog FTS5 integrity check failed")?;
+    Ok(())
+}
+
+fn validate_public_database_invariants(destination: &Connection, mineral_count: u64) -> Result<()> {
+    let page_size: i64 = destination
+        .query_row("PRAGMA page_size", [], |row| row.get(0))
+        .context("failed to verify public catalog page size")?;
+    if page_size != PUBLIC_CATALOG_PAGE_SIZE {
+        bail!("public catalog page size is {page_size}, expected {PUBLIC_CATALOG_PAGE_SIZE}");
     }
     let foreign_key_violations: i64 = destination
         .query_row("SELECT COUNT(*) FROM pragma_foreign_key_check", [], |row| {
@@ -895,6 +1511,25 @@ fn prepare_output_directory(output: &Path) -> Result<PathBuf> {
             absolute.display()
         )
     })
+}
+
+fn require_real_directory(path: &Path, label: &str) -> Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .context("failed to resolve the current directory")?
+            .join(path)
+    };
+    reject_existing_symlink_components(&absolute)?;
+    let metadata = fs::symlink_metadata(&absolute)
+        .with_context(|| format!("failed to inspect {label} {}", absolute.display()))?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        bail!("{label} must be a real directory: {}", absolute.display());
+    }
+    absolute
+        .canonicalize()
+        .with_context(|| format!("failed to canonicalize {label} {}", absolute.display()))
 }
 
 fn reject_existing_symlink_components(path: &Path) -> Result<()> {
@@ -1038,10 +1673,7 @@ fn verify_precompressed(
         CompressionEncoding::Brotli => {
             hash_complete_brotli_stream(file, maximum_decoded_bytes, path)
         }
-        CompressionEncoding::Gzip => hash_reader(
-            flate2::read::MultiGzDecoder::new(file).take(maximum_decoded_bytes),
-            path,
-        ),
+        CompressionEncoding::Gzip => hash_complete_gzip_stream(file, maximum_decoded_bytes, path),
     }
     .with_context(|| {
         format!(
@@ -1058,6 +1690,34 @@ fn verify_precompressed(
         );
     }
     Ok(())
+}
+
+fn hash_complete_gzip_stream(
+    file: File,
+    maximum_decoded_bytes: u64,
+    path: &Path,
+) -> Result<(String, u64)> {
+    let compressed_bytes = file
+        .metadata()
+        .with_context(|| format!("failed to inspect {}", path.display()))?
+        .len();
+    let buffered = io::BufReader::with_capacity(COMPRESSION_BUFFER_BYTES, file);
+    // The single-member decoder deliberately stops after the first gzip
+    // member. Inspecting the BufReader's logical position then rejects both a
+    // concatenated member (even an empty one) and arbitrary trailing bytes.
+    let mut decoder = flate2::bufread::GzDecoder::new(buffered);
+    let decoded = hash_reader((&mut decoder).take(maximum_decoded_bytes), path)?;
+    let consumed_bytes = decoder
+        .get_mut()
+        .stream_position()
+        .with_context(|| format!("failed to inspect the end of {}", path.display()))?;
+    if consumed_bytes != compressed_bytes {
+        bail!(
+            "gzip public catalog representation {} has trailing bytes or multiple members",
+            path.display()
+        );
+    }
+    Ok(decoded)
 }
 
 fn hash_complete_brotli_stream(
@@ -1264,6 +1924,98 @@ fn hash_bytes(value: &[u8]) -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
+}
+
+struct TemporaryValidationDatabase {
+    directory: PathBuf,
+    database: PathBuf,
+}
+
+impl TemporaryValidationDatabase {
+    fn create(source: &Path, expected_sha256: &str, expected_bytes: u64) -> Result<Self> {
+        require_regular_non_symlink_file(source, "public catalog validation source")?;
+        // System temp locations are commonly exposed through a stable symlink
+        // (for example /tmp on some platforms). Resolve that alias once, then
+        // create an unpredictable exclusive child in the real directory.
+        let temporary_root = std::env::temp_dir()
+            .canonicalize()
+            .context("failed to resolve system temporary directory for catalog validation")?;
+        let temporary_root_metadata = fs::symlink_metadata(&temporary_root).with_context(|| {
+            format!(
+                "failed to inspect system temporary directory {}",
+                temporary_root.display()
+            )
+        })?;
+        if temporary_root_metadata.file_type().is_symlink() || !temporary_root_metadata.is_dir() {
+            bail!(
+                "resolved system temporary location is not a real directory: {}",
+                temporary_root.display()
+            );
+        }
+        for _ in 0..32 {
+            let directory =
+                temporary_root.join(format!(".waajacu-catalog-validation-{}", random_hex(16)?));
+            match fs::create_dir(&directory) {
+                Ok(()) => {
+                    let database = directory.join("catalog.sqlite3");
+                    let temporary = Self {
+                        directory,
+                        database,
+                    };
+                    let mut input = File::open(source).with_context(|| {
+                        format!(
+                            "failed to open public catalog validation source {}",
+                            source.display()
+                        )
+                    })?;
+                    let mut output = OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .create_new(true)
+                        .open(temporary.path())
+                        .context("failed to create temporary public catalog validation copy")?;
+                    let copied = io::copy(&mut input, &mut output)
+                        .context("failed to copy public catalog for isolated integrity checking")?;
+                    if copied != expected_bytes {
+                        bail!(
+                            "public catalog changed while creating its integrity-check copy: copied {copied} bytes, expected {expected_bytes}"
+                        );
+                    }
+                    output.sync_all().context(
+                        "failed to synchronize temporary public catalog validation copy",
+                    )?;
+                    drop(output);
+                    let (actual_sha256, actual_bytes) = hash_file(temporary.path())?;
+                    if actual_sha256 != expected_sha256 || actual_bytes != expected_bytes {
+                        bail!(
+                            "temporary public catalog integrity-check copy failed re-verification"
+                        );
+                    }
+                    return Ok(temporary);
+                }
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!(
+                            "failed to create isolated public catalog validation directory {}",
+                            directory.display()
+                        )
+                    })
+                }
+            }
+        }
+        bail!("failed to allocate an isolated public catalog validation directory")
+    }
+
+    fn path(&self) -> &Path {
+        &self.database
+    }
+}
+
+impl Drop for TemporaryValidationDatabase {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.directory);
+    }
 }
 
 struct TemporaryFile {
@@ -1484,6 +2236,73 @@ mod tests {
     }
 
     #[test]
+    fn existing_release_validation_is_fail_closed() -> Result<()> {
+        let data_root = TempDir::new()?;
+        let output = TempDir::new()?;
+        prepare_registry(data_root.path())?;
+        seed_live_registry(data_root.path())?;
+        let manifest = export_public_catalog(data_root.path(), output.path())?;
+        let database_path = output.path().join(&manifest.database.path);
+        let database_before = file_snapshot(&database_path)?;
+        assert_eq!(validate_public_catalog_release(output.path())?, manifest);
+        assert_eq!(file_snapshot(&database_path)?, database_before);
+        assert!(!database_path.with_extension("sqlite3-journal").exists());
+        assert!(!database_path.with_extension("sqlite3-wal").exists());
+        assert!(!database_path.with_extension("sqlite3-shm").exists());
+
+        let manifest_path = output.path().join(PUBLIC_CATALOG_MANIFEST_FILE);
+        let original_manifest = fs::read(&manifest_path)?;
+        let mut value: serde_json::Value = serde_json::from_slice(&original_manifest)?;
+        value["unexpected_private_field"] = serde_json::json!(true);
+        fs::write(&manifest_path, serde_json::to_vec_pretty(&value)?)?;
+        assert!(validate_public_catalog_release(output.path()).is_err());
+        fs::write(&manifest_path, &original_manifest)?;
+
+        let mut wrong_size = manifest.clone();
+        wrong_size.database.bytes += 1;
+        fs::write(&manifest_path, serde_json::to_vec_pretty(&wrong_size)?)?;
+        assert!(validate_public_catalog_release(output.path()).is_err());
+        fs::write(&manifest_path, &original_manifest)?;
+
+        let unexpected = output.path().join("data/private-backup.sqlite3");
+        fs::write(&unexpected, b"not public")?;
+        assert!(validate_public_catalog_release(output.path()).is_err());
+        fs::remove_file(unexpected)?;
+
+        let mut mismatched = manifest.clone();
+        mismatched.release_id = format!("sha256:{}", "a".repeat(64));
+        fs::write(&manifest_path, serde_json::to_vec_pretty(&mismatched)?)?;
+        let error = validate_public_catalog_release(output.path()).unwrap_err();
+        assert!(format!("{error:#}").contains("metadata"));
+
+        fs::write(&manifest_path, &original_manifest)?;
+        let original_database = fs::read(&database_path)?;
+        let mut corrupted_database = original_database.clone();
+        let corrupted_position = corrupted_database.len() / 2;
+        corrupted_database[corrupted_position] ^= 1;
+        fs::write(&database_path, &corrupted_database)?;
+        assert!(validate_public_catalog_release(output.path()).is_err());
+        fs::write(&database_path, original_database)?;
+        Ok(())
+    }
+
+    #[test]
+    fn fts_integrity_validation_rejects_a_corrupted_inverted_index() -> Result<()> {
+        let data_root = TempDir::new()?;
+        let output = TempDir::new()?;
+        prepare_registry(data_root.path())?;
+        seed_live_registry(data_root.path())?;
+        let manifest = export_public_catalog(data_root.path(), output.path())?;
+        let database_path = output.path().join(manifest.database.path);
+        let database = Connection::open(&database_path)?;
+        let removed = database.execute("DELETE FROM mineral_search_data WHERE id > 10", [])?;
+        assert!(removed > 0, "fixture must contain an FTS5 index segment");
+        let error = validate_public_database_integrity(&database).unwrap_err();
+        assert!(format!("{error:#}").contains("integrity"));
+        Ok(())
+    }
+
+    #[test]
     fn refuses_non_file_manifest_without_destroying_it() -> Result<()> {
         let data_root = TempDir::new()?;
         let output = TempDir::new()?;
@@ -1584,6 +2403,22 @@ mod tests {
             verify_precompressed(&multiple_members, CompressionEncoding::Gzip, &sha256, bytes)
                 .is_err()
         );
+
+        let empty_second_member = output.path().join("empty-second-member.sqlite3.gz");
+        fs::copy(compressed.path(), &empty_second_member)?;
+        let appended = fs::OpenOptions::new()
+            .append(true)
+            .open(&empty_second_member)?;
+        flate2::write::GzEncoder::new(appended, flate2::Compression::best())
+            .finish()?
+            .sync_all()?;
+        assert!(verify_precompressed(
+            &empty_second_member,
+            CompressionEncoding::Gzip,
+            &sha256,
+            bytes,
+        )
+        .is_err());
 
         let trailing = output.path().join("trailing-bytes.sqlite3.gz");
         fs::copy(compressed.path(), &trailing)?;

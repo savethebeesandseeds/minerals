@@ -2,7 +2,7 @@ use std::{
     env,
     ffi::OsString,
     fs::{self, File, OpenOptions},
-    io::{ErrorKind, Write},
+    io::{ErrorKind, Read, Write},
     path::{Component, Path, PathBuf},
     process::ExitCode,
 };
@@ -10,7 +10,8 @@ use std::{
 use anyhow::{bail, Context, Result};
 use getrandom::getrandom;
 use minerals_public_catalog::{
-    export_public_catalog, PublicCatalogManifest, PUBLIC_CATALOG_MANIFEST_FILE,
+    export_public_catalog, validate_public_catalog_release, PublicCatalogManifest,
+    PUBLIC_CATALOG_MANIFEST_FILE,
 };
 
 const PUBLIC_APP_FILES: &[&str] = &[
@@ -43,32 +44,59 @@ fn run(arguments: Vec<OsString>) -> Result<()> {
         print_help();
         return Ok(());
     };
-    let output = resolve_fresh_output(&options.output)?;
-    let data_root = validate_private_output_separation(&options.data_root, &output)?;
     let app_root = require_real_directory(&options.app_root, "public app root")?;
-    if output.starts_with(&app_root) {
+    let manifest = match options.mode {
+        Mode::Export { data_root, output } => {
+            let output = resolve_fresh_output(&output)?;
+            let data_root = validate_private_output_separation(&data_root, &output)?;
+            if output.starts_with(&app_root) {
+                bail!(
+                    "--output cannot be inside --app-root: {} and {}",
+                    output.display(),
+                    app_root.display()
+                );
+            }
+            stage_and_promote(&output, |staging| {
+                copy_public_app(&app_root, staging)?;
+                let expected = export_public_catalog(&data_root, staging)?;
+                let published = validate_existing_release(staging, &app_root)?;
+                if published != expected {
+                    bail!("completed public catalog manifest differs from the exported release");
+                }
+                Ok(published)
+            })?
+        }
+        Mode::Validate { release } => {
+            let release = require_real_directory(&release, "public release")?;
+            validate_release_app_separation(&release, &app_root)?;
+            validate_existing_release(&release, &app_root)?
+        }
+    };
+    println!("{}", serde_json::to_string_pretty(&manifest)?);
+    Ok(())
+}
+
+fn validate_release_app_separation(release: &Path, app_root: &Path) -> Result<()> {
+    if release.starts_with(app_root) || app_root.starts_with(release) {
         bail!(
-            "--output cannot be inside --app-root: {} and {}",
-            output.display(),
+            "--validate-release and --app-root must be separate, non-nested directories: {} and {}",
+            release.display(),
             app_root.display()
         );
     }
-
-    let manifest = stage_and_promote(&output, |staging| {
-        copy_public_app(&app_root, staging)?;
-        let manifest = export_public_catalog(&data_root, staging)?;
-        validate_complete_release(staging, &manifest)?;
-        Ok(manifest)
-    })?;
-    println!("{}", serde_json::to_string_pretty(&manifest)?);
     Ok(())
 }
 
 #[derive(Debug, PartialEq, Eq)]
 struct Options {
-    data_root: PathBuf,
-    output: PathBuf,
     app_root: PathBuf,
+    mode: Mode,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum Mode {
+    Export { data_root: PathBuf, output: PathBuf },
+    Validate { release: PathBuf },
 }
 
 impl Options {
@@ -82,6 +110,7 @@ impl Options {
         let mut data_root = None;
         let mut output = None;
         let mut app_root = None;
+        let mut validate_release = None;
         let mut arguments = arguments.into_iter();
         while let Some(argument) = arguments.next() {
             let name = argument
@@ -91,6 +120,7 @@ impl Options {
                 "--data-root" => &mut data_root,
                 "--output" => &mut output,
                 "--app-root" => &mut app_root,
+                "--validate-release" => &mut validate_release,
                 _ if name.starts_with('-') => bail!("unknown option '{name}'"),
                 _ => bail!("unexpected positional argument '{name}'"),
             };
@@ -105,10 +135,20 @@ impl Options {
             }
             *slot = Some(PathBuf::from(value));
         }
+        let mode = if let Some(release) = validate_release {
+            if data_root.is_some() || output.is_some() {
+                bail!("--validate-release cannot be combined with --data-root or --output");
+            }
+            Mode::Validate { release }
+        } else {
+            Mode::Export {
+                data_root: data_root.context("missing required --data-root PATH")?,
+                output: output.context("missing required --output PATH")?,
+            }
+        };
         Ok(Some(Self {
-            data_root: data_root.context("missing required --data-root PATH")?,
-            output: output.context("missing required --output PATH")?,
             app_root: app_root.unwrap_or_else(|| PathBuf::from("public-app")),
+            mode,
         }))
     }
 }
@@ -292,83 +332,54 @@ fn stage_and_promote<T>(output: &Path, build: impl FnOnce(&Path) -> Result<T>) -
     Ok(value)
 }
 
-fn validate_complete_release(output: &Path, expected: &PublicCatalogManifest) -> Result<()> {
-    validate_output_hygiene(output)?;
+fn validate_existing_release(output: &Path, app_root: &Path) -> Result<PublicCatalogManifest> {
+    let output = require_real_directory(output, "public release")?;
+    let app_root = require_real_directory(app_root, "public app root")?;
+    validate_output_hygiene(&output)?;
     for relative in PUBLIC_APP_FILES {
         let relative = safe_relative_path(relative)?;
-        require_asset_path(output, &relative)?;
+        let published = require_asset_path(&output, &relative)?;
+        let source = require_asset_path(&app_root, &relative)?;
+        if !files_are_identical(&published, &source)? {
+            bail!(
+                "published public app asset differs from checked-out source: {}",
+                relative.display()
+            );
+        }
     }
+    validate_public_catalog_release(&output)
+}
 
-    let manifest_path = require_asset_path(output, Path::new(PUBLIC_CATALOG_MANIFEST_FILE))?;
-    let published: PublicCatalogManifest =
-        serde_json::from_reader(File::open(&manifest_path).with_context(|| {
-            format!(
-                "failed to open completed public catalog manifest {}",
-                manifest_path.display()
-            )
-        })?)
-        .context("failed to parse completed public catalog manifest")?;
-    if &published != expected {
-        bail!("completed public catalog manifest differs from the exported release");
+fn files_are_identical(left: &Path, right: &Path) -> Result<bool> {
+    let left_metadata = fs::metadata(left)
+        .with_context(|| format!("failed to inspect public app asset {}", left.display()))?;
+    let right_metadata = fs::metadata(right)
+        .with_context(|| format!("failed to inspect public app asset {}", right.display()))?;
+    if left_metadata.len() != right_metadata.len() {
+        return Ok(false);
     }
-
-    let database_relative = safe_relative_path(&published.database.path)?;
-    let database_digest = published
-        .database
-        .sha256
-        .strip_prefix("sha256:")
-        .filter(|digest| {
-            digest.len() == 64
-                && digest
-                    .chars()
-                    .all(|character| character.is_ascii_digit() || ('a'..='f').contains(&character))
-        });
-    let expected_database_relative =
-        database_digest.map(|digest| PathBuf::from(format!("data/catalog-{digest}.sqlite3")));
-    if database_relative.parent() != Some(Path::new("data"))
-        || database_relative
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_none_or(|name| !is_content_addressed_database_name(name))
-        || expected_database_relative.as_ref() != Some(&database_relative)
-    {
-        bail!("completed public catalog manifest names an invalid or mismatched database path");
+    let mut left = std::io::BufReader::new(
+        File::open(left).context("failed to open published public app asset")?,
+    );
+    let mut right = std::io::BufReader::new(
+        File::open(right).context("failed to open checked-out public app asset")?,
+    );
+    let mut left_buffer = [0_u8; 64 * 1024];
+    let mut right_buffer = [0_u8; 64 * 1024];
+    loop {
+        let left_bytes = left
+            .read(&mut left_buffer)
+            .context("failed to read published public app asset")?;
+        let right_bytes = right
+            .read(&mut right_buffer)
+            .context("failed to read checked-out public app asset")?;
+        if left_bytes != right_bytes || left_buffer[..left_bytes] != right_buffer[..right_bytes] {
+            return Ok(false);
+        }
+        if left_bytes == 0 {
+            return Ok(true);
+        }
     }
-    let database_path = require_asset_path(output, &database_relative)?;
-    let brotli_relative = PathBuf::from(format!("{}.br", published.database.path));
-    let gzip_relative = PathBuf::from(format!("{}.gz", published.database.path));
-    require_asset_path(output, &brotli_relative)?;
-    require_asset_path(output, &gzip_relative)?;
-    let database_bytes = fs::metadata(&database_path)
-        .with_context(|| {
-            format!(
-                "failed to inspect completed public catalog database {}",
-                database_path.display()
-            )
-        })?
-        .len();
-    if database_bytes != published.database.bytes {
-        bail!(
-            "completed public catalog database size is {database_bytes}, expected {}",
-            published.database.bytes
-        );
-    }
-
-    let data_directory = output.join("data");
-    let database_artifact_count = fs::read_dir(&data_directory)
-        .with_context(|| {
-            format!(
-                "failed to inspect completed public catalog data directory {}",
-                data_directory.display()
-            )
-        })?
-        .count();
-    if database_artifact_count != 3 {
-        bail!(
-            "completed public catalog must contain exactly one database and its two precompressed representations, found {database_artifact_count} artifacts"
-        );
-    }
-    Ok(())
 }
 
 fn validate_output_hygiene(output: &Path) -> Result<()> {
@@ -673,9 +684,11 @@ fn atomic_replace(source: &Path, destination: &Path) -> std::io::Result<()> {
 fn print_help() {
     println!(
         "Export the sanitized public catalog and static app\n\n\
-         Usage:\n  export-public --data-root PATH --output PATH [--app-root PATH]\n\n\
+         Usage:\n  export-public --data-root PATH --output PATH [--app-root PATH]\n  \
+         export-public --validate-release PATH [--app-root PATH]\n\n\
          Options:\n  --data-root PATH  Directory containing the live minerals.db\n  \
          --output PATH     New static release directory; must not already exist\n  \
+         --validate-release PATH\n                    Validate an existing static release without changing it\n  \
          --app-root PATH   Public app source directory (default: public-app)\n  \
          -h, --help        Show this help"
     );
@@ -699,11 +712,66 @@ mod tests {
             "dist".into(),
         ])?
         .unwrap();
-        assert_eq!(options.data_root, PathBuf::from("data"));
-        assert_eq!(options.output, PathBuf::from("dist"));
+        assert_eq!(
+            options.mode,
+            Mode::Export {
+                data_root: PathBuf::from("data"),
+                output: PathBuf::from("dist"),
+            }
+        );
         assert_eq!(options.app_root, PathBuf::from("public-app"));
         assert!(Options::parse(vec!["--help".into()])?.is_none());
         assert!(Options::parse(vec!["--data-root".into(), "data".into()]).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn validation_mode_is_mutually_exclusive_with_export_mode() -> Result<()> {
+        let options = Options::parse(vec![
+            "--validate-release".into(),
+            "release".into(),
+            "--app-root".into(),
+            "app".into(),
+        ])?
+        .unwrap();
+        assert_eq!(
+            options,
+            Options {
+                app_root: PathBuf::from("app"),
+                mode: Mode::Validate {
+                    release: PathBuf::from("release"),
+                },
+            }
+        );
+        assert!(Options::parse(vec![
+            "--validate-release".into(),
+            "release".into(),
+            "--output".into(),
+            "dist".into(),
+        ])
+        .is_err());
+        assert!(Options::parse(vec![
+            "--validate-release".into(),
+            "release".into(),
+            "--data-root".into(),
+            "data".into(),
+        ])
+        .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn validation_release_and_source_must_be_separate() -> Result<()> {
+        let root = TempDir::new()?;
+        let app = root.path().join("app");
+        let release = root.path().join("release");
+        let nested = release.join("app");
+        fs::create_dir(&app)?;
+        fs::create_dir(&release)?;
+        fs::create_dir(&nested)?;
+        validate_release_app_separation(&release, &app)?;
+        assert!(validate_release_app_separation(&release, &nested).is_err());
+        assert!(validate_release_app_separation(&release, &release).is_err());
         Ok(())
     }
 
@@ -837,40 +905,17 @@ mod tests {
     }
 
     #[test]
-    fn completed_release_validation_requires_exact_manifest_database_and_assets() -> Result<()> {
-        let output = TempDir::new()?;
-        for relative in PUBLIC_APP_FILES {
-            let path = output.path().join(relative);
-            fs::create_dir_all(path.parent().unwrap())?;
-            fs::write(path, "asset")?;
-        }
-        let digest = "a".repeat(64);
-        let database_relative = format!("data/catalog-{digest}.sqlite3");
-        let database_path = output.path().join(&database_relative);
-        fs::create_dir_all(database_path.parent().unwrap())?;
-        fs::write(&database_path, "database")?;
-        fs::write(format!("{}.br", database_path.display()), "brotli")?;
-        fs::write(format!("{}.gz", database_path.display()), "gzip")?;
-        let manifest = PublicCatalogManifest {
-            format: "waajacu-public-catalog-v1".to_string(),
-            schema_version: 1,
-            generated_at: "2026-08-21T00:00:00.000Z".to_string(),
-            release_id: format!("sha256:{}", "b".repeat(64)),
-            mineral_count: 0,
-            database: minerals_public_catalog::PublicCatalogDatabase {
-                path: database_relative,
-                sha256: format!("sha256:{digest}"),
-                bytes: 8,
-            },
-        };
-        fs::write(
-            output.path().join(PUBLIC_CATALOG_MANIFEST_FILE),
-            serde_json::to_vec_pretty(&manifest)?,
-        )?;
-        validate_complete_release(output.path(), &manifest)?;
-
-        fs::write(output.path().join("unexpected.txt"), "not public")?;
-        assert!(validate_complete_release(output.path(), &manifest).is_err());
+    fn static_asset_comparison_is_byte_exact() -> Result<()> {
+        let root = TempDir::new()?;
+        let left = root.path().join("left");
+        let right = root.path().join("right");
+        fs::write(&left, b"same bytes")?;
+        fs::write(&right, b"same bytes")?;
+        assert!(files_are_identical(&left, &right)?);
+        fs::write(&right, b"same bytex")?;
+        assert!(!files_are_identical(&left, &right)?);
+        fs::write(&right, b"different!")?;
+        assert!(!files_are_identical(&left, &right)?);
         Ok(())
     }
 }

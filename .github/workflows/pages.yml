@@ -1,0 +1,164 @@
+name: Deploy verified public catalog to GitHub Pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Published GitHub Release tag containing waajacu-public-catalog-pages.tar.gz
+        required: true
+        type: string
+      archive_sha256:
+        description: Lowercase SHA-256 of waajacu-public-catalog-pages.tar.gz
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Verify public release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pages: read
+    env:
+      ARCHIVE_NAME: waajacu-public-catalog-pages.tar.gz
+      ARCHIVE_SHA256: ${{ inputs.archive_sha256 }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      RUSTUP_TOOLCHAIN: 1.96.0
+
+    steps:
+      - name: Validate deployment selection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            echo "Run this deployment workflow only from the default branch." >&2
+            exit 1
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; then
+            echo "release_tag must be a simple Git tag without slashes or shell metacharacters." >&2
+            exit 1
+          fi
+          if [[ ! "$ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "archive_sha256 must be exactly 64 lowercase hexadecimal characters." >&2
+            exit 1
+          fi
+
+          release_json="$(
+            gh release view "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json isDraft,isPrerelease,tagName
+          )"
+          jq --exit-status \
+            --arg tag "$RELEASE_TAG" \
+            '.tagName == $tag and (.isDraft | not) and (.isPrerelease | not)' \
+            <<<"$release_json" >/dev/null
+
+      - name: Check out the release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: refs/tags/${{ inputs.release_tag }}
+
+      - name: Require release tag on default-branch history
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git merge-base --is-ancestor HEAD "origin/$DEFAULT_BRANCH" || {
+            echo "The selected release tag is not on the default branch history." >&2
+            exit 1
+          }
+
+      - name: Test safe release archive extraction
+        run: python3 -m unittest tools/test_extract_pages_release.py
+
+      - name: Download the fixed-name release archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          download_dir="$RUNNER_TEMP/waajacu-release-download"
+          mkdir --mode=0700 "$download_dir"
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$ARCHIVE_NAME" \
+            --dir "$download_dir"
+
+          archive="$download_dir/$ARCHIVE_NAME"
+          if [[ ! -f "$archive" ]]; then
+            echo "Release asset $ARCHIVE_NAME is missing." >&2
+            exit 1
+          fi
+          actual_sha256="$(sha256sum "$archive" | cut -d' ' -f1)"
+          if [[ "$actual_sha256" != "$ARCHIVE_SHA256" ]]; then
+            echo "Release archive SHA-256 does not match the approved value." >&2
+            exit 1
+          fi
+
+          python3 tools/extract-pages-release.py \
+            "$archive" \
+            "$RUNNER_TEMP/waajacu-pages-release"
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: >-
+          rustup toolchain install "$RUSTUP_TOOLCHAIN"
+          --profile minimal
+
+      - name: Build the release validator
+        run: >-
+          cargo build --locked --release
+          -p minerals-public-catalog --bin export-public
+
+      - name: Validate the complete public release
+        run: >-
+          target/release/export-public
+          --validate-release "$RUNNER_TEMP/waajacu-pages-release"
+          --app-root public-app
+
+      - name: Install Node.js for the browser-worker smoke test
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
+      - name: Test the verified public database and browser worker
+        env:
+          WAAJACU_CATALOG_SMOKE_DIR: ${{ runner.temp }}/waajacu-pages-release
+        run: node --test public-app/tests.mjs
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+
+      - name: Upload only the verified release root
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: ${{ runner.temp }}/waajacu-pages-release
+
+  deploy:
+    name: Deploy GitHub Pages
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy verified artifact
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5

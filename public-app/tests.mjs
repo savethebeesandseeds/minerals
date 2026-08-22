@@ -152,11 +152,12 @@ test("offer expiry follows registry semantics and fails closed for malformed dat
 });
 
 test("the shell is subpath-relative and app-owned code avoids HTML sinks", async () => {
-  const [index, app, worker, mapLoader] = await Promise.all([
+  const [index, app, worker, mapLoader, mapCss] = await Promise.all([
     readFile(new URL("./index.html", import.meta.url), "utf8"),
     readFile(new URL("./app.js", import.meta.url), "utf8"),
     readFile(new URL("./catalog-worker.js", import.meta.url), "utf8"),
     readFile(new URL("./map/map-loader.js", import.meta.url), "utf8"),
+    readFile(new URL("./map/map.css", import.meta.url), "utf8"),
   ]);
   assert.match(index, /href="\.\/app\.css"/);
   assert.match(index, /src="\.\/app\.js"/);
@@ -186,6 +187,12 @@ test("the shell is subpath-relative and app-owned code avoids HTML sinks", async
   assert.match(mapLoader, /new URL\("\.\/minerals_map\.wasm", import\.meta\.url\)/);
   assert.match(mapLoader, /"pointerdown"/);
   assert.doesNotMatch(mapLoader, /ROTATION_PERIOD_MS|setInterval|requestAnimationFrame\([^)]*rotat/i);
+  assert.match(mapLoader, /class="minerals-map__legend-bar"/);
+  assert.match(mapLoader, />Forest<\/span>.*>Land<\/span>.*>Water<\/span>/s);
+  assert.match(mapLoader, /JRC forest cover \(modified display\)/);
+  assert.doesNotMatch(mapLoader, /minerals-map__(?:hero|facts|sidebar)|Local Rust \+ WebAssembly/);
+  assert.doesNotMatch(app, /Spatial catalog|Explore the optional geographic view/);
+  assert.match(mapCss, /aspect-ratio:\s*2\s*\/\s*1/);
   assert.equal(typeof mountMineralsMap, "function");
   await assert.rejects(mountMineralsMap(null), /map container element is required/);
 });

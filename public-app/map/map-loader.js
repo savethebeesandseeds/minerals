@@ -57,107 +57,65 @@ function ensureStylesheet(documentObject, windowObject) {
 }
 
 function mapMarkup(documentObject, id) {
-  const root = documentObject.createElement("section");
+  const root = documentObject.createElement("div");
   root.className = "minerals-map";
   root.dataset.mineralsMap = "";
-  root.setAttribute("aria-labelledby", `${id}-title`);
+  root.setAttribute("role", "region");
+  root.setAttribute("aria-label", "Estimated forest presence, 2020");
   root.innerHTML = `
-    <header class="minerals-map__hero">
-      <div>
-        <p class="minerals-map__kicker">Local Rust + WebAssembly map</p>
-        <h2 id="${id}-title">Estimated forest presence, 2020</h2>
-        <p class="minerals-map__lead">
-          A deliberately small world atlas with land, water, and a coarse forest-presence layer. It uses no cities, routes, satellite imagery, accounts, or remote map service.
-        </p>
-      </div>
-      <dl class="minerals-map__facts" aria-label="Map properties">
-        <div><dt>Renderer</dt><dd>Rust / WASM</dd></div>
-        <div><dt>Network</dt><dd>Same origin only</dd></div>
-        <div><dt>View</dt><dd>Flat + draggable globe</dd></div>
-      </dl>
-    </header>
+    <div class="minerals-map__stage" data-map-stage aria-busy="true">
+      <canvas
+        id="${id}-canvas"
+        data-forest-map
+        width="960"
+        height="480"
+        tabindex="0"
+        role="img"
+        aria-roledescription="interactive world map"
+        aria-label="Draggable single orthographic globe map of estimated forest presence in 2020"
+        aria-describedby="${id}-instructions ${id}-detail-note ${id}-caveat"
+      >Interactive map unavailable.</canvas>
 
-    <div class="minerals-map__workspace">
-      <div class="minerals-map__panel minerals-map__map-panel">
-        <div class="minerals-map__toolbar">
-          <p class="minerals-map__status" data-map-status data-state="loading" role="status" aria-live="polite">
-            Loading the local map renderer…
-          </p>
-          <div class="minerals-map__toolbar-tools">
-            <div class="minerals-map__view-control">
-              <span id="${id}-view-label" class="minerals-map__view-label">Projection</span>
-              <div class="minerals-map__view-options" role="radiogroup" aria-labelledby="${id}-view-label">
-                <button type="button" role="radio" aria-checked="false" aria-controls="${id}-canvas" tabindex="-1" data-map-view="flat">Flat</button>
-                <button type="button" role="radio" aria-checked="true" aria-controls="${id}-canvas" aria-label="Globe — single orthographic sphere" tabindex="0" data-map-view="globe">Globe</button>
-              </div>
-            </div>
-            <p class="minerals-map__year">Reference year <strong>2020</strong></p>
-          </div>
-        </div>
-
-        <figure class="minerals-map__figure">
-          <div class="minerals-map__stage" data-map-stage aria-busy="true">
-            <canvas
-              id="${id}-canvas"
-              data-forest-map
-              width="960"
-              height="480"
-              tabindex="0"
-              role="img"
-              aria-roledescription="interactive world map"
-              aria-label="Draggable single orthographic globe map of estimated forest presence in 2020"
-              aria-describedby="${id}-instructions ${id}-detail ${id}-caveat"
-            >The interactive map requires a browser with Canvas and WebAssembly support.</canvas>
-            <span class="minerals-map__marker" data-map-marker hidden aria-hidden="true"></span>
-            <div class="minerals-map__fallback" data-map-fallback hidden role="note">
-              <strong>The interactive map is unavailable.</strong>
-              <span>You can still read the legend, source, and limitations below.</span>
-            </div>
-          </div>
-          <figcaption id="${id}-instructions" data-map-instructions>
-            Drag the globe left, right, up, or down to rotate it. Hover to inspect an estimate; tap or click without dragging to keep a point selected. With the map focused, use Control plus the arrow keys to rotate, 0 to reset the globe, unmodified arrow keys to move the inspector, and Escape to clear the selection. Space outside the globe has no map sample.
-          </figcaption>
-        </figure>
+      <div class="minerals-map__legend-bar">
+        <span class="minerals-map__status" data-map-status data-state="loading" role="status" aria-live="polite">
+          <span class="minerals-map__sr-only" data-map-status-text>Loading map…</span>
+        </span>
+        <ul class="minerals-map__legend" aria-label="Map legend">
+          <li><span class="minerals-map__swatch minerals-map__swatch--forest" aria-hidden="true"></span><span>Forest</span></li>
+          <li><span class="minerals-map__swatch minerals-map__swatch--land" aria-hidden="true"></span><span>Land</span></li>
+          <li><span class="minerals-map__swatch minerals-map__swatch--water" aria-hidden="true"></span><span>Water</span></li>
+        </ul>
       </div>
 
-      <aside class="minerals-map__sidebar" aria-label="Map details">
-        <section class="minerals-map__panel minerals-map__readout" aria-labelledby="${id}-readout-title">
-          <p class="minerals-map__section-label">Point inspection</p>
-          <h3 id="${id}-readout-title">Forest estimate</h3>
-          <output id="${id}-detail" data-map-detail aria-live="polite">
-            Move over the globe or focus the map with the keyboard to inspect a map cell.
-          </output>
-          <p class="minerals-map__detail-note" data-map-detail-note>The inspector reports forest, land, or water inside the globe. Space outside it has no sample; the coastline is a non-data overlay.</p>
-        </section>
+      <div class="minerals-map__view-options" role="radiogroup" aria-label="Map projection">
+        <button type="button" role="radio" aria-checked="false" aria-controls="${id}-canvas" tabindex="-1" data-map-view="flat">Flat</button>
+        <button type="button" role="radio" aria-checked="true" aria-controls="${id}-canvas" aria-label="Globe — single orthographic sphere" tabindex="0" data-map-view="globe">Globe</button>
+      </div>
 
-        <section class="minerals-map__panel minerals-map__legend" aria-labelledby="${id}-legend-title">
-          <p class="minerals-map__section-label">Legend</p>
-          <h3 id="${id}-legend-title">Map key</h3>
-          <ul>
-            <li><span class="minerals-map__swatch minerals-map__swatch--water" aria-hidden="true"></span><span>Water / no estimate</span></li>
-            <li><span class="minerals-map__swatch minerals-map__swatch--land" aria-hidden="true"></span><span>Land / forest not shown at this sample</span></li>
-            <li><span class="minerals-map__swatch minerals-map__swatch--forest" aria-hidden="true"></span><span>Estimated forest presence (2020)</span></li>
-            <li><span class="minerals-map__swatch minerals-map__swatch--coast" aria-hidden="true"></span><span>Coastline overlay (Natural Earth)</span></li>
-            <li data-map-outside-key><span class="minerals-map__swatch minerals-map__swatch--outside" aria-hidden="true"></span><span>Outside globe / no map sample</span></li>
-          </ul>
-        </section>
+      <output id="${id}-detail" class="minerals-map__chip" data-map-detail aria-live="polite" hidden></output>
+      <time class="minerals-map__year" datetime="2020">2020</time>
 
-        <section class="minerals-map__panel minerals-map__source" aria-labelledby="${id}-source-title">
-          <p class="minerals-map__section-label">Data &amp; limits</p>
-          <h3 id="${id}-source-title">Coarse global context</h3>
-          <p>
-            Forest data © European Union, 2026 — JRC Global Forest Cover 2020 v3 (modified for display),
-            <a href="https://doi.org/10.2905/JRC.354CG88" target="_blank" rel="noopener noreferrer">DOI 10.2905/JRC.354CG88</a>.
-          </p>
-          <p>
-            World land geometry: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a> (public domain).
-          </p>
-          <p id="${id}-caveat" class="minerals-map__caveat">
-            This offline display snapshot was repacked and recoloured by Minerals. It is a visual overview only: do not draw quantitative or statistical inferences from it. It is not suitable for local, legal, conservation, or land-use decisions.
-          </p>
-        </section>
-      </aside>
+      <div class="minerals-map__fallback" data-map-fallback hidden role="note">
+        <strong>Map unavailable</strong>
+        <span>The legend and data credits remain available.</span>
+      </div>
     </div>
+
+    <p class="minerals-map__credits">
+      <a href="https://doi.org/10.2905/JRC.354CG88" target="_blank" rel="noopener noreferrer">JRC forest cover (modified display)</a>
+      <span aria-hidden="true"> · </span>
+      <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>
+    </p>
+
+    <p id="${id}-instructions" class="minerals-map__sr-only" data-map-instructions>
+      Drag the globe left, right, up, or down to rotate it. Hover to inspect an estimate; tap or click without dragging to keep a point selected. With the map focused, use Control plus the arrow keys to rotate, 0 to reset the globe, unmodified arrow keys to move the inspector, and Escape to clear the selection. Space outside the globe has no map sample.
+    </p>
+    <p id="${id}-detail-note" class="minerals-map__sr-only" data-map-detail-note aria-live="polite">
+      Move over the globe or focus the map with the keyboard to inspect a map cell.
+    </p>
+    <p id="${id}-caveat" class="minerals-map__sr-only">
+      This modified display is a coarse visual overview only and is not suitable for quantitative, local, legal, conservation, or land-use decisions.
+    </p>
   `;
   return root;
 }
@@ -204,12 +162,11 @@ function createMapController(container, { wasmUrl, theme }) {
   const canvas = required("[data-forest-map]");
   const stage = required("[data-map-stage]");
   const status = required("[data-map-status]");
+  const statusText = required("[data-map-status-text]");
   const fallback = required("[data-map-fallback]");
   const detail = required("[data-map-detail]");
   const detailNote = required("[data-map-detail-note]");
   const instructions = required("[data-map-instructions]");
-  const outsideKey = required("[data-map-outside-key]");
-  const marker = required("[data-map-marker]");
   const viewButtons = Array.from(root.querySelectorAll("[data-map-view]"));
   const context = typeof canvas.getContext === "function"
     ? canvas.getContext("2d", { alpha: false })
@@ -224,12 +181,11 @@ function createMapController(container, { wasmUrl, theme }) {
     canvas,
     stage,
     status,
+    statusText,
     fallback,
     detail,
     detailNote,
     instructions,
-    outsideKey,
-    marker,
     viewButtons,
     context,
     darkColorScheme,
@@ -270,9 +226,12 @@ function createMapController(container, { wasmUrl, theme }) {
   };
 
   const setStatus = (nextState, message) => {
-    if (state.status.dataset.state === nextState && state.status.textContent.trim() === message) return;
+    if (
+      state.status.dataset.state === nextState
+      && state.statusText.textContent.trim() === message
+    ) return;
     state.status.dataset.state = nextState;
-    state.status.textContent = message;
+    state.statusText.textContent = message;
   };
 
   const setText = (element, message) => {
@@ -383,9 +342,10 @@ function createMapController(container, { wasmUrl, theme }) {
         ? globeInstructions()
         : "Flat view shows the full world plane. Hover to inspect an estimate; tap or click to keep a point selected. With the map focused, use the arrow keys to move the inspector and Escape to clear the selection.",
     );
-    state.outsideKey.hidden = state.activeView !== "globe";
-    setText(state.detail, defaultDetail());
-    setText(state.detailNote, defaultDetailNote());
+    state.detail.hidden = true;
+    state.detail.removeAttribute("data-category");
+    setText(state.detail, "");
+    setText(state.detailNote, `${defaultDetail()} ${defaultDetailNote()}`);
     updateDragAffordance();
   };
 
@@ -423,13 +383,12 @@ function createMapController(container, { wasmUrl, theme }) {
     state.stage.setAttribute("aria-busy", "false");
     state.fallback.hidden = false;
     state.canvas.hidden = true;
-    state.marker.hidden = true;
+    state.detail.hidden = true;
     for (const button of state.viewButtons) {
       button.disabled = true;
       button.setAttribute("aria-disabled", "true");
     }
-    setText(state.detail, "The forest layer could not be loaded in this browser.");
-    setText(state.detailNote, "The legend, source, and limitations remain available.");
+    setText(state.detailNote, "The forest layer could not be loaded in this browser. The legend and data credits remain available.");
   };
 
   const exportedNumber = (name) => {
@@ -462,30 +421,30 @@ function createMapController(container, { wasmUrl, theme }) {
     const normalizedU = Math.min(1, Math.max(0, u));
     const normalizedV = Math.min(1, Math.max(0, v));
     state.selection = { u: normalizedU, v: normalizedV };
-    state.marker.hidden = false;
-    state.marker.style.left = `${normalizedU * 100}%`;
-    state.marker.style.top = `${normalizedV * 100}%`;
 
     const forestState = forestStateAt(normalizedU, normalizedV);
+    const categoryText = {
+      forest: "Forest",
+      land: "Land",
+      water: "Water",
+      outside: "Outside",
+    };
     const stateText = {
       forest: "Estimated forest presence at this sampled cell.",
       land: "Forest not shown at this sampled cell.",
       water: "Water / no estimate at this sampled cell.",
       outside: "Outside the globe; no map sample at this point.",
     };
-    setText(
-      state.detail,
-      forestState === null
-        ? `${interaction} point: sample unavailable.`
-        : `${interaction} point. ${stateText[forestState]}`,
-    );
+    const category = forestState === null ? "unavailable" : forestState;
+    state.detail.dataset.category = category;
+    state.detail.dataset.pinned = String(state.pinned);
+    state.detail.hidden = false;
+    setText(state.detail, forestState === null ? "Unavailable" : categoryText[forestState]);
     setText(
       state.detailNote,
-      forestState === "outside"
-        ? "Move onto the orthographic globe to inspect the map, or choose Flat for the full rectangular extent."
-        : state.pinned
-          ? "Selection kept. Click another point or press Escape to clear it. The coastline is a non-data overlay."
-          : defaultDetailNote(),
+      forestState === null
+        ? `${interaction} point: sample unavailable.`
+        : `${interaction} point. ${stateText[forestState]}${state.pinned ? " Selection kept; click another point or press Escape to clear it." : ""}`,
     );
     setCanvasLabel(
       forestState === null
@@ -496,12 +455,12 @@ function createMapController(container, { wasmUrl, theme }) {
 
   const readyMessage = () => {
     if (state.compatibilityFlat) {
-      return "Map ready · Flat compatibility view · local WebAssembly";
+      return "Map ready · Flat view";
     }
     if (state.activeView === "globe" && !canManipulateGlobe()) {
-      return "Map ready · Static Globe compatibility view · local WebAssembly";
+      return "Map ready · Globe view";
     }
-    return `Map ready · ${viewName()} view · local WebAssembly`;
+    return `Map ready · ${viewName()} view`;
   };
 
   const renderMap = (announceStatus) => {
@@ -696,7 +655,6 @@ function createMapController(container, { wasmUrl, theme }) {
     state.pinned = false;
     state.selection = null;
     state.pendingPointer = null;
-    state.marker.hidden = true;
     updateViewCopy();
   };
 
