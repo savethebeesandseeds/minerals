@@ -179,9 +179,16 @@ test("the shell is subpath-relative and app-owned code avoids HTML sinks", async
   assert.match(app, /parseRoute\(location\.href, APP_BASE_PATH\)/);
   assert.doesNotMatch(app, /\b(?:innerHTML|outerHTML|insertAdjacentHTML)\b/);
   assert.match(app, /module\.mountMineralsMap\(container,/);
+  assert.match(app, /lifecycle\.controller\.abort\(\)/);
+  assert.match(app, /typeof lifecycle\.cleanup === "function"/);
+  assert.match(app, /signal: controller\.signal/);
   assert.doesNotMatch(app, /function\s+mapCatalog|catalog:\s*\w+\(/);
   assert.match(worker, /import\("\.\/vendor\/sqlite\/index\.mjs"\)/);
   assert.match(worker, /sqlite3_deserialize/);
+  assert.match(worker, /fetchGzipDatabase\(manifest\)/);
+  assert.match(worker, /new DecompressionStream\("gzip"\)/);
+  assert.match(worker, /gzipUrl\.pathname \+= "\.gz"/);
+  assert.match(worker, /return verifyDatabaseBytes\(new Uint8Array\(await response\.arrayBuffer\(\)\), manifest\)/);
   assert.match(mapLoader, /wasm\.render_globe_pose\(/);
   assert.match(mapLoader, /new URL\("\.\/map\.css", import\.meta\.url\)/);
   assert.match(mapLoader, /new URL\("\.\/minerals_map\.wasm", import\.meta\.url\)/);
@@ -195,6 +202,70 @@ test("the shell is subpath-relative and app-owned code avoids HTML sinks", async
   assert.match(mapCss, /aspect-ratio:\s*2\s*\/\s*1/);
   assert.equal(typeof mountMineralsMap, "function");
   await assert.rejects(mountMineralsMap(null), /map container element is required/);
+});
+
+test("the reconstructed interface keeps the former shell, language orbit, catalog, and registry structure", async () => {
+  const [index, app, css, lightMacaw, darkMacaw] = await Promise.all([
+    readFile(new URL("./index.html", import.meta.url), "utf8"),
+    readFile(new URL("./app.js", import.meta.url), "utf8"),
+    readFile(new URL("./app.css", import.meta.url), "utf8"),
+    readFile(new URL("./assets/logo_transparent.png", import.meta.url)),
+    readFile(new URL("./assets/logo_transparent_dark.png", import.meta.url)),
+  ]);
+
+  assert.equal(lightMacaw.byteLength > 0, true, "the published light macaw asset must not be empty");
+  assert.equal(darkMacaw.byteLength > 0, true, "the published dark macaw asset must not be empty");
+  for (const asset of ["./assets/logo_transparent.png", "./assets/logo_transparent_dark.png"]) {
+    assert.equal(index.includes(asset), true, `the static shell must reference ${asset}`);
+    assert.equal(app.includes(asset), true, `the client-rendered homepage must reference ${asset}`);
+  }
+
+  const languageBlock = app.match(/const LANGUAGE_OPTIONS = Object\.freeze\(\[([\s\S]*?)\]\);/)?.[1];
+  assert.ok(languageBlock, "the homepage language options must remain explicit and auditable");
+  const locales = [...languageBlock.matchAll(/\["([a-z]{2})",\s*"[^"]+"\]/gu)].map((match) => match[1]);
+  assert.deepEqual(locales, ["en", "es", "cs", "de", "fr", "zh", "ar", "pt", "hi", "ja"]);
+  assert.equal(new Set(locales).size, 10, "the language orbit must contain ten distinct locales");
+  assert.match(app, /className: "language-orbit"/);
+  assert.match(app, /className: "orbit-stage"/);
+  assert.match(app, /className: `lang-node\$\{active \? " current" : ""\}`/);
+  assert.match(app, /const active = locale === preferences\.locale/);
+  assert.match(app, /locale: preferredLocale\(\)/);
+  assert.match(app, /storeValue\(STORAGE_KEYS\.locale, preferences\.locale\)/);
+  assert.match(app, /button\.addEventListener\("click", \(\) => selectLocale\(locale\)\)/);
+  assert.doesNotMatch(app, /action=["']\/language|fetch\([^\n]*\/language/);
+
+  const staticClasses = new Set(
+    [...index.matchAll(/\bclass="([^"]+)"/gu)]
+      .flatMap((match) => match[1].trim().split(/\s+/u)),
+  );
+  for (const className of [
+    "topbar", "site-header", "topbar-inner", "brand", "primary-nav", "menu", "top-tools",
+    "theme-toggle", "site-footer", "footer-inner", "footer-col-links", "footer-meta", "footer-note",
+  ]) {
+    assert.equal(staticClasses.has(className), true, `missing reconstructed shell class: ${className}`);
+  }
+  for (const route of ["home", "minerals", "map", "about"]) {
+    assert.match(index, new RegExp(`data-nav="${route}"`));
+    assert.match(index, new RegExp(`data-nav-label="${route}"`));
+  }
+
+  const appClassGroups = {
+    homepage: ["home-shell", "home-card", "language-orbit", "orbit-stage", "logo-core", "home-macaw", "lang-node"],
+    catalog: ["catalog-layout", "catalog-hero", "catalog-metric", "results", "results-head", "mineral-grid", "result-row", "mineral-identity", "science-cell"],
+    registry: ["record-page", "record-header", "record-title", "record-formula-rail", "record-layout", "facts-column", "buy-column", "source-disclosure"],
+  };
+  for (const [surface, classNames] of Object.entries(appClassGroups)) {
+    for (const className of classNames) {
+      assert.match(app, new RegExp(`\\b${className}\\b`), `missing ${surface} reconstruction class: ${className}`);
+    }
+  }
+
+  for (const className of [
+    "topbar-inner", "menu", "footer-inner", "home-card", "language-orbit", "orbit-stage", "lang-node",
+    "catalog-layout", "results-head", "result-row", "record-header", "record-formula-rail", "record-layout",
+  ]) {
+    assert.match(css, new RegExp(`\\.${className}(?![\\w-])`), `missing reconstructed style contract: .${className}`);
+  }
 });
 
 test("worker validates the complete FTS slug set without a quadratic virtual-table join", async () => {

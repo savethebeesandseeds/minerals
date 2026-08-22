@@ -23,6 +23,8 @@ For a local smoke test, run any static HTTP server in this directory and use the
 Generated releases add the manifest and content-addressed database to the checked-in application files:
 
 ```text
+assets/logo_transparent.png
+assets/logo_transparent_dark.png
 catalog-manifest.json
 data/catalog-<64 lowercase hex SHA-256>.sqlite3
 data/catalog-<64 lowercase hex SHA-256>.sqlite3.br
@@ -65,6 +67,10 @@ compress the canonical response as described in the
 HTTP Fetch transparently decodes `Content-Encoding` before the worker receives
 the response body. The worker therefore needs no decompression dependency: it
 still verifies the decoded byte length and SHA-256 before opening SQLite.
+
+The checked-in `assets/` directory contains the light- and dark-theme macaw
+artwork used by the public shell. The exporter treats both PNG files as required
+allowlisted assets and copies their bytes unchanged into every release.
 
 The repository exporter also copies the finalized map package at
 `map/map-loader.js`, `map/map.css`, and `map/minerals_map.wasm`. None of those

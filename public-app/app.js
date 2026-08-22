@@ -10,7 +10,6 @@ import {
 const main = document.querySelector("#app-main");
 const statusRegion = document.querySelector("#app-status");
 const releaseSummary = document.querySelector("#release-summary");
-const localeSelect = document.querySelector("#locale-select");
 const themeToggle = document.querySelector("#theme-toggle");
 const mapModuleMeta = document.querySelector('meta[name="waajacu-map-module"]');
 const APP_BASE_PATH = new URL(".", import.meta.url).pathname;
@@ -18,9 +17,14 @@ const APP_BASE_PATH = new URL(".", import.meta.url).pathname;
 const STORAGE_KEYS = Object.freeze({ theme: "waajacu.theme", locale: "waajacu.locale" });
 const SUPPORTED_LOCALES = new Set(["en", "es", "de", "fr", "cs", "zh", "ar", "pt", "hi", "ja"]);
 const THEMES = ["system", "light", "dark"];
+const LANGUAGE_OPTIONS = Object.freeze([
+  ["en", "English"], ["es", "Español"], ["cs", "Čeština"], ["de", "Deutsch"], ["fr", "Français"],
+  ["zh", "中文"], ["ar", "العربية"], ["pt", "Português"], ["hi", "हिन्दी"], ["ja", "日本語"],
+]);
 
 const ENGLISH = Object.freeze({
-  home: "Home", minerals: "Minerals", map: "Map", about: "About", theme: "Theme",
+  home: "Home", minerals: "All Minerals", map: "Map", about: "About", theme: "Theme",
+  homeTitle: "Minerals", homeSubtitle: "Select your language and continue to the mineral sections.", language: "Language",
   search: "Search", searchLabel: "Search minerals", searchHint: "Name, formula, family, or keyword",
   viewRecord: "View record", previous: "Previous", next: "Next", evidence: "Evidence", offers: "Offers",
   details: "Details", noResults: "No minerals matched this search.", mapUnavailable: "The optional map is not available in this deployment.",
@@ -29,15 +33,15 @@ const ENGLISH = Object.freeze({
 
 const TRANSLATIONS = Object.freeze({
   en: ENGLISH,
-  es: { home: "Inicio", minerals: "Minerales", map: "Mapa", about: "Acerca de", theme: "Tema", search: "Buscar", searchLabel: "Buscar minerales", searchHint: "Nombre, fórmula, familia o palabra clave", viewRecord: "Ver ficha", previous: "Anterior", next: "Siguiente", evidence: "Evidencia", offers: "Ofertas", details: "Detalles", noResults: "Ningún mineral coincide con la búsqueda.", mapUnavailable: "El mapa opcional no está disponible en esta publicación.", opening: "Abriendo el catálogo verificado…", failed: "No se pudo abrir el catálogo público.", retry: "Reintentar" },
-  de: { home: "Start", minerals: "Minerale", map: "Karte", about: "Über uns", theme: "Design", search: "Suchen", searchLabel: "Minerale suchen", searchHint: "Name, Formel, Familie oder Stichwort", viewRecord: "Datensatz öffnen", previous: "Zurück", next: "Weiter", evidence: "Nachweise", offers: "Angebote", details: "Details", noResults: "Keine passenden Minerale gefunden.", mapUnavailable: "Die optionale Karte ist in dieser Bereitstellung nicht verfügbar.", opening: "Verifizierter Katalog wird geöffnet…", failed: "Der öffentliche Katalog konnte nicht geöffnet werden.", retry: "Erneut versuchen" },
-  fr: { home: "Accueil", minerals: "Minéraux", map: "Carte", about: "À propos", theme: "Thème", search: "Rechercher", searchLabel: "Rechercher des minéraux", searchHint: "Nom, formule, famille ou mot-clé", viewRecord: "Voir la fiche", previous: "Précédent", next: "Suivant", evidence: "Sources", offers: "Offres", details: "Détails", noResults: "Aucun minéral ne correspond à cette recherche.", mapUnavailable: "La carte facultative n’est pas disponible dans ce déploiement.", opening: "Ouverture du catalogue vérifié…", failed: "Impossible d’ouvrir le catalogue public.", retry: "Réessayer" },
-  cs: { home: "Domů", minerals: "Minerály", map: "Mapa", about: "O projektu", theme: "Motiv", search: "Hledat", searchLabel: "Hledat minerály", searchHint: "Název, vzorec, skupina nebo klíčové slovo", viewRecord: "Zobrazit záznam", previous: "Předchozí", next: "Další", evidence: "Zdroje", offers: "Nabídky", details: "Podrobnosti", noResults: "Vyhledávání neodpovídá žádný minerál.", mapUnavailable: "Volitelná mapa není v tomto nasazení dostupná.", opening: "Otevírání ověřeného katalogu…", failed: "Veřejný katalog se nepodařilo otevřít.", retry: "Zkusit znovu" },
-  zh: { home: "首页", minerals: "矿物", map: "地图", about: "关于", theme: "主题", search: "搜索", searchLabel: "搜索矿物", searchHint: "名称、化学式、类别或关键词", viewRecord: "查看记录", previous: "上一页", next: "下一页", evidence: "证据", offers: "报价", details: "详情", noResults: "没有符合搜索条件的矿物。", mapUnavailable: "此部署未提供可选地图。", opening: "正在打开已验证目录…", failed: "无法打开公共目录。", retry: "重试" },
-  ar: { home: "الرئيسية", minerals: "المعادن", map: "الخريطة", about: "حول", theme: "المظهر", search: "بحث", searchLabel: "البحث عن المعادن", searchHint: "الاسم أو الصيغة أو العائلة أو كلمة مفتاحية", viewRecord: "عرض السجل", previous: "السابق", next: "التالي", evidence: "الأدلة", offers: "العروض", details: "التفاصيل", noResults: "لا توجد معادن مطابقة لهذا البحث.", mapUnavailable: "الخريطة الاختيارية غير متاحة في هذا النشر.", opening: "جارٍ فتح الكتالوج المتحقق منه…", failed: "تعذر فتح الكتالوج العام.", retry: "إعادة المحاولة" },
-  pt: { home: "Início", minerals: "Minerais", map: "Mapa", about: "Sobre", theme: "Tema", search: "Pesquisar", searchLabel: "Pesquisar minerais", searchHint: "Nome, fórmula, família ou palavra-chave", viewRecord: "Ver registro", previous: "Anterior", next: "Seguinte", evidence: "Evidências", offers: "Ofertas", details: "Detalhes", noResults: "Nenhum mineral corresponde à pesquisa.", mapUnavailable: "O mapa opcional não está disponível nesta implantação.", opening: "Abrindo o catálogo verificado…", failed: "Não foi possível abrir o catálogo público.", retry: "Tentar novamente" },
-  hi: { home: "होम", minerals: "खनिज", map: "मानचित्र", about: "परिचय", theme: "थीम", search: "खोजें", searchLabel: "खनिज खोजें", searchHint: "नाम, सूत्र, परिवार या मुख्य शब्द", viewRecord: "रिकॉर्ड देखें", previous: "पिछला", next: "अगला", evidence: "साक्ष्य", offers: "प्रस्ताव", details: "विवरण", noResults: "इस खोज से कोई खनिज नहीं मिला।", mapUnavailable: "इस परिनियोजन में वैकल्पिक मानचित्र उपलब्ध नहीं है।", opening: "सत्यापित सूची खोली जा रही है…", failed: "सार्वजनिक सूची नहीं खोली जा सकी।", retry: "फिर प्रयास करें" },
-  ja: { home: "ホーム", minerals: "鉱物", map: "地図", about: "概要", theme: "テーマ", search: "検索", searchLabel: "鉱物を検索", searchHint: "名前、化学式、分類、キーワード", viewRecord: "記録を見る", previous: "前へ", next: "次へ", evidence: "根拠", offers: "オファー", details: "詳細", noResults: "検索に一致する鉱物はありません。", mapUnavailable: "この配信にはオプションの地図がありません。", opening: "検証済みカタログを開いています…", failed: "公開カタログを開けませんでした。", retry: "再試行" },
+  es: { home: "Inicio", minerals: "Todos los minerales", map: "Mapa", about: "Acerca de", theme: "Tema", homeTitle: "Minerales", homeSubtitle: "Selecciona tu idioma y continúa al catálogo de minerales.", language: "Idioma", search: "Buscar", searchLabel: "Buscar minerales", searchHint: "Nombre, fórmula, familia o palabra clave", viewRecord: "Ver ficha", previous: "Anterior", next: "Siguiente", evidence: "Evidencia", offers: "Ofertas", details: "Detalles", noResults: "Ningún mineral coincide con la búsqueda.", mapUnavailable: "El mapa opcional no está disponible en esta publicación.", opening: "Abriendo el catálogo verificado…", failed: "No se pudo abrir el catálogo público.", retry: "Reintentar" },
+  de: { home: "Start", minerals: "Alle Minerale", map: "Karte", about: "Über uns", theme: "Design", homeTitle: "Minerale", homeSubtitle: "Sprache wählen und zum Mineralkatalog wechseln.", language: "Sprache", search: "Suchen", searchLabel: "Minerale suchen", searchHint: "Name, Formel, Familie oder Stichwort", viewRecord: "Datensatz öffnen", previous: "Zurück", next: "Weiter", evidence: "Nachweise", offers: "Angebote", details: "Details", noResults: "Keine passenden Minerale gefunden.", mapUnavailable: "Die optionale Karte ist in dieser Bereitstellung nicht verfügbar.", opening: "Verifizierter Katalog wird geöffnet…", failed: "Der öffentliche Katalog konnte nicht geöffnet werden.", retry: "Erneut versuchen" },
+  fr: { home: "Accueil", minerals: "Tous les minéraux", map: "Carte", about: "À propos", theme: "Thème", homeTitle: "Minéraux", homeSubtitle: "Choisissez la langue puis ouvrez le catalogue.", language: "Langue", search: "Rechercher", searchLabel: "Rechercher des minéraux", searchHint: "Nom, formule, famille ou mot-clé", viewRecord: "Voir la fiche", previous: "Précédent", next: "Suivant", evidence: "Sources", offers: "Offres", details: "Détails", noResults: "Aucun minéral ne correspond à cette recherche.", mapUnavailable: "La carte facultative n’est pas disponible dans ce déploiement.", opening: "Ouverture du catalogue vérifié…", failed: "Impossible d’ouvrir le catalogue public.", retry: "Réessayer" },
+  cs: { home: "Domů", minerals: "Všechny minerály", map: "Mapa", about: "O projektu", theme: "Motiv", homeTitle: "Minerály", homeSubtitle: "Vyberte jazyk a pokračujte do katalogu minerálů.", language: "Jazyk", search: "Hledat", searchLabel: "Hledat minerály", searchHint: "Název, vzorec, skupina nebo klíčové slovo", viewRecord: "Zobrazit záznam", previous: "Předchozí", next: "Další", evidence: "Zdroje", offers: "Nabídky", details: "Podrobnosti", noResults: "Vyhledávání neodpovídá žádný minerál.", mapUnavailable: "Volitelná mapa není v tomto nasazení dostupná.", opening: "Otevírání ověřeného katalogu…", failed: "Veřejný katalog se nepodařilo otevřít.", retry: "Zkusit znovu" },
+  zh: { home: "首页", minerals: "全部矿物", map: "地图", about: "关于", theme: "主题", homeTitle: "矿物系统", homeSubtitle: "选择语言并进入矿物目录。", language: "语言", search: "搜索", searchLabel: "搜索矿物", searchHint: "名称、化学式、类别或关键词", viewRecord: "查看记录", previous: "上一页", next: "下一页", evidence: "证据", offers: "报价", details: "详情", noResults: "没有符合搜索条件的矿物。", mapUnavailable: "此部署未提供可选地图。", opening: "正在打开已验证目录…", failed: "无法打开公共目录。", retry: "重试" },
+  ar: { home: "الرئيسية", minerals: "كل المعادن", map: "الخريطة", about: "حول", theme: "المظهر", homeTitle: "المعادن", homeSubtitle: "اختر اللغة ثم تابع إلى فهرس المعادن.", language: "اللغة", search: "بحث", searchLabel: "البحث عن المعادن", searchHint: "الاسم أو الصيغة أو العائلة أو كلمة مفتاحية", viewRecord: "عرض السجل", previous: "السابق", next: "التالي", evidence: "الأدلة", offers: "العروض", details: "التفاصيل", noResults: "لا توجد معادن مطابقة لهذا البحث.", mapUnavailable: "الخريطة الاختيارية غير متاحة في هذا النشر.", opening: "جارٍ فتح الكتالوج المتحقق منه…", failed: "تعذر فتح الكتالوج العام.", retry: "إعادة المحاولة" },
+  pt: { home: "Início", minerals: "Todos os minerais", map: "Mapa", about: "Sobre", theme: "Tema", homeTitle: "Minerais", homeSubtitle: "Selecione o idioma e continue para o catálogo.", language: "Idioma", search: "Pesquisar", searchLabel: "Pesquisar minerais", searchHint: "Nome, fórmula, família ou palavra-chave", viewRecord: "Ver registro", previous: "Anterior", next: "Seguinte", evidence: "Evidências", offers: "Ofertas", details: "Detalhes", noResults: "Nenhum mineral corresponde à pesquisa.", mapUnavailable: "O mapa opcional não está disponível nesta implantação.", opening: "Abrindo o catálogo verificado…", failed: "Não foi possível abrir o catálogo público.", retry: "Tentar novamente" },
+  hi: { home: "होम", minerals: "सभी खनिज", map: "मानचित्र", about: "परिचय", theme: "थीम", homeTitle: "मिनरल्स", homeSubtitle: "भाषा चुनें और खनिज कैटलॉग में जाएँ।", language: "भाषा", search: "खोजें", searchLabel: "खनिज खोजें", searchHint: "नाम, सूत्र, परिवार या मुख्य शब्द", viewRecord: "रिकॉर्ड देखें", previous: "पिछला", next: "अगला", evidence: "साक्ष्य", offers: "प्रस्ताव", details: "विवरण", noResults: "इस खोज से कोई खनिज नहीं मिला।", mapUnavailable: "इस परिनियोजन में वैकल्पिक मानचित्र उपलब्ध नहीं है।", opening: "सत्यापित सूची खोली जा रही है…", failed: "सार्वजनिक सूची नहीं खोली जा सकी।", retry: "फिर प्रयास करें" },
+  ja: { home: "ホーム", minerals: "全鉱物", map: "地図", about: "概要", theme: "テーマ", homeTitle: "ミネラル", homeSubtitle: "言語を選択して鉱物カタログへ進みます。", language: "言語", search: "検索", searchLabel: "鉱物を検索", searchHint: "名前、化学式、分類、キーワード", viewRecord: "記録を見る", previous: "前へ", next: "次へ", evidence: "根拠", offers: "オファー", details: "詳細", noResults: "検索に一致する鉱物はありません。", mapUnavailable: "この配信にはオプションの地図がありません。", opening: "検証済みカタログを開いています…", failed: "公開カタログを開けませんでした。", retry: "再試行" },
 });
 
 function storedValue(key) {
@@ -124,22 +128,44 @@ function resolvedTheme() {
   return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+function applyLogoTheme() {
+  const dark = resolvedTheme() === "dark";
+  for (const image of document.querySelectorAll("img[data-logo-light][data-logo-dark]")) {
+    const source = dark ? image.dataset.logoDark : image.dataset.logoLight;
+    if (source) image.setAttribute("src", source);
+  }
+}
+
 function applyPreferences() {
   document.documentElement.dataset.theme = preferences.theme;
   document.documentElement.lang = preferences.locale;
   document.documentElement.dir = preferences.locale === "ar" ? "rtl" : "ltr";
-  localeSelect.value = preferences.locale;
   themeToggle.querySelector("[data-theme-label]").textContent = `${t("theme")}: ${preferences.theme}`;
   themeToggle.setAttribute("aria-label", `${t("theme")}: ${preferences.theme}`);
+  themeToggle.setAttribute("aria-pressed", String(resolvedTheme() === "dark"));
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  if (themeColor) themeColor.setAttribute("content", resolvedTheme() === "dark" ? "#0b0f0e" : "#e8ede8");
   for (const [name, key] of [["home", "home"], ["minerals", "minerals"], ["map", "map"], ["about", "about"]]) {
     const link = document.querySelector(`[data-nav="${name}"]`);
     link.textContent = t(key);
     link.href = routeHref(name === "home" ? "/" : `/${name}`);
+    for (const footerLink of document.querySelectorAll(`[data-nav-label="${name}"]`)) {
+      footerLink.textContent = t(key);
+      footerLink.href = routeHref(name === "home" ? "/" : `/${name}`);
+    }
   }
   const brand = document.querySelector(".brand");
   brand.href = routeHref("/");
   document.querySelector(".skip-link").textContent = "Skip to main content";
+  applyLogoTheme();
   if (manifest) updateReleaseSummary();
+}
+
+function selectLocale(locale) {
+  if (!SUPPORTED_LOCALES.has(locale) || locale === preferences.locale) return;
+  preferences.locale = locale;
+  storeValue(STORAGE_KEYS.locale, preferences.locale);
+  renderCurrentRoute({ focus: false });
 }
 
 class CatalogClient {
@@ -307,52 +333,77 @@ function statusBadges(mineral) {
 
 function mineralCard(mineral) {
   const headingId = `mineral-${mineral.slug}`;
-  const article = element("article", { className: "mineral-card", attrs: { "aria-labelledby": headingId } });
-  const heading = element("h2", { id: headingId });
-  heading.append(routeLink(`/minerals/${encodeURIComponent(mineral.slug)}`, mineral.canonical_name, "card-link"));
-  article.append(
-    statusBadges(mineral),
-    heading,
-    paragraph(mineral.formula || "Formula not published", "mineral-formula"),
-    paragraph(mineral.description_excerpt || "No public description is available.", "card-description"),
-    element("div", { className: "card-meta" }, [
-      paragraph(`${Number(mineral.evidence_count) || 0} ${t("evidence").toLowerCase()}`),
-      paragraph(`${Number(mineral.active_offer_count) || 0} ${t("offers").toLowerCase()}`),
+  const row = element("a", {
+    className: "mineral-card result-row",
+    attrs: {
+      href: routeHref(`/minerals/${encodeURIComponent(mineral.slug)}`),
+      "data-route-link": "",
+      "aria-labelledby": headingId,
+    },
+  });
+  row.append(
+    element("span", { className: "mineral-identity" }, [
+      element("strong", { id: headingId, className: "mineral-name", text: mineral.canonical_name }),
     ]),
-    routeLink(`/minerals/${encodeURIComponent(mineral.slug)}`, t("viewRecord"), "secondary-button"),
+    element("span", { className: "science-cell" }, [
+      element("small", { className: "result-cell-label", text: "Family" }),
+      element("span", { className: "muted", text: mineral.mineral_family || "—" }),
+      element("span", { className: "formula-line" }, [
+        element("small", { className: "result-cell-label", text: "Formula" }),
+        element("bdi", { className: "mineral-formula", text: mineral.formula || "—" }),
+      ]),
+    ]),
   );
-  return article;
+  return row;
 }
 
 function mineralGrid(items) {
-  return element("div", { className: "mineral-grid" }, items.map(mineralCard));
+  return element("section", { className: "results", attrs: { "aria-label": t("minerals") } }, [
+    element("div", { className: "results-head", attrs: { "aria-hidden": "true" } }, [
+      element("span", { text: "Mineral identity" }), element("span", { text: "Family and formula" }),
+    ]),
+    element("div", { className: "mineral-grid" }, items.map(mineralCard)),
+  ]);
 }
 
 async function renderHome(signal) {
-  const result = await catalog.search({ query: "", page: 1, pageSize: 6 }, signal);
-  const section = element("section", { className: "view" });
-  const hero = element("div", { className: "hero" }, [
-    element("div", { className: "hero-copy" }, [
-      paragraph("Public catalog · independently verifiable", "eyebrow"),
-      element("h1", { text: "Mineral knowledge, with its evidence intact." }),
-      paragraph("Explore a compact public snapshot of mineral records, their source context, and current published offers.", "hero-lede"),
-      element("div", { className: "actions" }, [
-        routeLink("/minerals", t("minerals"), "primary-button"),
-        routeLink("/about", t("about"), "secondary-button"),
-      ]),
-    ]),
-    element("aside", { className: "release-card", attrs: { "aria-label": "Catalog release" } }, [
-      paragraph("Verified snapshot", "eyebrow"),
-      element("strong", { text: manifest.mineral_count.toLocaleString(preferences.locale) }),
-      paragraph("public mineral records"),
-      paragraph(formatDate(manifest.generated_at), "muted"),
-    ]),
-  ]);
-  section.append(hero, element("div", { className: "section-heading" }, [
-    element("div", {}, [paragraph("Collection", "eyebrow"), element("h2", { text: "Browse the catalog" })]),
-    routeLink("/minerals", `${t("minerals")} →`, "text-link"),
+  if (signal?.aborted) throw new DOMException("Request aborted", "AbortError");
+  const section = element("section", { className: "home-shell view" });
+  const card = element("div", { className: "home-card" }, [element("h1", { text: t("homeTitle") })]);
+  const orbit = element("div", {
+    className: "language-orbit",
+    attrs: { role: "group", "aria-label": t("language") },
+  });
+  const stage = element("div", { className: "orbit-stage" });
+  const logoSource = resolvedTheme() === "dark" ? "./assets/logo_transparent_dark.png" : "./assets/logo_transparent.png";
+  stage.append(element("div", { className: "logo-core", attrs: { "aria-hidden": "true" } }, [
+    element("img", {
+      className: "home-macaw",
+      attrs: {
+        src: logoSource,
+        alt: "",
+        width: "600",
+        height: "600",
+        "data-logo-light": "./assets/logo_transparent.png",
+        "data-logo-dark": "./assets/logo_transparent_dark.png",
+      },
+    }),
   ]));
-  if (result.items.length) section.append(mineralGrid(result.items));
+  for (const [locale, label] of LANGUAGE_OPTIONS) {
+    const active = locale === preferences.locale;
+    const button = element("button", {
+      text: label,
+      className: `lang-node${active ? " current" : ""}`,
+      attrs: { type: "button", lang: locale, "data-locale": locale, "aria-pressed": String(active) },
+    });
+    button.addEventListener("click", () => selectLocale(locale));
+    stage.append(button);
+  }
+  orbit.append(stage, paragraph(t("homeSubtitle"), "home-tagline"), element("p", { className: "home-tagline" }, [
+    externalLink("https://www.waajacu.com", "www.waajacu.com"),
+  ]));
+  card.append(orbit);
+  section.append(card);
   return section;
 }
 
@@ -386,18 +437,26 @@ function pager(search, result) {
 
 async function renderMinerals(route, signal) {
   const result = await catalog.search(route.search, signal);
-  const section = element("section", { className: "view" }, [
-    paragraph("Public catalog", "eyebrow"),
-    element("h1", { text: t("minerals") }),
-    paragraph("Search the immutable release by name, chemical formula, mineral family, or indexed keyword.", "view-intro"),
-    searchForm(route.search),
-  ]);
+  const section = element("section", { className: "view catalog-layout" });
+  section.append(element("header", { className: "hero catalog-hero" }, [
+    element("div", {}, [
+      paragraph("Public catalog", "eyebrow"),
+      element("h1", { text: t("minerals") }),
+      paragraph("Search the published mineral registry by name, chemical formula, family, or keyword.", "view-intro"),
+    ]),
+    element("div", { className: "catalog-metric", attrs: { "aria-label": "Published mineral records" } }, [
+      element("span", { className: "metric-label", text: "Published records" }),
+      element("strong", { className: "metric-value", text: manifest.mineral_count.toLocaleString(preferences.locale) }),
+    ]),
+  ]));
+  section.append(element("section", { className: "panel search-panel" }, [searchForm(route.search)]));
   const summary = result.total === 1 ? "1 mineral" : `${result.total.toLocaleString(preferences.locale)} minerals`;
   section.append(paragraph(route.search.query ? `${summary} for “${route.search.query}”` : summary, "search-summary"));
   if (result.items.length) section.append(mineralGrid(result.items));
   else section.append(element("div", { className: "empty-panel" }, [element("h2", { text: t("noResults") }), paragraph("Try a shorter name, a formula, or another keyword.")]));
   const pagination = pager(route.search, result);
   if (pagination) section.append(pagination);
+  section.append(paragraph("This catalog is a published reference snapshot. Follow each record’s evidence links for its authoritative sources and terms.", "catalog-note notice"));
   announce(summary);
   return section;
 }
@@ -434,12 +493,12 @@ function structuredData(value, depth = 0) {
 function jsonSection(title, raw) {
   const data = parsedJson(raw);
   if (data === null || (Array.isArray(data) && data.length === 0) || (typeof data === "object" && !Array.isArray(data) && Object.keys(data).length === 0)) return null;
-  return element("section", { className: "record-section" }, [element("h2", { text: title }), structuredData(data)]);
+  return element("section", { className: "panel record-section" }, [element("h2", { text: title }), structuredData(data)]);
 }
 
 function evidenceCard(item, index) {
   const title = item.title || item.work_title || `Evidence ${index + 1}`;
-  const article = element("article", { className: "evidence-card" }, [
+  const article = element("article", { className: "evidence-card source-item" }, [
     element("div", { className: "badge-list" }, [item.review_status ? badge(item.review_status) : null, item.license_spdx ? badge(item.license_spdx) : null].filter(Boolean)),
     element("h3", { text: title }),
     paragraph([item.publisher, item.attribution_party].filter(Boolean).join(" · "), "muted"),
@@ -465,7 +524,7 @@ function priceText(item) {
 }
 
 function offerCard(item) {
-  const article = element("article", { className: "offer-card" }, [
+  const article = element("article", { className: "offer-card offer" }, [
     element("div", { className: "badge-list" }, [item.stock_status ? badge(item.stock_status) : null, item.verification_status ? badge(item.verification_status) : null].filter(Boolean)),
     element("h3", { text: item.title || item.provider_name || "Published offer" }),
     paragraph(item.provider_name || "Provider", "muted"),
@@ -486,49 +545,67 @@ async function renderMineral(route, signal) {
   ]);
   if (!mineral) return renderNotFound("That mineral is not part of this public release.");
   titleFor(route, mineral.canonical_name);
-  const section = element("article", { className: "view mineral-detail" });
-  const header = element("header", { className: "detail-header" }, [
-    routeLink("/minerals", `← ${t("minerals")}`, "text-link"),
-    statusBadges(mineral),
-    element("h1", { text: mineral.canonical_name }),
-    paragraph(mineral.formula || "Formula not published", "mineral-formula detail-formula"),
-    paragraph(mineral.description || "No public description is available.", "detail-description"),
+  const section = element("article", { className: "view mineral-detail record-page" });
+  const header = element("header", { className: "hero detail-header record-header" }, [
+    routeLink("/minerals", `← ${t("minerals")}`, "text-link back-link"),
+    element("div", { className: "record-title" }, [
+      element("div", { className: "record-title-copy" }, [
+        paragraph("Mineral species", "eyebrow"),
+        element("h1", { text: mineral.canonical_name }),
+        statusBadges(mineral),
+        paragraph(mineral.description || "No public description is available.", "detail-description"),
+      ]),
+      element("div", { className: "record-formula-rail" }, [
+        element("span", { text: "Formula" }),
+        element("bdi", { className: "mineral-formula detail-formula", text: mineral.formula || "—" }),
+      ]),
+    ]),
   ]);
   const facts = element("dl", { className: "fact-grid" }, [
     fact("Public ID", mineral.public_id), fact("CAS number", mineral.cas_number), fact("Mineral family", mineral.mineral_family),
     fact("Discovery country", mineral.discovery_country), fact("Source kind", mineral.source_kind), fact("License", mineral.license_spdx),
     fact("Data quality", mineral.data_quality_score), fact("Source status", mineral.source_status),
   ]);
-  section.append(header, element("section", { className: "record-section" }, [element("h2", { text: t("details") }), facts]));
+  const factsColumn = element("div", { className: "record-column facts-column" }, [
+    element("section", { className: "panel record-section" }, [element("h2", { text: t("details") }), facts]),
+  ]);
   for (const block of [jsonSection("Identifiers", mineral.identifiers_json), jsonSection("Properties", mineral.properties_json), jsonSection("Safety", mineral.safety_json)]) {
-    if (block) section.append(block);
+    if (block) factsColumn.append(block);
   }
   if (mineral.first_reference || mineral.second_reference) {
-    section.append(element("section", { className: "record-section" }, [element("h2", { text: "References" }), element("ul", { className: "reference-list" }, [mineral.first_reference, mineral.second_reference].filter(Boolean).map((value) => element("li", { text: value })))]));
+    factsColumn.append(element("section", { className: "panel record-section" }, [element("h2", { text: "References" }), element("ol", { className: "reference-list" }, [mineral.first_reference, mineral.second_reference].filter(Boolean).map((value) => element("li", { text: value })))]));
   }
-  section.append(element("section", { className: "record-section" }, [
-    element("div", { className: "section-heading" }, [element("h2", { text: t("evidence") }), badge(String(evidenceResult.items.length))]),
-    evidenceResult.items.length ? element("div", { className: "evidence-list" }, evidenceResult.items.map(evidenceCard)) : paragraph("No public evidence records are attached to this release.", "empty-panel"),
-  ]));
   const offers = offerResult.items.filter((item) => isOfferActiveAt(item.expires_at));
-  section.append(element("section", { className: "record-section" }, [
+  const buyColumn = element("aside", { className: "record-column buy-column" }, [element("section", { className: "panel buy-panel" }, [
     element("div", { className: "section-heading" }, [element("h2", { text: t("offers") }), badge(String(offers.length))]),
     offers.length ? element("div", { className: "offer-grid" }, offers.map(offerCard)) : paragraph("No unexpired public offers are available.", "empty-panel"),
-  ]));
+  ])]);
+  const disclosure = element("section", { className: "source-disclosure record-section", attrs: { id: "attribution" } }, [
+    element("div", { className: "section-heading" }, [element("h2", { text: t("evidence") }), badge(String(evidenceResult.items.length))]),
+    evidenceResult.items.length ? element("div", { className: "evidence-list source-list" }, evidenceResult.items.map(evidenceCard)) : paragraph("No public evidence records are attached to this release.", "empty-panel"),
+  ]);
+  section.append(header, element("div", { className: "record-layout" }, [factsColumn, buyColumn]), disclosure);
   return section;
 }
 
 function renderAbout() {
-  return element("section", { className: "view prose-view" }, [
-    paragraph("About this catalog", "eyebrow"),
-    element("h1", { text: "Evidence-forward mineral knowledge" }),
-    paragraph("Waajacu’s public catalog is a deliberately limited, read-only projection. It contains public mineral facts, evidence attribution, and published market offers; operational accounts, review queues, and private registry data stay outside this browser application."),
-    element("h2", { text: "Verified in your browser" }),
-    paragraph("Every release names a content-addressed SQLite database. A dedicated worker checks its byte length and SHA-256 digest, opens it read-only with official SQLite WebAssembly, and validates the v1 schema before answering fixed, parameterized queries."),
-    element("h2", { text: "Release" }),
-    element("dl", { className: "fact-grid" }, [
-      fact("Format", manifest.format), fact("Schema", manifest.schema_version), fact("Generated", formatDate(manifest.generated_at)),
-      fact("Minerals", manifest.mineral_count.toLocaleString(preferences.locale)), fact("Release ID", manifest.release_id), fact("Database SHA-256", manifest.database.sha256),
+  return element("section", { className: "view prose-view content" }, [
+    element("header", { className: "hero" }, [
+      paragraph("About this catalog", "eyebrow"),
+      element("h1", { text: "Evidence-forward mineral knowledge" }),
+      paragraph("Waajacu’s public catalog is a read-only projection of published mineral facts, evidence attribution, and public market offers.", "view-intro"),
+    ]),
+    element("section", { className: "panel" }, [
+      element("h2", { text: "Verified in your browser" }),
+      paragraph("Every release names a content-addressed SQLite database. Your browser checks its exact length and SHA-256 digest, opens it read-only with official SQLite WebAssembly, and validates the catalog before answering fixed searches."),
+      paragraph("Operational accounts, review queues, and unpublished registry data are not part of this standalone public application."),
+    ]),
+    element("section", { className: "panel" }, [
+      element("h2", { text: "Current release" }),
+      element("dl", { className: "fact-grid" }, [
+        fact("Format", manifest.format), fact("Schema", manifest.schema_version), fact("Generated", formatDate(manifest.generated_at)),
+        fact("Minerals", manifest.mineral_count.toLocaleString(preferences.locale)), fact("Release ID", manifest.release_id), fact("Database SHA-256", manifest.database.sha256),
+      ]),
     ]),
     paragraph("Source licenses and attribution notices remain attached to their records. Follow each evidence link for the authoritative source and its complete terms.", "notice"),
   ]);
@@ -664,13 +741,6 @@ document.querySelector(".skip-link").addEventListener("click", (event) => {
   main.scrollIntoView({ block: "start" });
 });
 
-localeSelect.addEventListener("change", () => {
-  if (!SUPPORTED_LOCALES.has(localeSelect.value)) return;
-  preferences.locale = localeSelect.value;
-  storeValue(STORAGE_KEYS.locale, preferences.locale);
-  renderCurrentRoute({ focus: false });
-});
-
 themeToggle.addEventListener("click", () => {
   preferences.theme = THEMES[(THEMES.indexOf(preferences.theme) + 1) % THEMES.length];
   storeValue(STORAGE_KEYS.theme, preferences.theme);
@@ -678,7 +748,9 @@ themeToggle.addEventListener("click", () => {
 });
 
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  if (preferences.theme === "system" && parseRoute(location.href, APP_BASE_PATH).name === "map") renderCurrentRoute({ focus: false });
+  if (preferences.theme !== "system") return;
+  applyPreferences();
+  if (parseRoute(location.href, APP_BASE_PATH).name === "map") renderCurrentRoute({ focus: false });
 });
 
 addEventListener("popstate", () => renderCurrentRoute());

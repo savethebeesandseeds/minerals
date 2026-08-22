@@ -21,6 +21,8 @@ const PUBLIC_APP_FILES: &[&str] = &[
     "app-core.mjs",
     "catalog-worker.js",
     "THIRD_PARTY_NOTICES.md",
+    "assets/logo_transparent.png",
+    "assets/logo_transparent_dark.png",
     "vendor/sqlite/index.mjs",
     "vendor/sqlite/sqlite3.wasm",
     "vendor/sqlite/LICENSE.txt",
@@ -819,6 +821,34 @@ mod tests {
         assert!(error.to_string().contains("unexpected file"));
         assert_eq!(fs::read_to_string(private)?, "private");
         assert!(!output.path().join("index.html").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn public_app_copy_preserves_macaw_assets_byte_for_byte() -> Result<()> {
+        let app = TempDir::new()?;
+        let output = TempDir::new()?;
+        for relative in PUBLIC_APP_FILES {
+            let path = app.path().join(relative);
+            fs::create_dir_all(path.parent().unwrap())?;
+            fs::write(path, "managed")?;
+        }
+
+        let light = b"\x89PNG\r\n\x1a\nlight\0macaw";
+        let dark = b"\x89PNG\r\n\x1a\ndark\0macaw";
+        fs::write(app.path().join("assets/logo_transparent.png"), light)?;
+        fs::write(app.path().join("assets/logo_transparent_dark.png"), dark)?;
+
+        copy_public_app(app.path(), output.path())?;
+
+        assert_eq!(
+            fs::read(output.path().join("assets/logo_transparent.png"))?,
+            light
+        );
+        assert_eq!(
+            fs::read(output.path().join("assets/logo_transparent_dark.png"))?,
+            dark
+        );
         Ok(())
     }
 
