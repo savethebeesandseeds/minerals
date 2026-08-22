@@ -37,6 +37,8 @@ import pymupdf
 FORMAT = "waajacu-ima-reconciliation-v2"
 INDEX_FORMAT = "waajacu-ima-extraction-index-v1"
 OVERRIDES_FORMAT = "waajacu-ima-extraction-overrides-v1"
+EXPECTED_PYTHON_IMPLEMENTATION = "CPython"
+EXPECTED_PYTHON_VERSION = "3.12.13"
 EXPECTED_PAGE_COUNT = 243
 EXPECTED_TABLE_PAGE_COUNT = 241
 EXPECTED_VALID_SPECIES = 6_226
@@ -933,7 +935,28 @@ def validate_source_metadata(
     return value
 
 
+def validate_python_runtime(
+    implementation: str | None = None, version: str | None = None
+) -> None:
+    actual_implementation = (
+        platform.python_implementation() if implementation is None else implementation
+    )
+    actual_version = platform.python_version() if version is None else version
+    if (
+        actual_implementation != EXPECTED_PYTHON_IMPLEMENTATION
+        or actual_version != EXPECTED_PYTHON_VERSION
+    ):
+        raise ExtractionError(
+            "extractor requires "
+            f"{EXPECTED_PYTHON_IMPLEMENTATION} {EXPECTED_PYTHON_VERSION}; "
+            f"running {actual_implementation} {actual_version}"
+        )
+
+
 def pinned_runtime(requirements_bytes: bytes) -> dict[str, Any]:
+    # Check the interpreter before consulting or invoking either extraction
+    # engine. Package pins alone do not capture Python ABI/runtime behavior.
+    validate_python_runtime()
     try:
         requirements_text = requirements_bytes.decode("utf-8")
     except UnicodeDecodeError as error:
@@ -963,7 +986,7 @@ def pinned_runtime(requirements_bytes: bytes) -> dict[str, Any]:
     if packages.get("PyMuPDF") != pymupdf.__version__:
         raise ExtractionError("PyMuPDF runtime metadata disagreement")
     return {
-        "python": platform.python_version(),
+        "python": EXPECTED_PYTHON_VERSION,
         "pdfplumber": pdfplumber.__version__,
         "pymupdf": pymupdf.__version__,
         "pinned_packages": dict(sorted(packages.items(), key=lambda item: item[0].casefold())),

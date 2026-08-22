@@ -1,4 +1,6 @@
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
+use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use askama::Template;
@@ -137,6 +139,12 @@ impl PdfGenerator {
             .await
             .with_context(|| format!("failed to write {}", tex_file.display()))?;
 
+        let stdout_path = work_dir.join("latexmk.stdout.log");
+        let stderr_path = work_dir.join("latexmk.stderr.log");
+        let stdout_file = std::fs::File::create(&stdout_path)
+            .with_context(|| format!("failed to create {}", stdout_path.display()))?;
+        let stderr_file = std::fs::File::create(&stderr_path)
+            .with_context(|| format!("failed to create {}", stderr_path.display()))?;
         let mut command = Command::new("latexmk");
         command
             .kill_on_drop(true)
@@ -144,14 +152,56 @@ impl PdfGenerator {
             .arg("-interaction=nonstopmode")
             .arg("-halt-on-error")
             .arg("report.tex")
-            .current_dir(work_dir);
-        let output = command.output().await.with_context(|| {
+            .current_dir(work_dir)
+            .stdout(Stdio::from(stdout_file))
+            .stderr(Stdio::from(stderr_file));
+        configure_process_tree(&mut command);
+        let mut child = command.spawn().with_context(|| {
             "failed to execute 'latexmk'; install latexmk + XeLaTeX + required fonts"
         })?;
+        let process_id = child
+            .id()
+            .context("latexmk started without an observable process ID")?;
+        let mut process_guard = ProcessTreeGuard::new(process_id);
+        let status = match tokio::time::timeout(LATEX_PROCESS_TIMEOUT, child.wait()).await {
+            Ok(result) => {
+                let status = result.context("failed while waiting for latexmk")?;
+                process_guard.disarm();
+                status
+            }
+            Err(_) => {
+                if let Err(error) = process_guard.terminate() {
+                    tracing::warn!(
+                        process_id,
+                        %error,
+                        "failed to terminate the complete latexmk process tree"
+                    );
+                }
+                // Keep the direct-child fallback even when platform tree
+                // termination is unavailable or reports a race with process exit.
+                let _ = child.start_kill();
+                match tokio::time::timeout(LATEX_REAP_TIMEOUT, child.wait()).await {
+                    Ok(Ok(_)) => {}
+                    Ok(Err(error)) => tracing::warn!(
+                        process_id,
+                        %error,
+                        "failed to reap latexmk after timeout"
+                    ),
+                    Err(_) => tracing::warn!(
+                        process_id,
+                        "latexmk did not exit promptly after timeout termination"
+                    ),
+                }
+                return Err(anyhow!(
+                    "latexmk exceeded the {}-second private report timeout",
+                    LATEX_PROCESS_TIMEOUT.as_secs()
+                ));
+            }
+        };
 
-        if !output.status.success() {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let stderr = String::from_utf8_lossy(&output.stderr);
+        if !status.success() {
+            let stdout = fs::read_to_string(&stdout_path).await.unwrap_or_default();
+            let stderr = fs::read_to_string(&stderr_path).await.unwrap_or_default();
             return Err(anyhow!(
                 "latexmk failed in private report workspace\nstdout:\n{}\nstderr:\n{}",
                 stdout.trim(),
@@ -227,6 +277,115 @@ impl PdfGenerator {
 }
 
 const MAX_REPORT_RUNS_PER_MINERAL: usize = 25;
+const LATEX_PROCESS_TIMEOUT: Duration = Duration::from_secs(50);
+const LATEX_REAP_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[cfg(unix)]
+fn configure_process_tree(command: &mut Command) {
+    use std::os::unix::process::CommandExt as _;
+
+    // A fresh process group gives timeout cleanup one exact, non-shell target:
+    // latexmk plus every XeLaTeX/helper descendant that it creates.
+    command.as_std_mut().process_group(0);
+}
+
+#[cfg(windows)]
+fn configure_process_tree(command: &mut Command) {
+    use std::os::windows::process::CommandExt as _;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.as_std_mut().creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(any(unix, windows)))]
+fn configure_process_tree(_command: &mut Command) {}
+
+#[derive(Debug)]
+struct ProcessTreeGuard {
+    process_id: u32,
+    armed: bool,
+}
+
+impl ProcessTreeGuard {
+    fn new(process_id: u32) -> Self {
+        Self {
+            process_id,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+
+    fn terminate(&mut self) -> std::io::Result<()> {
+        terminate_process_tree(self.process_id)?;
+        self.disarm();
+        Ok(())
+    }
+}
+
+impl Drop for ProcessTreeGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            // This also runs if the caller's outer timeout cancels PDF generation.
+            let _ = terminate_process_tree(self.process_id);
+        }
+    }
+}
+
+#[cfg(unix)]
+fn terminate_process_tree(process_id: u32) -> std::io::Result<()> {
+    let process_group = i32::try_from(process_id).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "process ID is outside the Unix PID range",
+        )
+    })?;
+    // SAFETY: kill is called with a validated positive PID negated to address
+    // only the process group created for this child.
+    if unsafe { libc::kill(-process_group, libc::SIGKILL) } == 0 {
+        return Ok(());
+    }
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(libc::ESRCH) {
+        Ok(())
+    } else {
+        Err(error)
+    }
+}
+
+#[cfg(windows)]
+fn terminate_process_tree(process_id: u32) -> std::io::Result<()> {
+    use std::os::windows::process::CommandExt as _;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let system_root = std::env::var_os("SystemRoot").ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::NotFound, "SystemRoot is not set")
+    })?;
+    let taskkill = PathBuf::from(system_root)
+        .join("System32")
+        .join("taskkill.exe");
+    let status = std::process::Command::new(taskkill)
+        .args(["/PID", &process_id.to_string(), "/T", "/F"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .status()?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(format!(
+            "taskkill exited with {status}"
+        )))
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
+fn terminate_process_tree(_process_id: u32) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "process-tree termination is unsupported on this platform",
+    ))
+}
 
 #[derive(Debug)]
 struct WorkDirGuard {
@@ -561,17 +720,23 @@ fn to_html_share(elem: &ElementShare) -> HtmlElementShare {
 }
 
 fn latex_escape(input: &str) -> String {
-    input
-        .replace('\\', "\\textbackslash{}")
-        .replace('&', "\\&")
-        .replace('%', "\\%")
-        .replace('$', "\\$")
-        .replace('#', "\\#")
-        .replace('_', "\\_")
-        .replace('{', "\\{")
-        .replace('}', "\\}")
-        .replace('~', "\\textasciitilde{}")
-        .replace('^', "\\textasciicircum{}")
+    let mut escaped = String::with_capacity(input.len());
+    for character in input.chars() {
+        match character {
+            '\\' => escaped.push_str("\\textbackslash{}"),
+            '&' => escaped.push_str("\\&"),
+            '%' => escaped.push_str("\\%"),
+            '$' => escaped.push_str("\\$"),
+            '#' => escaped.push_str("\\#"),
+            '_' => escaped.push_str("\\_"),
+            '{' => escaped.push_str("\\{"),
+            '}' => escaped.push_str("\\}"),
+            '~' => escaped.push_str("\\textasciitilde{}"),
+            '^' => escaped.push_str("\\textasciicircum{}"),
+            _ => escaped.push(character),
+        }
+    }
+    escaped
 }
 
 #[cfg(test)]
@@ -586,6 +751,36 @@ mod tests {
         let raw = r"50% Fe_2O_3 & quartz";
         let escaped = latex_escape(raw);
         assert_eq!(escaped, r"50\% Fe\_2O\_3 \& quartz");
+        assert_eq!(latex_escape(r"\{}"), r"\textbackslash{}\{\}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn process_tree_timeout_cleanup_kills_descendants_and_reaps_parent() {
+        let temp = tempfile::tempdir().expect("temporary process-tree test root");
+        let marker = temp.path().join("descendant-survived");
+        let mut command = tokio::process::Command::new("sh");
+        command
+            .kill_on_drop(true)
+            .env("MARKER_PATH", &marker)
+            .arg("-c")
+            .arg("(sleep 1; printf survived > \"$MARKER_PATH\") & sleep 30")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        super::configure_process_tree(&mut command);
+        let mut child = command.spawn().expect("spawn process tree");
+        let mut guard = super::ProcessTreeGuard::new(child.id().expect("child PID"));
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        guard.terminate().expect("terminate process group");
+        let _ = child.start_kill();
+        tokio::time::timeout(std::time::Duration::from_secs(5), child.wait())
+            .await
+            .expect("parent reap timeout")
+            .expect("reap parent");
+        tokio::time::sleep(std::time::Duration::from_millis(1_200)).await;
+
+        assert!(!marker.exists(), "a latex descendant survived tree cleanup");
     }
 
     #[test]

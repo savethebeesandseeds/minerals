@@ -6,7 +6,9 @@
   <title>{{ txt.nav_all_minerals }} | Minerals</title>
   <link rel="icon" href="/static/favicon.ico" sizes="any" />
   <link rel="stylesheet" href="/static/app.css" />
+  <link rel="stylesheet" href="/static/map.css" />
   <script src="/static/theme.js" defer></script>
+  <script src="/static/map-loader.js" defer></script>
   <style>
     .layout {
       display: grid;
@@ -19,6 +21,45 @@
       gap: 0.46rem;
       margin-top: 0.46rem;
       max-width: 320px;
+    }
+
+    .catalog-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(19rem, 0.8fr);
+      gap: clamp(0.8rem, 2.2vw, 1.5rem);
+      align-items: center;
+    }
+
+    .catalog-hero-copy,
+    .catalog-map-preview {
+      min-width: 0;
+    }
+
+    .catalog-map-preview .map-stage {
+      box-shadow: none;
+    }
+
+    .catalog-map-preview .map-view-options {
+      display: none;
+    }
+
+    .catalog-map-preview .map-source-credit {
+      font-size: 0.48rem;
+    }
+
+    .catalog-map-context {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.35rem 0.75rem;
+      margin: 0.3rem 0.1rem 0;
+      color: var(--muted);
+      font-size: 0.62rem;
+      line-height: 1.25;
+    }
+
+    .catalog-map-context a {
+      flex: 0 0 auto;
+      font-weight: 800;
     }
 
     .metric {
@@ -229,6 +270,16 @@
       white-space: normal;
     }
 
+    @media (max-width: 700px) {
+      .catalog-hero {
+        grid-template-columns: 1fr;
+      }
+
+      .catalog-map-preview {
+        width: min(100%, 38rem);
+      }
+    }
+
     @media (max-width: 900px) {
       .filters {
         grid-template-columns: 1fr;
@@ -286,6 +337,11 @@
     }
 
     @media (max-width: 520px) {
+      .catalog-map-context {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
       .filters {
         grid-template-columns: minmax(0, 1fr);
       }
@@ -351,15 +407,25 @@
   </nav>
 
   <main class="page layout">
-    <section class="hero">
-      <h1>{{ txt.all_minerals_title }}</h1>
-      <p class="lead">{{ txt.all_minerals_subtitle }}</p>
-      <div class="metrics">
-        <div class="metric">
-          <span class="metric-label">{{ txt.all_minerals_published_label }}</span>
-          <span class="metric-value" id="published-count">{{ published_count }}</span>
+    <section class="hero catalog-hero">
+      <div class="catalog-hero-copy">
+        <h1>{{ txt.all_minerals_title }}</h1>
+        <p class="lead">{{ txt.all_minerals_subtitle }}</p>
+        <div class="metrics">
+          <div class="metric">
+            <span class="metric-label">{{ txt.all_minerals_published_label }}</span>
+            <span class="metric-value" id="published-count">{{ published_count }}</span>
+          </div>
         </div>
       </div>
+
+      <aside class="catalog-map-preview" aria-label="World context map" lang="en">
+        {% include "map_component.html" %}
+        <p class="catalog-map-context">
+          <span>Forest context only — mineral locations are not included yet.</span>
+          <a href="/map">Open map →</a>
+        </p>
+      </aside>
     </section>
 
     <section class="panel">

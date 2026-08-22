@@ -310,6 +310,15 @@ pub struct AboutTemplate {
 }
 
 #[derive(Template)]
+#[template(path = "map.html")]
+pub struct MapTemplate {
+    pub lang_code: String,
+    pub lang_dir: String,
+    pub txt: UiText,
+    pub has_admin_session: bool,
+}
+
+#[derive(Template)]
 #[template(path = "info.html")]
 pub struct InfoTemplate {
     pub lang_code: String,

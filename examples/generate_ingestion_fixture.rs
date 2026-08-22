@@ -158,6 +158,12 @@ fn parse_generate_options(args: Vec<String>) -> Result<GenerateOptions> {
             "--inject-conflicts requires --policy ima_identity_v1; create_only_v1 forbids official authority identifiers"
         );
     }
+    if inject_conflicts && variant != Variant::Changed {
+        bail!("--inject-conflicts requires --variant changed");
+    }
+    if inject_conflicts && count < 2 {
+        bail!("--inject-conflicts requires --count of at least 2");
+    }
     Ok(GenerateOptions {
         count,
         output,
@@ -414,6 +420,7 @@ fn verify(directory: &Path) -> Result<()> {
     let mut source_ids = HashSet::new();
     let mut slugs = HashSet::new();
     let mut authority_ids = HashSet::new();
+    let mut duplicate_authority_ids = 0usize;
     for (expected_index, metadata) in index.chunks.iter().enumerate() {
         let relative = Path::new(&metadata.file);
         validate_relative_chunk_path(relative)?;
@@ -462,8 +469,11 @@ fn verify(directory: &Path) -> Result<()> {
                 );
             }
             for (key, value) in &item.official_identifiers {
-                if !authority_ids.insert((key.clone(), value.clone())) && !is_conflict_fixture {
-                    bail!("duplicate authority identity {key}={value}");
+                if !authority_ids.insert((key.clone(), value.clone())) {
+                    duplicate_authority_ids += 1;
+                    if !is_conflict_fixture {
+                        bail!("duplicate authority identity {key}={value}");
+                    }
                 }
             }
         }
@@ -479,6 +489,11 @@ fn verify(directory: &Path) -> Result<()> {
     }
     if manifest.artifact.sha256 != records_hash {
         bail!("fixture artifact hash must equal its canonical records hash");
+    }
+    if is_conflict_fixture && duplicate_authority_ids != 1 {
+        bail!(
+            "conflict fixture must contain exactly one duplicate authority identity, found {duplicate_authority_ids}"
+        );
     }
     Ok(())
 }
@@ -540,4 +555,50 @@ fn write_pretty_json(path: &Path, value: &impl Serialize) -> Result<()> {
 fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
     let bytes = fs::read(path).with_context(|| format!("failed to read {}", path.display()))?;
     serde_json::from_slice(&bytes).with_context(|| format!("invalid JSON in {}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn strings(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| (*value).to_string()).collect()
+    }
+
+    #[test]
+    fn conflict_injection_requires_at_least_two_changed_records() {
+        let error = parse_generate_options(strings(&[
+            "--count",
+            "1",
+            "--output",
+            "fixture",
+            "--variant",
+            "changed",
+            "--base-batch-id",
+            "batch_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "--inject-conflicts",
+        ]))
+        .expect_err("one record cannot express an identity conflict");
+        assert!(error.to_string().contains("--count of at least 2"));
+    }
+
+    #[test]
+    fn conflict_injection_cannot_be_silently_requested_for_a_baseline() {
+        let error = parse_generate_options(strings(&[
+            "--count",
+            "2",
+            "--output",
+            "fixture",
+            "--inject-conflicts",
+        ]))
+        .expect_err("baseline conflict injection must be rejected");
+        assert!(error.to_string().contains("--variant changed"));
+    }
+
+    #[test]
+    fn conflict_injection_creates_one_duplicate_authority_identity() {
+        let items = changed_items(2, true, MineralIngestionPolicy::ImaIdentityV1);
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].official_identifiers, items[1].official_identifiers);
+    }
 }

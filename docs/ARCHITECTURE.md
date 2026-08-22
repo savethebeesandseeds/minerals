@@ -1,5 +1,41 @@
 # Architecture
 
+## Public delivery and private control
+
+The catalog supports a deliberately simple split deployment. Public browsing
+is a static single-page application; administration and publication remain on
+the private Axum service.
+
+```text
+public browser                    administrator
+      |                                |
+      v                                v
+static HTML/JS/WASM              private Axum routes
+      |                                |
+      v                                v
+sanitized public SQLite          authoritative minerals.db
+      ^                                |
+      |                                v
+      +----- verified export-public snapshot
+```
+
+The static app fetches a small manifest and its content-addressed database,
+which the static origin can transfer from a prebuilt Brotli or gzip sidecar.
+The browser transparently decodes the HTTP representation; the worker then
+checks the canonical byte length and SHA-256 digest, opens it read-only with
+SQLite WebAssembly, validates the public schema, and exposes only fixed
+parameterized search/detail/evidence/offer operations. It has no account,
+review, ingestion, report-generation, or arbitrary-SQL capability.
+
+`export-public` reads one consistent transaction from the authoritative
+database and constructs a new database containing only published, valid
+minerals and their public associations. It verifies and publishes immutable
+raw, Brotli, and gzip representations before replacing the manifest as the
+publication commit point. Operational tables and the live database file are
+never copied. Content publication is therefore admin change, export, then an
+atomic static-directory deployment; it does not require regenerating one HTML
+file per mineral or recompiling SQLite.
+
 ## Current runtime
 
 The application is a Rust/Axum service with Askama-rendered HTML and SQLite.

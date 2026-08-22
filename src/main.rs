@@ -55,8 +55,8 @@ use crate::{
         AboutTemplate, AdminIngestionAnomalyView, AdminIngestionBatchView, AdminIngestionCountView,
         AdminIngestionDecisionView, AdminIngestionReviewSampleView, AdminIngestionTemplate,
         AdminReviewCandidateView, AdminReviewEvidenceView, AdminReviewFactView, AdminTemplate,
-        AllMineralsTemplate, HomeTemplate, InfoTemplate, MineralDiscoveryItem, MineralTemplate,
-        RegistryMineralTemplate, ReviewQueueTemplate, TemplateResponse,
+        AllMineralsTemplate, HomeTemplate, InfoTemplate, MapTemplate, MineralDiscoveryItem,
+        MineralTemplate, RegistryMineralTemplate, ReviewQueueTemplate, TemplateResponse,
     },
 };
 use minerals::registry;
@@ -67,10 +67,11 @@ use minerals::registry::{
     legacy_report_folder_is_public, list_mineral_ingestion_batches, list_pending_mineral_reviews,
     offers_for_material, put_mineral_ingestion_chunk, registered_image_is_public,
     registry_is_ready, registry_stats, reject_mineral_ingestion_batch, reject_mineral_review,
-    search_materials, search_materials_page, withdraw_mineral, MaterialImport,
-    MineralBatchDecisionRequest, MineralDatasetManifest, MineralIngestionBatchDetail,
-    MineralIngestionBatchStatus, MineralIngestionChunk, MineralIngestionClassification,
-    MineralIngestionProblem, MineralIngestionProblemKind, PendingMineralReview, ProviderImport,
+    search_materials, search_materials_page, validate_registry_configuration, withdraw_mineral,
+    MaterialImport, MineralBatchDecisionRequest, MineralDatasetManifest,
+    MineralIngestionBatchDetail, MineralIngestionBatchStatus, MineralIngestionChunk,
+    MineralIngestionClassification, MineralIngestionProblem, MineralIngestionProblemKind,
+    PendingMineralReview, ProviderImport,
 };
 
 const MINERALS_PAGE_SIZE: usize = 24;
@@ -105,6 +106,7 @@ struct AppState {
     admin_reviewer_id: Arc<String>,
     ingestion_api_token: Arc<Option<String>>,
     ingestion_adapter_id: Arc<String>,
+    trusted_proxy_ips: Arc<BTreeSet<IpAddr>>,
     secure_cookies: bool,
     admin_sql_enabled: bool,
 }
@@ -507,17 +509,9 @@ async fn main() -> Result<()> {
         .unwrap_or_else(|_| EnvFilter::new("minerals=info,tower_http=info"));
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
-    let data_root = std::env::var("DATA_ROOT")
+    let data_root = std::env::var_os("DATA_ROOT")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("data"));
-    fs::create_dir_all(data_root.join("minerals"))
-        .await
-        .context("failed to create data/minerals directory")?;
-    fs::create_dir_all(data_root.join("reports"))
-        .await
-        .context("failed to create data/reports directory")?;
-    init_minerals_database(&data_root).context("failed to initialize data/minerals.db")?;
-    init_registry_database(&data_root).context("failed to initialize material registry schema")?;
+        .unwrap_or_else(|| PathBuf::from("data"));
 
     let admin_password = std::env::var("ADMIN_PASSWORD")
         .context("ADMIN_PASSWORD is required. Set it in .env.local (or env) before starting.")?;
@@ -561,6 +555,46 @@ async fn main() -> Result<()> {
             return Err(anyhow!("INGESTION_ADAPTER_ID must be valid Unicode"))
         }
     };
+    let trusted_proxy_ips = configured_trusted_proxy_ips()?;
+    let port = match std::env::var("PORT") {
+        Ok(value) => value
+            .parse::<u16>()
+            .context("PORT must be an integer between 0 and 65535")?,
+        Err(std::env::VarError::NotPresent) => 7979,
+        Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(anyhow!("PORT must be valid Unicode"))
+        }
+    };
+    let bind_address = match std::env::var("BIND_ADDRESS") {
+        Ok(value) => value
+            .parse::<IpAddr>()
+            .context("BIND_ADDRESS must be a valid IP address")?,
+        Err(std::env::VarError::NotPresent) => "127.0.0.1"
+            .parse::<IpAddr>()
+            .expect("hard-coded loopback address is valid"),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(anyhow!("BIND_ADDRESS must be valid Unicode"))
+        }
+    };
+    let secure_cookies = configured_env_flag("COOKIE_SECURE", false)?;
+    let admin_sql_enabled = configured_env_flag("ADMIN_SQL_ENABLED", false)?;
+    validate_registry_configuration()?;
+    let http_client = Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(90))
+        .build()
+        .context("failed to initialize HTTP client")?;
+
+    // All required and fallible process configuration is validated before any
+    // directories, databases, or migrations are created or changed.
+    fs::create_dir_all(data_root.join("minerals"))
+        .await
+        .context("failed to create data/minerals directory")?;
+    fs::create_dir_all(data_root.join("reports"))
+        .await
+        .context("failed to create data/reports directory")?;
+    init_minerals_database(&data_root).context("failed to initialize data/minerals.db")?;
+    init_registry_database(&data_root).context("failed to initialize material registry schema")?;
 
     let state = AppState {
         catalogs_by_lang: Arc::new(RwLock::new(HashMap::new())),
@@ -574,21 +608,16 @@ async fn main() -> Result<()> {
         openai_model: Arc::new(openai_model),
         openai_translation_model: Arc::new(openai_translation_model),
         default_language,
-        http_client: Arc::new(
-            Client::builder()
-                .connect_timeout(std::time::Duration::from_secs(10))
-                .timeout(std::time::Duration::from_secs(90))
-                .build()
-                .context("failed to initialize HTTP client")?,
-        ),
+        http_client: Arc::new(http_client),
         report_slots: Arc::new(Semaphore::new(2)),
         ingestion_writer: Arc::new(Semaphore::new(1)),
         report_attempts: Arc::new(Mutex::new(HashMap::new())),
         admin_reviewer_id: Arc::new(admin_reviewer_id),
         ingestion_api_token: Arc::new(ingestion_api_token),
         ingestion_adapter_id: Arc::new(ingestion_adapter_id),
-        secure_cookies: env_flag("COOKIE_SECURE", false),
-        admin_sql_enabled: env_flag("ADMIN_SQL_ENABLED", false),
+        trusted_proxy_ips: Arc::new(trusted_proxy_ips),
+        secure_cookies,
+        admin_sql_enabled,
     };
 
     let app = Router::new()
@@ -604,6 +633,7 @@ async fn main() -> Result<()> {
         .route("/minerals", get(all_minerals_page))
         .route("/catalog", get(catalog_page))
         .route("/about", get(about_page))
+        .route("/map", get(map_page))
         .route("/pages/:slug", get(info_page))
         .route("/minerals/:slug", get(mineral_page))
         .route("/minerals/:slug/pdf", post(generate_pdf_form))
@@ -665,7 +695,12 @@ async fn main() -> Result<()> {
         .route("/admin/db/query", post(admin_db_query))
         .route(
             "/admin/minerals/import",
-            post(admin_import_minerals).layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES)),
+            post(admin_import_minerals)
+                .layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES))
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    admit_admin_write_request,
+                )),
         )
         .route(
             "/admin/minerals/review",
@@ -673,21 +708,17 @@ async fn main() -> Result<()> {
         )
         .route(
             "/admin/providers/import",
-            post(admin_import_provider).layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES)),
+            post(admin_import_provider)
+                .layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES))
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    admit_admin_write_request,
+                )),
         )
         .nest_service("/static", ServeDir::new("static"))
         .layer(middleware::from_fn(security_headers))
         .with_state(state);
 
-    let port: u16 = std::env::var("PORT")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(7979);
-
-    let bind_address = std::env::var("BIND_ADDRESS")
-        .unwrap_or_else(|_| "127.0.0.1".to_string())
-        .parse()
-        .context("BIND_ADDRESS must be a valid IP address")?;
     let address = SocketAddr::new(bind_address, port);
     let listener = TcpListener::bind(address)
         .await
@@ -870,20 +901,36 @@ fn is_safe_artifact_segment(value: &str) -> bool {
         && value != ".."
 }
 
-fn is_private_static_template_path(path: &str) -> bool {
+fn is_public_static_asset_path(path: &str) -> bool {
     let Some(relative) = path.strip_prefix("/static/") else {
         return false;
     };
-    relative
-        .rsplit_once('.')
-        .is_some_and(|(_, extension)| matches!(extension, "html" | "tex"))
+    matches!(
+        relative,
+        "app.css"
+            | "map.css"
+            | "map-loader.js"
+            | "map/minerals_map.wasm"
+            | "theme.js"
+            | "favicon.ico"
+            | "logo_transparent.png"
+            | "logo_transparent_dark.png"
+            | "logo_transparent_dark_g.png"
+            | "logo_transparent_dark_w.png"
+            | "loading_1.png"
+            | "loading_2.png"
+            | "1.png"
+            | "2.png"
+    )
 }
 
 async fn security_headers(request: Request, next: Next) -> Response {
     let path = request.uri().path();
-    let private_template = is_private_static_template_path(path);
+    let blocked_static_path =
+        (path == "/static" || path.starts_with("/static/")) && !is_public_static_asset_path(path);
     let private_admin_response = is_admin_path(path);
-    let mut response = if private_template {
+    let allows_map_wasm = matches!(path, "/map" | "/minerals");
+    let mut response = if blocked_static_path {
         StatusCode::NOT_FOUND.into_response()
     } else {
         next.run(request).await
@@ -897,9 +944,11 @@ async fn security_headers(request: Request, next: Next) -> Response {
     }
     headers.insert(
         header::CONTENT_SECURITY_POLICY,
-        HeaderValue::from_static(
-            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
-        ),
+        HeaderValue::from_static(if allows_map_wasm {
+            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        } else {
+            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        }),
     );
     headers.insert(
         header::X_CONTENT_TYPE_OPTIONS,
@@ -1421,6 +1470,23 @@ async fn about_page(
     })
 }
 
+async fn map_page(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> TemplateResponse<MapTemplate> {
+    // The isolated prototype copy is intentionally English-only. Keep the
+    // document language truthful until the map is promoted into the localized
+    // public navigation and i18n surface.
+    let language = Language::En;
+    let has_admin = has_admin_session(&state, &headers);
+    TemplateResponse(MapTemplate {
+        lang_code: language.code().to_string(),
+        lang_dir: language.dir().to_string(),
+        txt: ui_text(language),
+        has_admin_session: has_admin,
+    })
+}
+
 async fn info_page(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1499,7 +1565,10 @@ async fn generate_pdf_form(
         .filter(|record| !record.registry_authoritative)
         .ok_or_else(|| AppError::NotFound(format!("mineral '{slug}' not found")))?;
     validate_report_request(&request)?;
-    check_report_rate_limit(&state, peer_addr.ip())?;
+    check_report_rate_limit(
+        &state,
+        client_ip_for_rate_limit(&state, peer_addr.ip(), &headers),
+    )?;
     let report = run_agentic_chain(&mineral, &request, language);
 
     let (artifacts, generation_error): (Option<GeneratedArtifacts>, Option<String>) =
@@ -1549,7 +1618,10 @@ async fn generate_pdf_api(
     }
     let mineral = get_mineral(&state, language, &slug)?;
     validate_report_request(&request)?;
-    check_report_rate_limit(&state, peer_addr.ip())?;
+    check_report_rate_limit(
+        &state,
+        client_ip_for_rate_limit(&state, peer_addr.ip(), &headers),
+    )?;
     let report = run_agentic_chain(&mineral, &request, language);
     let artifacts = generate_report_artifacts(&state, &report, language)
         .await
@@ -1598,6 +1670,47 @@ fn check_report_rate_limit(state: &AppState, client_ip: IpAddr) -> Result<(), Ap
     }
     attempts.push(Instant::now());
     Ok(())
+}
+
+fn client_ip_for_rate_limit(state: &AppState, peer_ip: IpAddr, headers: &HeaderMap) -> IpAddr {
+    resolve_client_ip(peer_ip, headers, state.trusted_proxy_ips.as_ref())
+}
+
+fn resolve_client_ip(
+    peer_ip: IpAddr,
+    headers: &HeaderMap,
+    trusted_proxy_ips: &BTreeSet<IpAddr>,
+) -> IpAddr {
+    if !trusted_proxy_ips.contains(&peer_ip) {
+        return peer_ip;
+    }
+
+    let forwarded_values: Vec<_> = headers.get_all("x-forwarded-for").iter().collect();
+    let mut inspected_hops = 0_usize;
+    for value in forwarded_values.into_iter().rev() {
+        let Ok(value) = value.to_str() else {
+            return peer_ip;
+        };
+        for hop in value.rsplit(',') {
+            let hop = hop.trim();
+            if hop.is_empty() || inspected_hops >= 32 {
+                return peer_ip;
+            }
+            inspected_hops += 1;
+            let Ok(ip) = hop.parse::<IpAddr>() else {
+                return peer_ip;
+            };
+            if !trusted_proxy_ips.contains(&ip) {
+                return ip;
+            }
+        }
+    }
+
+    // A trusted proxy appends or overwrites X-Forwarded-For. Walk from the
+    // nearest hop toward the client and stop at the first address outside the
+    // configured trust boundary. Do not parse anything farther left: that
+    // prefix came from outside the trust boundary and may be attacker supplied.
+    peer_ip
 }
 
 async fn admin_page(
@@ -1697,6 +1810,16 @@ async fn admit_ingestion_write_request(
 ) -> Result<Response, AppError> {
     let admission = require_ingestion_write_admission(&state, request.headers())?;
     request.extensions_mut().insert(Arc::new(admission));
+    Ok(next.run(request).await)
+}
+
+async fn admit_admin_write_request(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Result<Response, AppError> {
+    require_admin_session(&state, request.headers())?;
+    require_same_origin(request.headers())?;
     Ok(next.run(request).await)
 }
 
@@ -2416,12 +2539,13 @@ async fn admin_review_mineral(
     };
 
     let data_root = state.data_root.clone();
+    let reviewer_id = state.admin_reviewer_id.as_str().to_string();
     let review_id = request.review_id;
     let outcome = run_blocking(move || {
         if approve {
-            approve_mineral_review(data_root.as_path(), review_id, &operator_note)
+            approve_mineral_review(data_root.as_path(), review_id, &reviewer_id, &operator_note)
         } else {
-            reject_mineral_review(data_root.as_path(), review_id, &operator_note)
+            reject_mineral_review(data_root.as_path(), review_id, &reviewer_id, &operator_note)
         }
     })
     .await
@@ -2452,6 +2576,7 @@ async fn admin_login(
 ) -> Result<Response, AppError> {
     let language = resolve_language(&state, &headers);
     require_same_origin(&headers)?;
+    let client_ip = client_ip_for_rate_limit(&state, peer_addr.ip(), &headers);
     // Once an address exhausts its initial burst, reserve at most one password
     // comparison per interval. This limits brute-force guesses without making
     // a correct password permanently unusable after an attacker fills a
@@ -2465,7 +2590,7 @@ async fn admin_login(
             failures.retain(|created_at| created_at.elapsed().as_secs() < 60);
             !failures.is_empty()
         });
-        let failures = failures_by_ip.entry(peer_addr.ip()).or_default();
+        let failures = failures_by_ip.entry(client_ip).or_default();
         if failures.len() >= ADMIN_LOGIN_BURST
             && failures.last().is_some_and(|attempt| {
                 attempt.elapsed().as_secs() < ADMIN_LOGIN_THROTTLED_INTERVAL_SECS
@@ -2498,7 +2623,7 @@ async fn admin_login(
         .admin_login_failures
         .lock()
         .map_err(|_| anyhow!("admin login failure store lock poisoned"))?
-        .remove(&peer_addr.ip());
+        .remove(&client_ip);
 
     let token = generate_secure_hex(24)?;
     {
@@ -2809,10 +2934,12 @@ async fn admin_delete_mineral(
 
     let data_root = state.data_root.clone();
     let withdraw_slug = slug.clone();
+    let reviewer_id = state.admin_reviewer_id.as_str().to_string();
     run_blocking(move || {
         withdraw_mineral(
             data_root.as_path(),
             &withdraw_slug,
+            &reviewer_id,
             "Withdrawn by the legacy catalog delete action.",
         )
     })
@@ -2869,16 +2996,22 @@ async fn admin_withdraw_mineral(
     let operator_note = required_string_limited(&request.operator_note, "operator_note", 2_000)?;
     let data_root = state.data_root.clone();
     let withdraw_slug = slug.clone();
-    let changed =
-        run_blocking(move || withdraw_mineral(data_root.as_path(), &withdraw_slug, &operator_note))
-            .await
-            .map_err(|err| {
-                warn!(mineral_slug = %slug, error = %err, "mineral withdrawal failed");
-                AppError::BadRequest(
-                    "This mineral could not be withdrawn. Check the slug and try again."
-                        .to_string(),
-                )
-            })?;
+    let reviewer_id = state.admin_reviewer_id.as_str().to_string();
+    let changed = run_blocking(move || {
+        withdraw_mineral(
+            data_root.as_path(),
+            &withdraw_slug,
+            &reviewer_id,
+            &operator_note,
+        )
+    })
+    .await
+    .map_err(|err| {
+        warn!(mineral_slug = %slug, error = %err, "mineral withdrawal failed");
+        AppError::BadRequest(
+            "This mineral could not be withdrawn. Check the slug and try again.".to_string(),
+        )
+    })?;
 
     Ok(TemplateResponse(AdminTemplate {
         lang_code: language.code().to_string(),
@@ -4051,16 +4184,54 @@ fn configured_ingestion_api_token() -> Result<Option<String>> {
     validate_ingestion_api_token(&value).map(Some)
 }
 
-fn env_flag(name: &str, default: bool) -> bool {
-    std::env::var(name)
-        .ok()
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes" | "on"
-            )
+fn parse_trusted_proxy_ips(value: &str) -> Result<BTreeSet<IpAddr>> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(BTreeSet::new());
+    }
+
+    value
+        .split(',')
+        .map(|entry| {
+            let entry = entry.trim();
+            if entry.is_empty() {
+                return Err(anyhow!(
+                    "TRUSTED_PROXY_IPS must be a comma-separated list of IP addresses"
+                ));
+            }
+            entry
+                .parse::<IpAddr>()
+                .with_context(|| format!("invalid trusted proxy IP '{entry}'"))
         })
-        .unwrap_or(default)
+        .collect()
+}
+
+fn configured_trusted_proxy_ips() -> Result<BTreeSet<IpAddr>> {
+    match std::env::var("TRUSTED_PROXY_IPS") {
+        Ok(value) => parse_trusted_proxy_ips(&value),
+        Err(std::env::VarError::NotPresent) => Ok(BTreeSet::new()),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            Err(anyhow!("TRUSTED_PROXY_IPS must be valid Unicode"))
+        }
+    }
+}
+
+fn parse_env_flag(name: &str, value: &str) -> Result<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Ok(true),
+        "0" | "false" | "no" | "off" => Ok(false),
+        _ => Err(anyhow!(
+            "{name} must be one of true/false, 1/0, yes/no, or on/off"
+        )),
+    }
+}
+
+fn configured_env_flag(name: &str, default: bool) -> Result<bool> {
+    match std::env::var(name) {
+        Ok(value) => parse_env_flag(name, &value),
+        Err(std::env::VarError::NotPresent) => Ok(default),
+        Err(std::env::VarError::NotUnicode(_)) => Err(anyhow!("{name} must be valid Unicode")),
+    }
 }
 
 async fn shutdown_signal() {
@@ -4093,9 +4264,9 @@ async fn shutdown_signal() {
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::{BTreeMap, HashMap},
+        collections::{BTreeMap, BTreeSet, HashMap},
         io::{Read, Write},
-        net::{SocketAddr, TcpStream},
+        net::{IpAddr, SocketAddr, TcpStream},
         path::Path,
         sync::{Arc, Mutex, RwLock},
         time::Duration,
@@ -4113,17 +4284,21 @@ mod tests {
     use tokio::sync::Semaphore;
 
     use super::{
-        admin_create_ingestion_batch, admin_review_notice, admit_ingestion_write_request,
+        admin_create_ingestion_batch, admin_import_minerals, admin_import_provider,
+        admin_review_notice, admit_admin_write_request, admit_ingestion_write_request,
         authenticate_ingestion_bearer, constant_time_eq, expand_localized_mineral_query,
-        is_admin_path, is_private_static_template_path, is_safe_artifact_segment,
-        map_ingestion_backend_error, mineral_status_display, require_ingestion_reader_actor,
-        require_ingestion_reviewer_actor, require_ingestion_writer_actor, require_same_origin,
-        require_valid_ingestion_batch_id, review_claim_scope_display, try_ingestion_writer_permit,
-        ui_text, validate_actor_id, validate_ingestion_api_token, AppError, AppState,
-        IngestionAuthKind, Language, Mineral, MineralCatalog, PdfGenerator,
-        ADMIN_INGESTION_CHUNK_MAX_BYTES, ADMIN_INGESTION_MANIFEST_MAX_BYTES,
+        is_admin_path, is_public_static_asset_path, is_safe_artifact_segment,
+        map_ingestion_backend_error, mineral_status_display, parse_env_flag,
+        parse_trusted_proxy_ips, require_ingestion_reader_actor, require_ingestion_reviewer_actor,
+        require_ingestion_writer_actor, require_same_origin, require_valid_ingestion_batch_id,
+        resolve_client_ip, review_claim_scope_display, security_headers,
+        try_ingestion_writer_permit, ui_text, validate_actor_id, validate_ingestion_api_token,
+        AppError, AppState, IngestionAuthKind, Language, Mineral, MineralCatalog, PdfGenerator,
+        ADMIN_IMPORT_MAX_BYTES, ADMIN_INGESTION_CHUNK_MAX_BYTES,
+        ADMIN_INGESTION_MANIFEST_MAX_BYTES,
     };
     use minerals::registry::{MineralIngestionProblem, MineralIngestionProblemKind};
+    use tower_http::services::ServeDir;
 
     fn mineral(slug: &str, name: &str, family: &str, formula: &str) -> Mineral {
         Mineral {
@@ -4166,6 +4341,7 @@ mod tests {
             admin_reviewer_id: Arc::new("reviewer.primary".to_string()),
             ingestion_api_token: Arc::new(Some("0123456789abcdef0123456789abcdef".to_string())),
             ingestion_adapter_id: Arc::new("adapter.primary".to_string()),
+            trusted_proxy_ips: Arc::new(BTreeSet::new()),
             secure_cookies: false,
             admin_sql_enabled: false,
         }
@@ -4196,6 +4372,51 @@ mod tests {
         String::from_utf8_lossy(&response[..count]).into_owned()
     }
 
+    fn send_incomplete_admin_import(
+        address: SocketAddr,
+        path: &str,
+        cookie: Option<&str>,
+        origin: Option<&str>,
+    ) -> String {
+        let mut stream = TcpStream::connect(address).expect("connect to admin admission server");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("set admin admission response timeout");
+        let cookie = cookie
+            .map(|value| format!("Cookie: admin_session={value}\r\n"))
+            .unwrap_or_default();
+        let origin = origin
+            .map(|value| format!("Origin: {value}\r\n"))
+            .unwrap_or_default();
+        let request = format!(
+            "POST {path} HTTP/1.1\r\nHost: minerals.test\r\nContent-Type: application/json\r\nContent-Length: {}\r\n{cookie}{origin}Connection: close\r\n\r\n",
+            ADMIN_IMPORT_MAX_BYTES,
+        );
+        stream
+            .write_all(request.as_bytes())
+            .expect("write admin import headers without body");
+        let mut response = [0_u8; 2_048];
+        let count = stream
+            .read(&mut response)
+            .expect("admin admission must respond before reading the declared body");
+        String::from_utf8_lossy(&response[..count]).into_owned()
+    }
+
+    fn send_get(address: SocketAddr, path: &str) -> String {
+        let mut stream = TcpStream::connect(address).expect("connect to static test server");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .expect("set static response timeout");
+        let request =
+            format!("GET {path} HTTP/1.1\r\nHost: minerals.test\r\nConnection: close\r\n\r\n");
+        stream
+            .write_all(request.as_bytes())
+            .expect("write static request");
+        let mut response = [0_u8; 2_048];
+        let count = stream.read(&mut response).expect("read static response");
+        String::from_utf8_lossy(&response[..count]).into_owned()
+    }
+
     #[test]
     fn artifact_segments_reject_traversal() {
         assert!(is_safe_artifact_segment("mineral.silicates"));
@@ -4206,14 +4427,21 @@ mod tests {
     }
 
     #[test]
-    fn askama_source_templates_are_not_public_static_assets() {
-        assert!(is_private_static_template_path("/static/all_minerals.html"));
-        assert!(is_private_static_template_path(
-            "/static/admin_ingestion.html"
-        ));
-        assert!(is_private_static_template_path("/static/report.tex"));
-        assert!(!is_private_static_template_path("/static/app.css"));
-        assert!(!is_private_static_template_path("/minerals"));
+    fn only_canonical_allowlisted_static_assets_are_public() {
+        assert!(is_public_static_asset_path("/static/app.css"));
+        assert!(is_public_static_asset_path("/static/map.css"));
+        assert!(is_public_static_asset_path("/static/map-loader.js"));
+        assert!(is_public_static_asset_path("/static/map/minerals_map.wasm"));
+        assert!(is_public_static_asset_path("/static/theme.js"));
+        assert!(is_public_static_asset_path("/static/logo_transparent.png"));
+        assert!(!is_public_static_asset_path("/static/admin_ingestion.html"));
+        assert!(!is_public_static_asset_path("/static/report.tex"));
+        assert!(!is_public_static_asset_path("/static/map.html"));
+        assert!(!is_public_static_asset_path("/static/map_component.html"));
+        assert!(!is_public_static_asset_path("/static/admin%2ehtml"));
+        assert!(!is_public_static_asset_path("/static/report%2etex"));
+        assert!(!is_public_static_asset_path("/static/app%2ecss"));
+        assert!(!is_public_static_asset_path("/minerals"));
     }
 
     #[test]
@@ -4221,6 +4449,66 @@ mod tests {
         assert!(constant_time_eq(b"waajacu", b"waajacu"));
         assert!(!constant_time_eq(b"waajacu", b"minerals"));
         assert!(!constant_time_eq(b"waajacu", b"waajacu-longer"));
+    }
+
+    #[test]
+    fn forwarded_client_ip_is_used_only_across_configured_proxy_hops() {
+        let direct_peer = "192.0.2.10".parse().expect("direct peer IP");
+        let proxy = "127.0.0.1".parse().expect("proxy IP");
+        let upstream_proxy = "10.0.0.8".parse().expect("upstream proxy IP");
+        let client: IpAddr = "198.51.100.24".parse().expect("client IP");
+        let spoofed_prefix = "203.0.113.99";
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "x-forwarded-for",
+            HeaderValue::from_str(&format!("{spoofed_prefix}, {client}, {upstream_proxy}"))
+                .expect("forwarded chain"),
+        );
+
+        let no_trusted_proxies = BTreeSet::new();
+        assert_eq!(
+            resolve_client_ip(direct_peer, &headers, &no_trusted_proxies),
+            direct_peer,
+            "an untrusted peer must not choose a bucket through forwarded headers"
+        );
+
+        let trusted = BTreeSet::from([proxy, upstream_proxy]);
+        assert_eq!(resolve_client_ip(proxy, &headers, &trusted), client);
+
+        headers.insert(
+            "x-forwarded-for",
+            HeaderValue::from_str(&format!("not-an-ip, {client}, {upstream_proxy}"))
+                .expect("forwarded chain with an untrusted prefix"),
+        );
+        assert_eq!(
+            resolve_client_ip(proxy, &headers, &trusted),
+            client,
+            "an untrusted prefix must not collapse every proxied client into one bucket"
+        );
+
+        headers.insert("x-forwarded-for", HeaderValue::from_static("not-an-ip"));
+        assert_eq!(
+            resolve_client_ip(proxy, &headers, &trusted),
+            proxy,
+            "malformed metadata at the trust boundary must fail closed"
+        );
+    }
+
+    #[test]
+    fn trusted_proxy_and_boolean_configuration_are_strict() {
+        let proxies = parse_trusted_proxy_ips("127.0.0.1, 2001:db8::1")
+            .expect("valid trusted proxy configuration");
+        assert!(proxies.contains(&"127.0.0.1".parse().expect("IPv4")));
+        assert!(proxies.contains(&"2001:db8::1".parse().expect("IPv6")));
+        assert!(parse_trusted_proxy_ips("")
+            .expect("empty means disabled")
+            .is_empty());
+        assert!(parse_trusted_proxy_ips("127.0.0.1,").is_err());
+        assert!(parse_trusted_proxy_ips("127.0.0.0/8").is_err());
+
+        assert!(parse_env_flag("FLAG", "true").expect("true flag"));
+        assert!(!parse_env_flag("FLAG", "OFF").expect("false flag"));
+        assert!(parse_env_flag("FLAG", "sometimes").is_err());
     }
 
     #[test]
@@ -4380,6 +4668,124 @@ mod tests {
         drop(held);
         assert!(try_ingestion_writer_permit(&writer).is_ok());
         assert_eq!(ADMIN_INGESTION_CHUNK_MAX_BYTES, 8 * 1024 * 1024);
+    }
+
+    #[tokio::test]
+    async fn legacy_admin_imports_authenticate_before_reading_large_json_bodies() {
+        let temp = tempfile::tempdir().expect("temporary data root");
+        let state = ingestion_test_state(temp.path());
+        let app = Router::new()
+            .route(
+                "/admin/minerals/import",
+                post(admin_import_minerals)
+                    .layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES))
+                    .layer(middleware::from_fn_with_state(
+                        state.clone(),
+                        admit_admin_write_request,
+                    )),
+            )
+            .route(
+                "/admin/providers/import",
+                post(admin_import_provider)
+                    .layer(DefaultBodyLimit::max(ADMIN_IMPORT_MAX_BYTES))
+                    .layer(middleware::from_fn_with_state(
+                        state.clone(),
+                        admit_admin_write_request,
+                    )),
+            )
+            .with_state(state);
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind admin admission test server");
+        let address = listener.local_addr().expect("admin admission address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("admin admission test server");
+        });
+
+        for path in ["/admin/minerals/import", "/admin/providers/import"] {
+            let unauthorized_path = path.to_string();
+            let unauthorized = tokio::task::spawn_blocking(move || {
+                send_incomplete_admin_import(address, &unauthorized_path, None, None)
+            })
+            .await
+            .expect("unauthorized import request task");
+            assert!(
+                unauthorized.starts_with("HTTP/1.1 401"),
+                "unexpected unauthenticated response: {unauthorized:?}"
+            );
+
+            let cross_origin_path = path.to_string();
+            let cross_origin = tokio::task::spawn_blocking(move || {
+                send_incomplete_admin_import(
+                    address,
+                    &cross_origin_path,
+                    Some("test-session"),
+                    Some("https://attacker.invalid"),
+                )
+            })
+            .await
+            .expect("cross-origin import request task");
+            assert!(
+                cross_origin.starts_with("HTTP/1.1 401"),
+                "unexpected cross-origin response: {cross_origin:?}"
+            );
+        }
+
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn encoded_template_paths_cannot_bypass_the_static_asset_allowlist() {
+        let static_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("static");
+        let app = Router::new()
+            .nest_service("/static", ServeDir::new(static_root))
+            .layer(middleware::from_fn(security_headers));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind static test server");
+        let address = listener.local_addr().expect("static test address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, app)
+                .await
+                .expect("static test server");
+        });
+
+        for path in [
+            "/static/admin.html",
+            "/static/admin%2ehtml",
+            "/static/admin.ht%6dl",
+            "/static/report%2etex",
+            "/static/map.html",
+            "/static/map_component.html",
+        ] {
+            let path = path.to_string();
+            let response = tokio::task::spawn_blocking(move || send_get(address, &path))
+                .await
+                .expect("private static request task");
+            assert!(
+                response.starts_with("HTTP/1.1 404"),
+                "private static path was served: {response:?}"
+            );
+        }
+
+        for path in [
+            "/static/app.css",
+            "/static/map.css",
+            "/static/map-loader.js",
+        ] {
+            let path = path.to_string();
+            let response = tokio::task::spawn_blocking(move || send_get(address, &path))
+                .await
+                .expect("public static request task");
+            assert!(
+                response.starts_with("HTTP/1.1 200"),
+                "allowlisted static path was blocked: {response:?}"
+            );
+        }
+
+        server.abort();
     }
 
     #[tokio::test]

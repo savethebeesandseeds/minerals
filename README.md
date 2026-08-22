@@ -39,6 +39,7 @@ ADMIN_REVIEWER_ID=replace-with-a-stable-operator-id
 # SQLITE_DURABILITY=FULL
 # INGESTION_API_TOKEN=optional-32-plus-character-machine-staging-secret
 # INGESTION_ADAPTER_ID=required-when-machine-staging-is-enabled
+# TRUSTED_PROXY_IPS=127.0.0.1,::1 # only if these peers terminate trusted TLS
 # OPENAI_API_KEY=optional-for-ai-assisted-drafting
 ```
 
@@ -57,9 +58,11 @@ Open:
 - `http://127.0.0.1:7979/admin/reviews` - individual mineral review queue;
 - `http://127.0.0.1:7979/admin/ingestion` - dataset release review queue.
 
-The container builds with the locked Rust dependency graph, runs unprivileged,
-uses a read-only root filesystem, persists only `./data`, and includes XeLaTeX,
-`latexmk`, and Noto fonts. Compose provides configurable CPU/memory bounds, log
+The container builds with the locked Rust dependency graph, uses a read-only
+root filesystem, persists only `./data`, and includes XeLaTeX, `latexmk`, and
+Noto fonts. Compose uses a small root bootstrap to make the bind mount private,
+then clears all capabilities and runs the service as the mount owner (or UID
+10001 on Docker Desktop). It also provides configurable CPU/memory bounds, log
 rotation, and a graceful shutdown window longer than one ingestion chunk.
 
 ## Native development
@@ -74,18 +77,73 @@ cargo run
 Native runs bind to `127.0.0.1:7979` by default. The container overrides
 `BIND_ADDRESS=0.0.0.0` internally while publishing only to host loopback.
 
+## Static public catalog
+
+The public mineral experience can be deployed as ordinary static files. The
+browser loads a sanitized, content-addressed SQLite snapshot in the vendored
+SQLite WebAssembly runtime, then performs search, pagination, and detail
+queries locally. The Axum service and live `data/minerals.db` remain the private
+administration and publication control plane.
+
+Build the exporter when application code changes:
+
+```bash
+cargo build --locked --release --bin export-public
+```
+
+Then publish content without recompiling. On Windows:
+
+```powershell
+.\target\release\export-public.exe --data-root .\data --output .\public-dist
+```
+
+On Linux or macOS:
+
+```bash
+./target/release/export-public --data-root ./data --output ./public-dist
+```
+
+The command copies only the explicit public-app asset allowlist, reads one
+consistent read-only registry snapshot, creates a public-only SQLite database
+under `public-dist/data/`, verifies it, emits precompressed `.br` and `.gz`
+representations, and replaces
+`public-dist/catalog-manifest.json` last. Serve `public-dist/` over HTTPS;
+literal localhost or loopback HTTP is supported for development, while
+`file:` URLs cannot run module workers or WebAssembly. Hash routes such as
+`/#/minerals` work on basic static hosts without rewrite rules. A host with an
+SPA fallback can additionally expose clean `/minerals/:slug` routes.
+
+For the small transfer size, configure the static host to serve the generated
+`.sqlite3.br` or `.sqlite3.gz` sidecar for the canonical `.sqlite3` request
+with the matching `Content-Encoding` and `Vary: Accept-Encoding`. Browsers
+decode it transparently before the existing byte-length and SHA-256 checks.
+The uncompressed file remains as the compatibility fallback. See
+[the static app contract](public-app/README.md#precompressed-database-delivery).
+
+After an admin approval, withdrawal, dataset activation, or provider update,
+run the exporter and atomically deploy the resulting directory. Never publish
+the live database, its WAL/SHM files, backups, review records, or ingestion
+state. The static database contains only currently public, valid mineral rows
+and their public evidence and offers. See [the static app contract](public-app/README.md)
+and [the map integration handoff](docs/MAP_STATIC_APP_HANDOFF.md).
+
 ## Storage
 
 The mutable root defaults to `data/` and can be changed with `DATA_ROOT`.
 
 ```text
 data/
-|-- minerals.db       SQLite authority
+|-- minerals.db       SQLite authority (mutable and never tracked)
 |-- backups/          bounded local pre-activation safety snapshots
 |-- images/           optional registered uploaded/source media
 |-- minerals/         legacy localized metadata and old report artifacts
 `-- reports/          opaque request-specific generated reports
 ```
+
+A clean checkout builds the database from the version-controlled legacy seed
+under `data/minerals/`; a live database, WAL, backup, or report must never be
+committed. Compose makes data directories mode `0700`, files mode `0600`, and
+uses umask `077` for new private state.
 
 The server does **not** expose the data root. Public file surfaces are limited
 to database-registered images under `/media/images/:file` and the two published
@@ -180,6 +238,10 @@ approval remains same-origin browser work and is attributed using the
 server-side `ADMIN_REVIEWER_ID`. See [the ingestion
 policy](docs/INGESTION.md) and [operations runbook](docs/OPERATIONS.md).
 
+`ima-release stage` requires HTTPS for remote servers. Literal loopback IPs
+(`127.0.0.0/8` or `::1`) may use HTTP for local development; that exception
+disables proxies, and staging never follows redirects.
+
 ```text
 GET  /admin/ingestion                                  browser review queue
 POST /admin/ingestion/batches                          create/resume manifest
@@ -230,6 +292,7 @@ The admin SQL endpoint is disabled by default. If explicitly enabled with
 | `INGESTION_ABANDONED_HOURS` | `336` | Tombstone an inactive `receiving` batch and reclaim its chunks/items after 14 days |
 | `SQLITE_DURABILITY` | `NORMAL` debug / `FULL` release | Explicitly set `FULL` for production publication durability |
 | `COOKIE_SECURE` | `false` | Add `Secure` to the admin cookie behind HTTPS |
+| `TRUSTED_PROXY_IPS` | unset | Exact TCP-peer IPs allowed to supply `X-Forwarded-For`, separated by commas |
 | `ADMIN_SQL_ENABLED` | `false` | Enable read-only emergency SQL diagnostics |
 | `OPENAI_API_KEY` | unset | AI-assisted image drafting and translation |
 | `OPENAI_MODEL` | configured in `.env` | Drafting model |

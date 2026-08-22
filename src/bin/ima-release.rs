@@ -240,6 +240,8 @@ Safety:
   ledger-evolve rejects new identities unless --allow-new is explicit.
   stage creates/reuses a quarantine batch, uploads chunks, and finalizes it.
   stage never approves or activates a release; operator review remains required.
+  Remote staging requires HTTPS and never follows redirects. Literal loopback
+  IPs may use HTTP for local development; that exception bypasses all proxies.
   The token is read from INGESTION_API_TOKEN by default and is never accepted
   as a command-line value.
 "#

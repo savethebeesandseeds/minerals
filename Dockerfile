@@ -46,11 +46,13 @@ RUN apt-get update \
         texlive-lang-other \
         texlive-latex-extra \
         texlive-xetex \
+        util-linux \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 minerals \
     && useradd --uid 10001 --gid minerals --no-create-home \
         --home-dir /tmp --shell /usr/sbin/nologin minerals \
-    && install -d -o minerals -g minerals /app /app/data /app/data/minerals
+    && install -d -m0755 -o minerals -g minerals /app \
+    && install -d -m0700 -o minerals -g minerals /app/data /app/data/minerals
 
 ENV BIND_ADDRESS=0.0.0.0 \
     DATA_ROOT=/app/data
@@ -58,6 +60,7 @@ ENV BIND_ADDRESS=0.0.0.0 \
 WORKDIR /app
 
 COPY --from=builder /out/minerals /usr/local/bin/minerals
+COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/minerals-entrypoint
 COPY --chown=minerals:minerals static ./static
 
 USER minerals:minerals
@@ -69,4 +72,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 
 STOPSIGNAL SIGTERM
 
-ENTRYPOINT ["/usr/local/bin/minerals"]
+ENTRYPOINT ["/usr/local/bin/minerals-entrypoint"]

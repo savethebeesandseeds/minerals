@@ -19,10 +19,12 @@ operational constraints.
 - Run media on object storage and move the writer to PostgreSQL only when the
   product actually needs multiple independent writers or horizontal replicas.
 
-The image runs as unprivileged UID/GID `10001:10001`. Compose makes the root
-filesystem read-only, gives `/tmp` a bounded disposable mount, drops all Linux
-capabilities, prevents privilege escalation, and limits PIDs, CPU, memory, and
-local log growth.
+The image defaults to unprivileged UID/GID `10001:10001`. Compose starts a
+minimal root entrypoint with only the capabilities required to normalize the
+exact `/app/data` bind mount, then drops its identity and complete capability
+bounding set before executing application code. The root filesystem is
+read-only, `/tmp` is bounded and disposable, privilege escalation is disabled,
+and PIDs, CPU, memory, and local log growth are limited.
 
 ## Probes
 
@@ -41,9 +43,19 @@ period for the active, at-most-500-record chunk to finish.
 
 ## Configuration and secrets
 
-Compose loads `.env` and then `.env.local`; the latter takes precedence. Keep
+The service's `env_file` list loads `.env` and then `.env.local`; the latter
+takes precedence for application variables such as `RUST_LOG`. Keep
 development secrets in the gitignored `.env.local` and use the platform secret
 store in production. Neither file is sent to the Docker builder.
+
+Compose `${MINERALS_*}` interpolation for ports and resource limits is a
+separate phase: it reads the invoking shell and the project `.env`, not the
+service's `env_file` list. To put those deployment values in `.env.local`, pass
+both files explicitly, with the local file last:
+
+```bash
+docker compose --env-file .env --env-file .env.local up -d --build
+```
 
 `docker compose config` expands and prints environment values. Use its
 `--quiet` form for validation and never attach full rendered output to a ticket
@@ -62,6 +74,7 @@ Application settings:
 | `INGESTION_ABANDONED_HOURS` | Inactive, never-finalized `receiving` batches are tombstoned and their payload reclaimed; defaults to 336 hours (14 days), accepted range 1-8,760 hours. |
 | `SQLITE_DURABILITY` | Use `FULL` in production. A less durable mode is acceptable only for disposable development data. |
 | `COOKIE_SECURE` | Set `true` behind HTTPS. |
+| `TRUSTED_PROXY_IPS` | Comma-separated exact IP allowlist for direct reverse-proxy TCP peers. `X-Forwarded-For` is ignored when the peer is not listed. Keep empty without a proxy; a same-host TLS proxy commonly uses `127.0.0.1,::1`. |
 | `ADMIN_SQL_ENABLED` | Keep `false`; enable only for short, supervised, read-only diagnostics. |
 | `DEFAULT_LANG` | Default UI language; `en` when unset. |
 | `OPENAI_API_KEY` | Optional for drafting/translation; not required to serve or ingest an image-free catalog. |
@@ -93,31 +106,19 @@ rotation; a higher safety ceiling is not evidence of higher capacity.
 
 ## Data-directory permissions
 
-On Linux, run with the UID/GID that own `./data`:
+No UID/GID exports or `chmod 777` workaround are needed. On each Compose start,
+the entrypoint targets only the real `/app/data` directory, retains a non-root
+bind mount owner's numeric UID/GID (or uses `10001:10001` for a root-owned
+Docker Desktop mount), and normalizes ownership without following symlinks.
+It sets every private directory to `0700`, every regular file to `0600`, and a
+`077` umask for new database, WAL, image, backup, and report files. The process
+then clears all capabilities and executes the service under that non-root
+identity.
 
-```bash
-export MINERALS_UID="$(id -u)"
-export MINERALS_GID="$(id -g)"
-docker compose up -d --build
-```
-
-Alternatively, make the directory belong to `10001:10001`. Never make it
-world-writable or run the service as root to bypass permissions. Check the
-mount before a first production start:
-
-```bash
-docker compose run --rm --entrypoint sh minerals -c \
-  'test -w /app/data && echo "data mount is writable"'
-```
-
-Docker Desktop may present an existing bind-mounted database as owned by root.
-If the preflight fails, use a short-lived helper that targets only this mount,
-then start the application under its normal identity:
-
-```powershell
-docker run --rm --mount "type=bind,source=$PWD\data,target=/data" `
-  debian:bookworm-slim chown -R 10001:10001 /data
-```
+The tracked `data/minerals/` tree is the immutable legacy import seed for a
+clean checkout. `data/minerals.db`, its sidecars, backups, and generated reports
+are private runtime state and are ignored by Git. Never add a live database to
+source control; take backups using the database procedure below.
 
 ## Build and start
 
@@ -145,6 +146,10 @@ access outside the container.
 The durable release API is resumable and idempotent; details and payload
 contracts are in [INGESTION.md](INGESTION.md). Operationally:
 
+The official IMA extractor requires exactly CPython `3.12.13` as well as every
+pin in `scripts/ima-requirements.txt`; it exits before either PDF engine runs
+when the implementation or patch version differs.
+
 1. Archive the exact raw source outside the application data directory. Record
    its checksum, retrieval time, license, source release, parser version, and
    adapter version.
@@ -157,6 +162,8 @@ contracts are in [INGESTION.md](INGESTION.md). Operationally:
    manifest hash is the idempotency identity. Machine callers may stage with
    `Authorization: Bearer <token>`; never put the token in a URL, fixture, log,
    or error report, and avoid interactive shell history in production.
+   `ima-release stage` permits remote HTTPS only, never follows redirects, and
+   permits HTTP solely for a literal loopback IP with proxy use disabled.
 4. Upload chunks in index order. Retry an uncertain response with the exact
    same release, chunk index, and payload. Never mutate a chunk after another
    chunk has been accepted.
@@ -415,8 +422,10 @@ cargo run --locked --example generate_ingestion_fixture -- generate \
 ```
 
 Add `--inject-conflicts` and use a separate empty output directory to generate
-an intentional conflict batch. Test maximum legal field sizes with targeted
-fixtures; do not bloat every capacity record.
+an intentional conflict batch. Conflict injection requires `--variant changed`
+and a `--count` of at least 2 so the request cannot silently produce a
+non-conflicting fixture. Test maximum legal field sizes with targeted fixtures;
+do not bloat every capacity record.
 
 Required destructive scenarios include identical retry, invalid final record,
 disconnect/resume, kill during staging and activation, concurrent submissions,

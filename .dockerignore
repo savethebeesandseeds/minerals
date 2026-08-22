@@ -4,6 +4,7 @@
 !Cargo.toml
 !Cargo.lock
 !askama.toml
+!docker-entrypoint.sh
 !src/
 !src/**
 !static/

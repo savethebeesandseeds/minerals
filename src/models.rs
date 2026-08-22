@@ -1,14 +1,18 @@
 use std::{
     collections::{BTreeMap, HashMap},
-    fs,
-    path::Path,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    fs::{self, OpenOptions},
+    io::{ErrorKind, Write},
+    path::{Component, Path},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{anyhow, Context, Result};
 use rusqlite::{params, types::ValueRef, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 const MINERALS_DB_FILE: &str = "minerals.db";
 const LEGACY_JSON_DB_FILE: &str = "minerals.db.json";
@@ -21,6 +25,7 @@ const ADMIN_SQL_MAX_LENGTH: usize = 100_000;
 const ADMIN_SQL_MAX_CELL_BYTES: usize = 100_000;
 const ADMIN_SQL_MAX_OUTPUT_BYTES: usize = 1_000_000;
 const ADMIN_SQL_MAX_RUNTIME: Duration = Duration::from_secs(2);
+const LEGACY_IMAGE_MAX_BYTES: u64 = 20 * 1024 * 1024;
 const ADMIN_SQL_FORBIDDEN_KEYWORDS: &[&str] = &[
     "alter",
     "analyze",
@@ -194,8 +199,12 @@ impl<'a> From<NewImageRecord<'a>> for OwnedImageInput {
 pub fn init_minerals_database(data_root: &Path) -> Result<()> {
     fs::create_dir_all(data_root)
         .with_context(|| format!("failed to create {}", data_root.display()))?;
+    set_private_directory_permissions(data_root)?;
     fs::create_dir_all(data_root.join(IMAGES_DIR))
         .with_context(|| format!("failed to create {}", data_root.join(IMAGES_DIR).display()))?;
+    set_private_directory_permissions(&data_root.join(IMAGES_DIR))?;
+    ensure_real_directory_within(data_root, &data_root.join(IMAGES_DIR), "images directory")?;
+    validate_database_file_paths(data_root)?;
 
     let mut conn = open_connection(data_root)?;
     initialize_schema(&mut conn)?;
@@ -212,6 +221,74 @@ pub fn init_minerals_database(data_root: &Path) -> Result<()> {
         prune_orphan_images(&conn, data_root)?;
     }
 
+    harden_database_file_permissions(data_root)?;
+
+    Ok(())
+}
+
+#[cfg(unix)]
+fn set_private_directory_permissions(path: &Path) -> Result<()> {
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+        .with_context(|| format!("failed to set private permissions on {}", path.display()))
+}
+
+#[cfg(not(unix))]
+fn set_private_directory_permissions(_path: &Path) -> Result<()> {
+    Ok(())
+}
+
+fn validate_database_file_paths(data_root: &Path) -> Result<()> {
+    for name in [
+        MINERALS_DB_FILE.to_string(),
+        format!("{MINERALS_DB_FILE}-wal"),
+        format!("{MINERALS_DB_FILE}-shm"),
+    ] {
+        let path = data_root.join(name);
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_file() => {
+                return Err(anyhow!(
+                    "database path {} must be a regular file, not a symlink",
+                    path.display()
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("failed to inspect database path {}", path.display()))
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn harden_database_file_permissions(data_root: &Path) -> Result<()> {
+    validate_database_file_paths(data_root)?;
+    for name in [
+        MINERALS_DB_FILE.to_string(),
+        format!("{MINERALS_DB_FILE}-wal"),
+        format!("{MINERALS_DB_FILE}-shm"),
+    ] {
+        let path = data_root.join(name);
+        match fs::symlink_metadata(&path) {
+            Ok(_) => {
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).with_context(
+                    || format!("failed to set private permissions on {}", path.display()),
+                )?;
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("failed to inspect database path {}", path.display()))
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn harden_database_file_permissions(_data_root: &Path) -> Result<()> {
     Ok(())
 }
 
@@ -482,6 +559,14 @@ pub fn mineral_slug_exists(data_root: &Path, slug: &str) -> Result<bool> {
 }
 
 pub fn execute_admin_sql(data_root: &Path, sql: &str) -> Result<AdminSqlExecution> {
+    execute_admin_sql_with_runtime(data_root, sql, ADMIN_SQL_MAX_RUNTIME)
+}
+
+fn execute_admin_sql_with_runtime(
+    data_root: &Path,
+    sql: &str,
+    max_runtime: Duration,
+) -> Result<AdminSqlExecution> {
     let trimmed = sql.trim();
     if trimmed.is_empty() {
         return Err(anyhow!("SQL cannot be empty"));
@@ -502,6 +587,8 @@ pub fn execute_admin_sql(data_root: &Path, sql: &str) -> Result<AdminSqlExecutio
         .to_ascii_lowercase();
 
     let conn = open_connection(data_root)?;
+    let started_at = Instant::now();
+    conn.progress_handler(1_000, Some(move || started_at.elapsed() >= max_runtime));
     let mut stmt = conn
         .prepare(trimmed)
         .context("failed to prepare SQL statement")?;
@@ -1055,9 +1142,27 @@ fn import_localized_records(
 ) -> Result<()> {
     let mut grouped: HashMap<String, (String, HashMap<String, MineralDiskRecord>)> = HashMap::new();
     for row in records {
+        if !is_valid_mineral_folder_name(&row.slug) {
+            return Err(anyhow!(
+                "legacy mineral slug '{}' is not a valid mineral identifier",
+                row.slug
+            ));
+        }
+        if !is_valid_mineral_folder_name(&row.folder_name) {
+            return Err(anyhow!(
+                "legacy mineral folder '{}' is not a valid mineral identifier",
+                row.folder_name
+            ));
+        }
         let entry = grouped
             .entry(row.slug.clone())
             .or_insert_with(|| (row.folder_name.clone(), HashMap::new()));
+        if entry.0 != row.folder_name {
+            return Err(anyhow!(
+                "legacy mineral '{}' references multiple folders",
+                row.slug
+            ));
+        }
         entry.0 = row.folder_name.clone();
         entry.1.insert(row.lang_code.clone(), row.metadata.clone());
     }
@@ -1355,10 +1460,17 @@ fn store_image_file(
     bytes: &[u8],
     original_name: Option<&str>,
 ) -> Result<StoredImage> {
+    if !is_valid_mineral_folder_name(slug) {
+        return Err(anyhow!(
+            "cannot store an image for invalid mineral slug '{slug}'"
+        ));
+    }
     let normalized_ext = normalize_image_extension(ext);
-    let images_root = data_root.join(IMAGES_DIR);
-    fs::create_dir_all(&images_root)
-        .with_context(|| format!("failed to create {}", images_root.display()))?;
+    let configured_images_root = data_root.join(IMAGES_DIR);
+    fs::create_dir_all(&configured_images_root)
+        .with_context(|| format!("failed to create {}", configured_images_root.display()))?;
+    let images_root =
+        ensure_real_directory_within(data_root, &configured_images_root, "images directory")?;
 
     for attempt in 0..64 {
         let now = SystemTime::now()
@@ -1367,12 +1479,24 @@ fn store_image_file(
             .as_nanos();
         let candidate = format!("{slug}.{now:x}.{attempt}.{normalized_ext}");
         let target = images_root.join(&candidate);
-        if target.exists() {
-            continue;
+        let mut file = match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&target)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("failed to create image {}", target.display()))
+            }
+        };
+        if let Err(error) = file.write_all(bytes) {
+            drop(file);
+            let _ = fs::remove_file(&target);
+            return Err(error)
+                .with_context(|| format!("failed to write image {}", target.display()));
         }
-
-        fs::write(&target, bytes)
-            .with_context(|| format!("failed to write image {}", target.display()))?;
 
         return Ok(StoredImage {
             stored_name: candidate,
@@ -1387,6 +1511,33 @@ fn store_image_file(
     Err(anyhow!(
         "failed to allocate unique image filename for slug '{slug}'"
     ))
+}
+
+fn ensure_real_directory_within(
+    data_root: &Path,
+    directory: &Path,
+    label: &str,
+) -> Result<std::path::PathBuf> {
+    let metadata = fs::symlink_metadata(directory)
+        .with_context(|| format!("failed to inspect {label} {}", directory.display()))?;
+    if metadata.file_type().is_symlink() || !metadata.is_dir() {
+        return Err(anyhow!(
+            "{label} {} must be a real directory, not a symlink",
+            directory.display()
+        ));
+    }
+    let canonical_root = fs::canonicalize(data_root)
+        .with_context(|| format!("failed to resolve data root {}", data_root.display()))?;
+    let canonical_directory = fs::canonicalize(directory)
+        .with_context(|| format!("failed to resolve {label} {}", directory.display()))?;
+    if !canonical_directory.starts_with(&canonical_root) {
+        return Err(anyhow!(
+            "{label} {} escapes data root {}",
+            canonical_directory.display(),
+            canonical_root.display()
+        ));
+    }
+    Ok(canonical_directory)
 }
 
 fn resolve_shared_image_by_name(
@@ -1419,60 +1570,221 @@ fn resolve_legacy_image_for_slug(
     folder_name: &str,
     localized: &HashMap<String, MineralDiskRecord>,
 ) -> Result<Option<OwnedImageInput>> {
-    let folder_path = data_root.join(LEGACY_MINERALS_DIR).join(folder_name);
-    if !folder_path.exists() {
-        return Ok(None);
+    if !is_valid_mineral_folder_name(folder_name) {
+        return Err(anyhow!(
+            "legacy mineral folder '{folder_name}' is not a valid mineral identifier"
+        ));
+    }
+
+    let legacy_root = data_root.join(LEGACY_MINERALS_DIR);
+    let legacy_root_metadata = match fs::symlink_metadata(&legacy_root) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to inspect {}", legacy_root.display()))
+        }
+    };
+    if legacy_root_metadata.file_type().is_symlink() || !legacy_root_metadata.is_dir() {
+        return Err(anyhow!(
+            "legacy minerals root {} must be a real directory, not a symlink",
+            legacy_root.display()
+        ));
+    }
+
+    let canonical_data_root = fs::canonicalize(data_root)
+        .with_context(|| format!("failed to resolve {}", data_root.display()))?;
+    let canonical_legacy_root = fs::canonicalize(&legacy_root)
+        .with_context(|| format!("failed to resolve {}", legacy_root.display()))?;
+    if !canonical_legacy_root.starts_with(&canonical_data_root) {
+        return Err(anyhow!(
+            "legacy minerals root {} escapes data root {}",
+            canonical_legacy_root.display(),
+            canonical_data_root.display()
+        ));
+    }
+
+    let folder_path = legacy_root.join(folder_name);
+    let folder_metadata = match fs::symlink_metadata(&folder_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to inspect {}", folder_path.display()))
+        }
+    };
+    if folder_metadata.file_type().is_symlink() || !folder_metadata.is_dir() {
+        return Err(anyhow!(
+            "legacy mineral folder {} must be a real directory, not a symlink",
+            folder_path.display()
+        ));
+    }
+    let canonical_folder = fs::canonicalize(&folder_path)
+        .with_context(|| format!("failed to resolve {}", folder_path.display()))?;
+    if !canonical_folder.starts_with(&canonical_legacy_root) {
+        return Err(anyhow!(
+            "legacy mineral folder {} escapes {}",
+            canonical_folder.display(),
+            canonical_legacy_root.display()
+        ));
     }
 
     let preferred_file = localized
         .get(FALLBACK_LANGUAGE)
-        .and_then(|value| value.image_file.clone())
+        .and_then(|value| value.image_file.as_deref())
         .or_else(|| {
             localized
                 .values()
-                .find_map(|value| value.image_file.clone())
+                .find_map(|value| value.image_file.as_deref())
         });
 
-    let candidate_path = preferred_file
-        .as_ref()
-        .map(|name| folder_path.join(name))
-        .filter(|path| path.exists())
-        .or_else(|| {
-            fs::read_dir(&folder_path).ok().and_then(|iter| {
-                iter.filter_map(std::result::Result::ok)
-                    .map(|entry| entry.path())
-                    .find(|path| {
-                        path.file_name()
-                            .and_then(|name| name.to_str())
-                            .map(|name| name.starts_with("image."))
-                            .unwrap_or(false)
-                    })
-            })
-        });
+    let candidate_path = if let Some(name) = preferred_file {
+        validate_legacy_image_file_name(name)?;
+        let preferred_path = folder_path.join(name);
+        match fs::symlink_metadata(&preferred_path) {
+            Ok(_) => Some(preferred_path),
+            Err(error) if error.kind() == ErrorKind::NotFound => None,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("failed to inspect {}", preferred_path.display()))
+            }
+        }
+    } else {
+        None
+    }
+    .or_else(|| {
+        fs::read_dir(&folder_path).ok().and_then(|iter| {
+            iter.filter_map(std::result::Result::ok)
+                .filter(|entry| {
+                    entry
+                        .file_type()
+                        .map(|kind| kind.is_file() && !kind.is_symlink())
+                        .unwrap_or(false)
+                })
+                .find(|entry| {
+                    entry
+                        .file_name()
+                        .to_str()
+                        .map(|name| name.starts_with("image."))
+                        .unwrap_or(false)
+                })
+                .map(|entry| entry.path())
+        })
+    });
 
     let Some(path) = candidate_path else {
         return Ok(None);
     };
 
-    let ext = path
+    let path_metadata = fs::symlink_metadata(&path)
+        .with_context(|| format!("failed to inspect legacy image {}", path.display()))?;
+    if path_metadata.file_type().is_symlink() || !path_metadata.is_file() {
+        return Err(anyhow!(
+            "legacy image {} must be a regular file, not a symlink",
+            path.display()
+        ));
+    }
+    if path_metadata.len() > LEGACY_IMAGE_MAX_BYTES {
+        return Err(anyhow!(
+            "legacy image {} exceeds the {} byte limit",
+            path.display(),
+            LEGACY_IMAGE_MAX_BYTES
+        ));
+    }
+
+    let canonical_path = fs::canonicalize(&path)
+        .with_context(|| format!("failed to resolve legacy image {}", path.display()))?;
+    if !canonical_path.starts_with(&canonical_folder) {
+        return Err(anyhow!(
+            "legacy image {} escapes mineral folder {}",
+            canonical_path.display(),
+            canonical_folder.display()
+        ));
+    }
+
+    let ext = canonical_path
         .extension()
         .and_then(|value| value.to_str())
-        .unwrap_or("jpg")
-        .to_string();
+        .and_then(supported_image_extension)
+        .ok_or_else(|| {
+            anyhow!(
+                "legacy image {} has an unsupported extension",
+                canonical_path.display()
+            )
+        })?;
 
-    let bytes = fs::read(&path)
-        .with_context(|| format!("failed to read legacy image {}", path.display()))?;
+    let bytes = fs::read(&canonical_path)
+        .with_context(|| format!("failed to read legacy image {}", canonical_path.display()))?;
+    if !image_signature_matches(&bytes, ext) {
+        return Err(anyhow!(
+            "legacy image {} does not match its declared {ext} format",
+            canonical_path.display()
+        ));
+    }
 
-    let original_name = path
+    let original_name = canonical_path
         .file_name()
         .and_then(|value| value.to_str())
         .map(str::to_string);
 
     Ok(Some(OwnedImageInput {
         bytes,
-        ext,
+        ext: ext.to_string(),
         original_name,
     }))
+}
+
+fn validate_legacy_image_file_name(name: &str) -> Result<()> {
+    let trimmed = name.trim();
+    let mut components = Path::new(trimmed).components();
+    let single_normal_component =
+        matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none();
+    if trimmed.is_empty()
+        || trimmed != name
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || !single_normal_component
+    {
+        return Err(anyhow!(
+            "legacy image_file '{name}' must be a single normal filename"
+        ));
+    }
+    if Path::new(trimmed)
+        .extension()
+        .and_then(|value| value.to_str())
+        .and_then(supported_image_extension)
+        .is_none()
+    {
+        return Err(anyhow!(
+            "legacy image_file '{name}' has an unsupported extension"
+        ));
+    }
+    Ok(())
+}
+
+fn supported_image_extension(ext: &str) -> Option<&'static str> {
+    match ext
+        .trim()
+        .trim_start_matches('.')
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => Some("png"),
+        "webp" => Some("webp"),
+        "gif" => Some("gif"),
+        "jpeg" | "jpg" => Some("jpg"),
+        _ => None,
+    }
+}
+
+fn image_signature_matches(bytes: &[u8], ext: &str) -> bool {
+    match ext {
+        "png" => bytes.starts_with(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]),
+        "jpg" => bytes.starts_with(&[0xff, 0xd8, 0xff]),
+        "gif" => bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a"),
+        "webp" => bytes.len() >= 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP",
+        _ => false,
+    }
 }
 
 fn normalize_localized_records(
@@ -1647,7 +1959,15 @@ pub fn is_valid_mineral_folder_name(name: &str) -> bool {
 
     let family = family.unwrap_or_default();
     let id = id.unwrap_or_default();
-    if family.is_empty() || !id.starts_with("0x") || id.len() < 5 {
+    if family.is_empty()
+        || !family
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+        || family.starts_with('-')
+        || family.ends_with('-')
+        || !id.starts_with("0x")
+        || id.len() < 5
+    {
         return false;
     }
 
@@ -1695,4 +2015,181 @@ pub fn major_elements_to_text(values: &BTreeMap<String, f32>) -> String {
         .map(|(name, value)| format!("{name}={value:.2}"))
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn legacy_record(image_file: Option<&str>) -> MineralDiskRecord {
+        MineralDiskRecord {
+            common_name: "Quartz".to_string(),
+            description: String::new(),
+            mineral_family: "silicates".to_string(),
+            formula: "SiO2".to_string(),
+            hardness_mohs: 7.0,
+            density_g_cm3: 2.65,
+            crystal_system: "trigonal".to_string(),
+            color: "colorless".to_string(),
+            streak: "white".to_string(),
+            luster: "vitreous".to_string(),
+            major_elements_pct: BTreeMap::new(),
+            notes: String::new(),
+            image_file: image_file.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn admin_sql_interrupts_queries_that_exceed_the_runtime_limit() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        init_minerals_database(temp.path()).expect("initialize database");
+
+        let started = Instant::now();
+        let error = execute_admin_sql_with_runtime(
+            temp.path(),
+            "WITH RECURSIVE forever(value) AS (VALUES(1) UNION ALL SELECT value + 1 FROM forever) SELECT max(value) FROM forever",
+            Duration::from_millis(10),
+        )
+        .expect_err("recursive query must be interrupted");
+
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert!(format!("{error:#}")
+            .to_ascii_lowercase()
+            .contains("interrupt"));
+    }
+
+    #[test]
+    fn legacy_image_reference_must_be_a_normal_filename() {
+        for invalid in [
+            "../secret.jpg",
+            "..\\secret.jpg",
+            "/secret.jpg",
+            "image.jpg/child",
+            " image.jpg",
+            "image.txt",
+        ] {
+            let error = validate_legacy_image_file_name(invalid)
+                .expect_err("traversing or unsupported image name must fail");
+            assert!(!error.to_string().is_empty());
+        }
+        validate_legacy_image_file_name("image.JPEG").expect("supported filename");
+    }
+
+    #[test]
+    fn mineral_identifier_rejects_path_characters() {
+        assert!(is_valid_mineral_folder_name("mineral.iron-oxides.0x1234"));
+        assert!(!is_valid_mineral_folder_name("mineral.iron/oxides.0x1234"));
+        assert!(!is_valid_mineral_folder_name("mineral.iron\\oxides.0x1234"));
+        assert!(!is_valid_mineral_folder_name("mineral.-iron.0x1234"));
+    }
+
+    #[test]
+    fn legacy_image_resolution_rejects_traversal_before_reading() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder_name = "mineral.silicates.0x1234";
+        let folder = temp.path().join(LEGACY_MINERALS_DIR).join(folder_name);
+        fs::create_dir_all(&folder).expect("legacy folder");
+        fs::write(temp.path().join("secret.jpg"), [0xff, 0xd8, 0xff]).expect("outside file");
+        let localized = HashMap::from([(
+            FALLBACK_LANGUAGE.to_string(),
+            legacy_record(Some("../../secret.jpg")),
+        )]);
+
+        let error = resolve_legacy_image_for_slug(temp.path(), folder_name, &localized)
+            .expect_err("traversal must fail");
+        assert!(error.to_string().contains("single normal filename"));
+    }
+
+    #[test]
+    fn valid_legacy_seed_still_migrates_with_a_registered_image() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let folder_name = "mineral.silicates.0x1234";
+        let folder = temp.path().join(LEGACY_MINERALS_DIR).join(folder_name);
+        fs::create_dir_all(&folder).expect("legacy folder");
+        fs::write(folder.join("image.jpg"), [0xff, 0xd8, 0xff, 0xd9]).expect("legacy image");
+        fs::write(
+            folder.join("mineral.en.json"),
+            serde_json::to_vec(&legacy_record(Some("image.jpg"))).expect("metadata JSON"),
+        )
+        .expect("legacy metadata");
+
+        init_minerals_database(temp.path()).expect("migrate valid legacy seed");
+        let minerals = load_minerals(temp.path(), FALLBACK_LANGUAGE).expect("load catalog");
+        assert_eq!(minerals.len(), 1);
+        assert_eq!(minerals[0].slug, folder_name);
+        assert!(minerals[0]
+            .image_path
+            .as_deref()
+            .is_some_and(|path| path.starts_with("/media/images/")));
+    }
+
+    #[test]
+    fn image_storage_rejects_a_traversing_slug() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let error = store_image_file(
+            temp.path(),
+            "../../escape",
+            "jpg",
+            &[0xff, 0xd8, 0xff],
+            Some("image.jpg"),
+        )
+        .expect_err("invalid slug must fail");
+        assert!(error.to_string().contains("invalid mineral slug"));
+        assert!(!temp.path().join("escape").exists());
+    }
+
+    #[test]
+    fn image_directory_must_remain_inside_the_data_root() {
+        let data_root = tempfile::tempdir().expect("data root");
+        let outside = tempfile::tempdir().expect("outside directory");
+        let error =
+            ensure_real_directory_within(data_root.path(), outside.path(), "images directory")
+                .expect_err("outside image directory must fail");
+        assert!(error.to_string().contains("escapes data root"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn initialization_rejects_a_symlinked_database_before_opening_it() {
+        use std::os::unix::fs::symlink;
+
+        let data_root = tempfile::tempdir().expect("data root");
+        let outside = tempfile::NamedTempFile::new().expect("outside database target");
+        fs::write(outside.path(), b"do not modify").expect("marker");
+        symlink(outside.path(), data_root.path().join(MINERALS_DB_FILE)).expect("database symlink");
+
+        let error = init_minerals_database(data_root.path())
+            .expect_err("symlinked database must be rejected");
+        assert!(error.to_string().contains("regular file"));
+        assert_eq!(
+            fs::read(outside.path()).expect("marker remains"),
+            b"do not modify"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn initialization_applies_private_unix_permissions() {
+        let data_root = tempfile::tempdir().expect("data root");
+        init_minerals_database(data_root.path()).expect("initialize database");
+
+        let root_mode = fs::metadata(data_root.path())
+            .expect("root metadata")
+            .permissions()
+            .mode()
+            & 0o777;
+        let images_mode = fs::metadata(data_root.path().join(IMAGES_DIR))
+            .expect("images metadata")
+            .permissions()
+            .mode()
+            & 0o777;
+        let database_mode = fs::metadata(data_root.path().join(MINERALS_DB_FILE))
+            .expect("database metadata")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(root_mode, 0o700);
+        assert_eq!(images_mode, 0o700);
+        assert_eq!(database_mode, 0o600);
+    }
 }
