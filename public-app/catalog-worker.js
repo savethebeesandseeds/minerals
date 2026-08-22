@@ -240,8 +240,8 @@ function validateDatabaseSchema(manifest) {
     || singleValue("SELECT count(*) FROM evidence WHERE json_valid(claim_json) <> 1") !== 0) {
     throw catalogError("INVALID_DATABASE", "A catalog JSON column contains invalid JSON.");
   }
-  if (singleValue("SELECT count(*) FROM minerals AS m LEFT JOIN mineral_search AS s ON s.slug = m.slug WHERE s.slug IS NULL") !== 0
-    || singleValue("SELECT count(*) FROM mineral_search AS s LEFT JOIN minerals AS m ON m.slug = s.slug WHERE m.slug IS NULL") !== 0) {
+  if (singleValue("SELECT EXISTS(SELECT slug FROM minerals EXCEPT SELECT slug FROM mineral_search)") !== 0
+    || singleValue("SELECT EXISTS(SELECT slug FROM mineral_search EXCEPT SELECT slug FROM minerals)") !== 0) {
     throw catalogError("INVALID_SCHEMA", "The mineral search index does not match the mineral table.");
   }
   if (singleValue("SELECT count(*) FROM evidence AS e LEFT JOIN minerals AS m ON m.slug = e.mineral_slug WHERE m.slug IS NULL") !== 0

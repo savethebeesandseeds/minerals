@@ -197,6 +197,22 @@ test("the shell is subpath-relative and app-owned code avoids HTML sinks", async
   await assert.rejects(mountMineralsMap(null), /map container element is required/);
 });
 
+test("worker validates the complete FTS slug set without a quadratic virtual-table join", async () => {
+  const worker = await readFile(new URL("./catalog-worker.js", import.meta.url), "utf8");
+  assert.match(
+    worker,
+    /SELECT EXISTS\(SELECT slug FROM minerals EXCEPT SELECT slug FROM mineral_search\)/,
+  );
+  assert.match(
+    worker,
+    /SELECT EXISTS\(SELECT slug FROM mineral_search EXCEPT SELECT slug FROM minerals\)/,
+  );
+  assert.doesNotMatch(
+    worker,
+    /FROM minerals AS m LEFT JOIN mineral_search AS s ON s\.slug = m\.slug/,
+  );
+});
+
 test("the bundled map WASM exposes the dependency-free two-axis pose ABI", async () => {
   const bytes = await readFile(new URL("./map/minerals_map.wasm", import.meta.url));
   const compiled = await WebAssembly.compile(bytes);
