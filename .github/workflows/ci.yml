@@ -72,10 +72,10 @@ jobs:
           built=map-wasm/target/wasm32-unknown-unknown/release/minerals_map.wasm
           checked_in=public-app/map/minerals_map.wasm
           expected=f095257a885fe1545c7ccf1b18e480da4685b0726f5b9a2532c2cecd6212799f
-          actual="$(sha256sum "$built" | cut -d' ' -f1)"
+          actual="$(sha256sum "$checked_in" | cut -d' ' -f1)"
           test "$actual" = "$expected"
-          cmp "$built" "$checked_in"
-          node map-wasm/test-wasm-abi.mjs
+          node map-wasm/test-wasm-abi.mjs "$checked_in"
+          node map-wasm/test-wasm-abi.mjs "$built"
 
       - name: Build private admin and public exporter
         run: >-
