@@ -245,6 +245,9 @@ test("optional exported snapshot passes the real worker integrity, schema, and q
   assert.deepEqual(gunzipSync(gzipFile), databaseFile);
   const wasmBytes = new Uint8Array(await readFile(new URL("./vendor/sqlite/sqlite3.wasm", import.meta.url)));
   let manifestFetchCount = 0;
+  let gzipSidecarFetchCount = 0;
+  let missingGzipFetchCount = 0;
+  let staleRawFetchCount = 0;
   const server = createServer((request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
     const [, mode, ...segments] = url.pathname.split("/");
@@ -259,6 +262,26 @@ test("optional exported snapshot passes the real worker integrity, schema, and q
         "Cache-Control": "no-cache",
       });
       response.end(selectedText);
+      return;
+    }
+    if (resource === `${staleManifest.database.path}.gz`) {
+      missingGzipFetchCount += 1;
+      response.writeHead(404).end();
+      return;
+    }
+    if (resource === staleManifest.database.path) {
+      staleRawFetchCount += 1;
+      response.writeHead(404).end();
+      return;
+    }
+    if (resource === `${rawManifest.database.path}.gz`) {
+      gzipSidecarFetchCount += 1;
+      response.writeHead(200, {
+        "Content-Type": "application/gzip",
+        "Content-Length": gzipFile.byteLength,
+        "Cache-Control": "public, max-age=31536000, immutable",
+      });
+      response.end(gzipFile);
       return;
     }
     if (resource === rawManifest.database.path) {
@@ -343,6 +366,9 @@ test("optional exported snapshot passes the real worker integrity, schema, and q
     const initialized = await request("init", { manifestUrl: `${origin}/br/catalog-manifest.json` });
     assert.equal(initialized.ok, true, initialized.error?.message);
     assert.equal(manifestFetchCount, 2, "a release switch should refresh the manifest exactly once");
+    assert.equal(missingGzipFetchCount, 1, "a missing gzip sidecar should be attempted once");
+    assert.equal(staleRawFetchCount, 1, "a missing gzip sidecar should fall back to the canonical database");
+    assert.equal(gzipSidecarFetchCount, 1, "the worker should prefer the directly fetched gzip sidecar");
     assert.equal(initialized.result.manifest.mineral_count, rawManifest.mineral_count);
 
     const search = await request("search", { query: "quartz", page: 1, pageSize: 5 });

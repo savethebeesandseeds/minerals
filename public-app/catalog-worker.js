@@ -307,6 +307,8 @@ async function fetchDatabase(manifest) {
   if (manifest.database.bytes > MAX_DATABASE_BYTES) {
     throw catalogError("DATABASE_TOO_LARGE", `This app accepts catalog databases up to ${MAX_DATABASE_BYTES} bytes.`);
   }
+  const precompressed = await fetchGzipDatabase(manifest);
+  if (precompressed) return precompressed;
   const response = await fetch(manifest.database.url, {
     cache: "force-cache",
     credentials: "same-origin",
@@ -320,7 +322,73 @@ async function fetchDatabase(manifest) {
   if (Number.isFinite(declaredLength) && declaredLength > MAX_DATABASE_BYTES) {
     throw catalogError("DATABASE_TOO_LARGE", "The catalog database response is too large.");
   }
-  const bytes = await response.arrayBuffer();
+  return verifyDatabaseBytes(new Uint8Array(await response.arrayBuffer()), manifest);
+}
+
+async function fetchGzipDatabase(manifest) {
+  if (typeof globalThis.DecompressionStream !== "function") return undefined;
+  const gzipUrl = new URL(manifest.database.url);
+  gzipUrl.pathname += ".gz";
+  let response;
+  try {
+    response = await fetch(gzipUrl, {
+      cache: "force-cache",
+      credentials: "same-origin",
+      redirect: "error",
+      headers: { Accept: "application/gzip, application/octet-stream;q=0.9" },
+    });
+  } catch {
+    return undefined;
+  }
+  if (!response.ok || !response.body) return undefined;
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_DATABASE_BYTES) return undefined;
+  try {
+    const contentEncoding = response.headers.get("content-encoding")?.trim().toLowerCase();
+    const decodedStream = contentEncoding === "gzip"
+      ? response.body
+      : response.body.pipeThrough(new DecompressionStream("gzip"));
+    const bytes = await readExactDatabaseStream(decodedStream, manifest.database.bytes);
+    return await verifyDatabaseBytes(bytes, manifest);
+  } catch {
+    return undefined;
+  }
+}
+
+async function readExactDatabaseStream(stream, expectedBytes) {
+  const reader = stream.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!(value instanceof Uint8Array)) {
+        throw catalogError("DATABASE_DECOMPRESSION_FAILED", "The compressed catalog returned an invalid stream chunk.");
+      }
+      total += value.byteLength;
+      if (total > expectedBytes) {
+        await reader.cancel();
+        throw catalogError("DATABASE_SIZE_MISMATCH", "The decompressed catalog is larger than the manifest allows.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  if (total !== expectedBytes) {
+    throw catalogError("DATABASE_SIZE_MISMATCH", "The decompressed catalog size does not match the declared manifest value.");
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+async function verifyDatabaseBytes(bytes, manifest) {
   if (bytes.byteLength !== manifest.database.bytes) {
     throw catalogError("DATABASE_SIZE_MISMATCH", "The downloaded catalog database size does not match the declared manifest value.");
   }
@@ -328,7 +396,7 @@ async function fetchDatabase(manifest) {
   if (digest !== manifest.database.digest) {
     throw catalogError("DATABASE_HASH_MISMATCH", "The downloaded catalog database failed SHA-256 verification.");
   }
-  return new Uint8Array(bytes);
+  return bytes;
 }
 
 async function initializeSqlite() {

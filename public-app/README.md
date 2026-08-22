@@ -11,7 +11,8 @@ The deployment must:
 - serve `.mjs` with a JavaScript MIME type and `.wasm` as `application/wasm`; prefer `application/vnd.sqlite3` for `.sqlite3` (a generic binary MIME type is also safe because the database is fetched as bytes rather than executed);
 - use canonical hash routes for portable directory-subpath deployments; clean-path rewrites are optional and require host-specific asset-base handling;
 - send `Cache-Control: no-cache` for `catalog-manifest.json`, and may send `Cache-Control: public, max-age=31536000, immutable` for `data/catalog-<sha256>.sqlite3`;
-- when the host supports precompressed-file negotiation, select the generated `.sqlite3.br` and `.sqlite3.gz` sidecars for the canonical `.sqlite3` URL, preferring Brotli, then gzip, then the uncompressed file; `fetch()` supplies the decoded bytes that the manifest size and SHA-256 checks verify;
+- keep the generated `.sqlite3.gz` beside the canonical database: the worker prefers that smaller same-origin file, decompresses it with the browser's native gzip stream, bounds the decoded size, verifies the manifest SHA-256, and falls back to the canonical `.sqlite3` file when the native decoder or sidecar is unavailable;
+- when the host supports transparent precompressed-file negotiation, it may also select the generated `.sqlite3.br` or `.sqlite3.gz` representation for the canonical `.sqlite3` URL, preferring Brotli, then gzip, then the uncompressed file; `fetch()` supplies the decoded bytes that the same manifest checks verify;
 - preserve same-origin URLs for the manifest, database, worker, SQLite runtime, and optional map module; and
 - reproduce the CSP in `index.html` as an HTTP response header in production, adding `frame-ancestors 'none'` (which a CSP meta element cannot enforce) and `X-Content-Type-Options: nosniff`.
 
