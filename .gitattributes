@@ -15,6 +15,14 @@ public-app/**/*.mjs text eol=lf
 public-app/**/*.txt text eol=lf
 public-app/**/*.wasm -text
 
+# The checked-in catalog is an intentionally public, sanitized snapshot. Keep
+# its manifest stable across platforms and never apply text filters to SQLite
+# or its precompressed representations.
+public-catalog/catalog-manifest.json text eol=lf
+public-catalog/data/*.sqlite3 -text -diff
+public-catalog/data/*.sqlite3.br -text -diff
+public-catalog/data/*.sqlite3.gz -text -diff
+
 # Preserve the official vendored SQLite ESM byte-for-byte; upstream contains
 # intentional trailing tabs that must not be normalized locally.
 public-app/vendor/sqlite/index.mjs whitespace=-trailing-space

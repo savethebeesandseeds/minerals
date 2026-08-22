@@ -28,6 +28,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
       - name: Enforce the public repository boundary
         run: python3 tools/check-public-boundary.py
 
@@ -39,16 +44,14 @@ jobs:
           --component clippy
           --target wasm32-unknown-unknown
 
-      - name: Install Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
-        with:
-          node-version: 22
-
       - name: Test repository boundary and release extraction tools
-        run: >-
-          python3 -m unittest
-          tools/test_check_public_boundary.py
-          tools/test_extract_pages_release.py
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 -m unittest \
+            tools/test_check_public_boundary.py \
+            tools/test_extract_pages_release.py
+          node --test tools/test_validate_public_catalog_sidecars.mjs
 
       - name: Check Rust formatting
         run: |
@@ -85,3 +88,15 @@ jobs:
 
       - name: Export and test an isolated static release
         run: bash tools/ci-static-release.sh
+
+      - name: Assemble and test the committed public catalog
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          release="$RUNNER_TEMP/waajacu-committed-catalog"
+          target/debug/export-public \
+            --assemble-catalog public-catalog \
+            --output "$release" \
+            --app-root public-app
+          WAAJACU_CATALOG_SMOKE_DIR="$release" \
+            node --test public-app/tests.mjs

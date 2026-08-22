@@ -4,14 +4,22 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import math
+import os
 from pathlib import Path, PurePosixPath
 import re
+import sqlite3
 import subprocess
 import sys
+from urllib.parse import quote
 
 
 MAX_SECRET_SCAN_BYTES = 2 * 1024 * 1024
+PUBLIC_CATALOG_ROOT = "public-catalog"
+PUBLIC_CATALOG_MANIFEST = f"{PUBLIC_CATALOG_ROOT}/catalog-manifest.json"
+SIDECAR_VALIDATOR = Path(__file__).with_name("validate-public-catalog-sidecars.mjs")
 
 FORBIDDEN_ROOTS = (
     ".archives",
@@ -144,6 +152,110 @@ def below(path: str, root: str) -> bool:
     return path == root or path.startswith(f"{root}/")
 
 
+def is_public_catalog_database_path(path: str) -> bool:
+    return bool(
+        re.fullmatch(
+            rf"{re.escape(PUBLIC_CATALOG_ROOT)}/data/"
+            r"catalog-[0-9a-f]{64}\.sqlite3(?:\.(?:br|gz))?",
+            path,
+        )
+    )
+
+
+def public_catalog_snapshot_findings(
+    repo: Path, paths: list[str], *, validate_compression: bool = True
+) -> list[tuple[str, str]]:
+    actual = {path for path in paths if below(path, PUBLIC_CATALOG_ROOT)}
+    raw_databases = sorted(
+        path
+        for path in actual
+        if re.fullmatch(
+            rf"{re.escape(PUBLIC_CATALOG_ROOT)}/data/"
+            r"catalog-[0-9a-f]{64}\.sqlite3",
+            path,
+        )
+    )
+    if len(raw_databases) != 1:
+        return [
+            (
+                PUBLIC_CATALOG_ROOT,
+                "must track exactly one sanitized raw catalog database",
+            )
+        ]
+
+    raw = raw_databases[0]
+    expected = {PUBLIC_CATALOG_MANIFEST, raw, f"{raw}.br", f"{raw}.gz"}
+    if actual != expected:
+        return [
+            (
+                PUBLIC_CATALOG_ROOT,
+                "must contain exactly the manifest and one matching raw/br/gz catalog set",
+            )
+        ]
+
+    findings: list[tuple[str, str]] = []
+    try:
+        for relative in sorted(expected):
+            candidate = repo.joinpath(*PurePosixPath(relative).parts)
+            if candidate.is_symlink() or not candidate.is_file():
+                findings.append((relative, "worktree artifact is not a regular file"))
+                continue
+            indexed = git(repo, "cat-file", "blob", f":{relative}")
+            if candidate.read_bytes() != indexed:
+                findings.append(
+                    (
+                        relative,
+                        "worktree bytes differ from the staged Git blob; refusing to scan a different file",
+                    )
+                )
+        if findings:
+            return findings
+
+        manifest_bytes = git(repo, "cat-file", "blob", f":{PUBLIC_CATALOG_MANIFEST}")
+        manifest = json.loads(manifest_bytes)
+        database = manifest["database"]
+        relative_database = raw.removeprefix(f"{PUBLIC_CATALOG_ROOT}/")
+        digest = raw.removeprefix(f"{PUBLIC_CATALOG_ROOT}/data/catalog-").removesuffix(
+            ".sqlite3"
+        )
+        if database["path"] != relative_database:
+            findings.append(
+                (PUBLIC_CATALOG_MANIFEST, "database path does not name the tracked raw file")
+            )
+        if database["sha256"] != f"sha256:{digest}":
+            findings.append(
+                (PUBLIC_CATALOG_MANIFEST, "database SHA-256 does not match its filename")
+            )
+        raw_bytes = git(repo, "cat-file", "blob", f":{raw}")
+        if len(raw_bytes) != database["bytes"]:
+            findings.append((raw, "database byte length does not match the manifest"))
+        if hashlib.sha256(raw_bytes).hexdigest() != digest:
+            findings.append((raw, "database content does not match its SHA-256 filename"))
+        if validate_compression:
+            node = os.environ.get("WAAJACU_NODE", "node")
+            try:
+                completed = subprocess.run(
+                    [node, str(SIDECAR_VALIDATOR), str(repo / PUBLIC_CATALOG_ROOT)],
+                    cwd=repo,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=False,
+                    text=True,
+                )
+            except FileNotFoundError as error:
+                raise BoundaryError(
+                    "Node.js is required to validate public catalog Brotli and gzip sidecars"
+                ) from error
+            if completed.returncode != 0:
+                detail = completed.stderr.strip() or "sidecar validator returned no detail"
+                raise BoundaryError(detail)
+    except BoundaryError as error:
+        findings.append((PUBLIC_CATALOG_ROOT, f"catalog validation failed: {error}"))
+    except (KeyError, TypeError, json.JSONDecodeError) as error:
+        findings.append((PUBLIC_CATALOG_MANIFEST, f"cannot validate catalog manifest: {error}"))
+    return findings
+
+
 def forbidden_path_reason(path: str) -> str | None:
     normalized = PurePosixPath(path).as_posix()
     while normalized.startswith("./"):
@@ -151,6 +263,13 @@ def forbidden_path_reason(path: str) -> str | None:
     parts = PurePosixPath(normalized).parts
     if not normalized or any(part in {".", "..", ""} for part in parts):
         return "unsafe repository path"
+
+    if below(normalized, PUBLIC_CATALOG_ROOT):
+        if normalized == PUBLIC_CATALOG_MANIFEST or is_public_catalog_database_path(
+            normalized
+        ):
+            return None
+        return "unexpected tracked public-catalog path"
 
     for root in (*FORBIDDEN_ROOTS, *FORBIDDEN_DATA_ROOTS):
         if below(normalized, root):
@@ -238,6 +357,84 @@ def scan_tracked_secrets(repo: Path, paths: list[str]) -> list[tuple[str, str]]:
     return findings
 
 
+def scan_public_catalog_text(
+    repo: Path, paths: list[str]
+) -> list[tuple[str, str]]:
+    databases = [
+        path
+        for path in paths
+        if is_public_catalog_database_path(path) and path.endswith(".sqlite3")
+    ]
+    findings: list[tuple[str, str]] = []
+    for relative in databases:
+        candidate = repo.joinpath(*PurePosixPath(relative).parts)
+        if candidate.is_symlink() or not candidate.is_file():
+            raise BoundaryError(
+                f"public catalog database is not a regular file: {relative}"
+            )
+        database_path = candidate.resolve()
+        try:
+            database_path.relative_to(repo)
+        except ValueError as error:
+            raise BoundaryError(
+                f"public catalog database escapes the repository: {relative}"
+            ) from error
+        uri = f"file:{quote(database_path.as_posix(), safe='/:')}?mode=ro&immutable=1"
+        try:
+            connection = sqlite3.connect(uri, uri=True)
+            connection.execute("PRAGMA query_only = ON")
+            tables = list(
+                connection.execute(
+                    "SELECT name, sql FROM sqlite_schema "
+                    "WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
+                    "ORDER BY name"
+                )
+            )
+            for table, schema_sql in tables:
+                if isinstance(schema_sql, str):
+                    for reason in sorted(secret_reasons(schema_sql.encode("utf-8"))):
+                        findings.append((f"{relative}:schema {table}", reason))
+                escaped_table = str(table).replace('"', '""')
+                columns = [
+                    row[1]
+                    for row in connection.execute(
+                        f'PRAGMA table_xinfo("{escaped_table}")'
+                    )
+                ]
+                if not columns:
+                    continue
+                selection = ", ".join(
+                    f'"{column.replace(chr(34), chr(34) * 2)}"'
+                    for column in columns
+                )
+                for row_number, row in enumerate(
+                    connection.execute(
+                        f'SELECT {selection} FROM "{escaped_table}"'
+                    ),
+                    start=1,
+                ):
+                    for column, value in zip(columns, row):
+                        if isinstance(value, str):
+                            content = value.encode("utf-8")
+                        elif isinstance(value, bytes):
+                            content = value
+                        else:
+                            continue
+                        for reason in sorted(secret_reasons(content)):
+                            findings.append(
+                                (
+                                    f"{relative}:{table}.{column} row {row_number}",
+                                    reason,
+                                )
+                            )
+            connection.close()
+        except sqlite3.Error as error:
+            raise BoundaryError(
+                f"failed to scan public catalog text in {relative}: {error}"
+            ) from error
+    return findings
+
+
 def historical_blob_candidates(
     repo: Path,
 ) -> tuple[list[tuple[str, str, int]], list[tuple[str, str]]]:
@@ -275,7 +472,10 @@ def historical_blob_candidates(
             candidates.append((fields[0], object_paths[fields[0]], size))
         elif size > MAX_SECRET_SCAN_BYTES:
             path = object_paths[fields[0]]
-            if forbidden_path_reason(path) is None:
+            if (
+                forbidden_path_reason(path) is None
+                and not is_public_catalog_database_path(path)
+            ):
                 oversized.append(
                     (
                         f"{path} @ {fields[0][:12]}",
@@ -344,7 +544,9 @@ def main() -> int:
             for path in paths
             if (reason := forbidden_path_reason(path)) is not None
         ]
+        path_findings.extend(public_catalog_snapshot_findings(repo, paths))
         secret_findings = scan_tracked_secrets(repo, paths)
+        secret_findings.extend(scan_public_catalog_text(repo, paths))
 
         history_findings: list[tuple[str, str]] = []
         historical_secret_findings: list[tuple[str, str]] = []
@@ -376,7 +578,7 @@ def main() -> int:
             print(f"  likely historical secret: {blob} ({reason})", file=sys.stderr)
         print(
             "Keep service state and credentials in ignored local storage; "
-            "publish only a validated public release archive.",
+            "publish only the validated public catalog snapshot and app assets.",
             file=sys.stderr,
         )
         return 1

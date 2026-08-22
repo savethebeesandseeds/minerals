@@ -1,0 +1,12 @@
+{
+  "format": "waajacu-public-catalog-v1",
+  "schema_version": 1,
+  "generated_at": "2026-08-22T20:42:50.463Z",
+  "release_id": "sha256:684c2830a145bfa0f0b0ecaf4f80bac64ddb51ffcb4a75035304840a868bccc4",
+  "mineral_count": 6226,
+  "database": {
+    "path": "data/catalog-04f38354e7aec37d91466b88b6201997deae40ad53d5d76136f3efc8c45bca0c.sqlite3",
+    "sha256": "sha256:04f38354e7aec37d91466b88b6201997deae40ad53d5d76136f3efc8c45bca0c",
+    "bytes": 13967360
+  }
+}

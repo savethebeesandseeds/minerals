@@ -4,7 +4,21 @@ This directory is a standalone, static browser application. The browser loads a 
 
 ## Serve and deploy
 
-`public-app/` is the checked-in asset source, not a complete release: it intentionally has no manifest or catalog database. Build `export-public` and run it as documented in the root README, passing a fresh release path under an existing parent (for example, `./target/release/export-public --data-root ./data --output ./public-releases/release-2026-08-21-1`). The exporter assembles and validates a sibling staging directory before renaming it to that path; it rejects an existing output and cleans staging after failure. Atomically switch the static host to the completed release, then serve it at an origin root or same-origin directory subpath over HTTPS. Plain HTTP is supported only on literal loopback addresses for development. Opening `index.html` with `file:` is unsupported because module workers, WebAssembly, Web Crypto, and `fetch()` require a secure HTTP origin. Application, worker, map, manifest, database, and SQLite URLs resolve from their owning modules, so a release mounted at a path such as `/catalog/` stays within that path.
+`public-app/` is the checked-in application source, while `public-catalog/` is
+the checked-in sanitized data source. Neither directory is deployed by itself.
+On every push to `main`, the Pages workflow uses `export-public
+--assemble-catalog` to copy only the explicit application allowlist and the four
+validated catalog artifacts into a fresh release directory. It then proves that
+the deployed live files match that commit. The operational `data/minerals.db`
+is never an input to GitHub Pages.
+
+Serve the assembled release at an origin root or same-origin directory subpath
+over HTTPS. Plain HTTP is supported only on literal loopback addresses for
+development. Opening `index.html` with `file:` is unsupported because module
+workers, WebAssembly, Web Crypto, and `fetch()` require a secure HTTP origin.
+Application, worker, map, manifest, database, and SQLite URLs resolve from their
+owning modules, so a release mounted at a path such as `/catalog/` stays within
+that path.
 
 The deployment must:
 

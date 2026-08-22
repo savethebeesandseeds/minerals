@@ -10,3 +10,7 @@ This directory contains two different classes of data:
 A clean checkout creates its SQLite authority from the tracked seed inputs at
 startup. Never commit a live database, WAL, backup, or generated report. Back
 up the complete mutable data root using the procedure in `docs/OPERATIONS.md`.
+
+The intentionally public browser database lives separately under
+`public-catalog/`. It is rebuilt by the exporter with a strict public-only
+schema; it is not a copy of this operational data root.

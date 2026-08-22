@@ -82,68 +82,64 @@ not load `.env` or `.env.local` itself.
 
 ## Static public catalog
 
-The public mineral experience can be deployed as ordinary static files. The
-browser loads a sanitized, content-addressed SQLite snapshot in the vendored
-SQLite WebAssembly runtime, then performs search, pagination, and detail
-queries locally. The Axum service and live `data/minerals.db` remain the private
-administration and publication control plane. The source repository and
-sanitized public release may be public; credentials, service configuration,
-the live database, journals, backups, and ingestion state may not.
+The public mineral experience is ordinary static HTML, CSS, JavaScript,
+WebAssembly, and an intentionally public SQLite snapshot. The browser performs
+search, pagination, and detail queries locally. GitHub Pages does not run an
+application server and receives no administrator password or writable database.
 
-Build the exporter when application code changes:
+Two databases have deliberately different boundaries:
+
+- `public-catalog/` is the reviewed, sanitized 6,226-mineral projection. It is
+  version-controlled because it is part of the public scientific contribution.
+- `data/minerals.db` is the writable administration database. Its reviews,
+  ingestion state, withdrawal notes, journals, and backups remain ignored local
+  service state and are never published by Pages.
+
+Every push to `main` automatically runs `.github/workflows/pages.yml`. The
+workflow assembles a fresh site from the exact committed `public-app` allowlist
+and the exact committed `public-catalog` snapshot, validates the SQLite schema,
+hashes, compressed streams, and browser worker, deploys only that assembled
+directory, then waits until the live files match the pushed commit. There is no
+deployment branch and no manual GitHub Release archive.
+
+To review a new catalog snapshot from the private administration machine, build
+the exporter and write a fresh temporary release:
 
 ```bash
 cargo build --locked --release -p minerals-public-catalog --bin export-public
+./target/release/export-public \
+  --data-root ./data \
+  --output ./public-releases/review-1 \
+  --app-root ./public-app
 ```
 
-Then publish content without recompiling. `--output` must name a new release
-directory whose parent already exists. On Windows:
-
-```powershell
-.\target\release\export-public.exe --data-root .\data --output .\public-releases\release-2026-08-21-1
-```
-
-On Linux or macOS:
+Review that fresh output, then update only `public-catalog/catalog-manifest.json`
+and its three matching files under `public-catalog/data/`. Before committing,
+assemble the tracked sources exactly as Pages will:
 
 ```bash
-./target/release/export-public --data-root ./data --output ./public-releases/release-2026-08-21-1
+./target/release/export-public \
+  --assemble-catalog ./public-catalog \
+  --output ./target/pages-review \
+  --app-root ./public-app
+python3 tools/check-public-boundary.py
 ```
 
-The command creates a sibling staging directory, copies only the explicit
-public-app asset allowlist, reads one consistent read-only registry snapshot,
-creates and verifies a public-only SQLite database plus Brotli and gzip
-sidecars, and writes `catalog-manifest.json` last. It validates the completed package and renames
-the staging directory to the requested fresh output only after every step
-succeeds; a failure leaves no output release and never changes an existing
-one. Serve the completed release directory over HTTPS in production (plain
-HTTP is reserved for literal-loopback development);
-`file:` URLs cannot run module workers or WebAssembly. Hash routes such as
-`/#/minerals` work on basic static hosts without rewrite rules. A host with an
-SPA fallback can additionally expose clean `/minerals/:slug` routes.
+Both output paths must be new. The assembler rejects links, extra files,
+malformed schemas, mismatched hashes, and any application asset that differs
+from the checked-in source. The boundary check also scans public SQLite text
+for high-confidence credential formats and uses Node.js's built-in Brotli and
+gzip decoders to prove the staged sidecars contain that same sanitized database.
+Because Git history is public and permanent, review evidence, licenses, offers,
+and descriptive text before committing a snapshot. A future raw snapshot
+approaching GitHub's 100 MiB single-file limit needs a different data
+distribution method.
 
-Configure the static host to negotiate the generated `.sqlite3.br` and
-`.sqlite3.gz` sidecars for the canonical `.sqlite3` URL, with matching
-`Content-Encoding` and `Vary: Accept-Encoding` headers. Fetch exposes the
-decoded bytes to the worker, so the manifest's uncompressed length and SHA-256
-checks remain authoritative. The uncompressed database is the safe fallback.
-See [precompressed database delivery](public-app/README.md#precompressed-database-delivery).
-GitHub Pages does not select adjacent sidecars itself; the
-[Pages and Cloudflare guide](docs/GITHUB_PAGES.md) describes verified release
-assets, dynamic edge compression, cache rules, security headers, and custom
-domain TLS without adding a deployment branch.
-
-After an admin approval, withdrawal, dataset activation, or provider update,
-export to another versioned directory and atomically switch the static host to
-that completed release, or publish it as a new immutable GitHub Release and
-manually deploy the verified asset. Do not rerun the exporter against an
-existing or live directory. Never publish the live database, its WAL/SHM
-files, backups, review records, or ingestion state. The static database
-contains only currently public, valid mineral rows
-and their public evidence and offers. See [the static app contract](public-app/README.md)
-and [the map integration handoff](docs/MAP_STATIC_APP_HANDOFF.md). A ready-to-use
-[versioned activation and nginx configuration](deploy/README.md) serves releases
-from `/srv/waajacu/current` on port 8080 with explicit SQLite/WASM MIME types,
-safe cache headers, transfer compression, and a one-command atomic rollback.
+Serve static releases over HTTPS; `file:` URLs cannot run module workers,
+WebAssembly, Web Crypto, or `fetch()`. Hash routes such as `/#/minerals` work on
+basic static hosts without rewrite rules. See the [Pages and Cloudflare
+guide](docs/GITHUB_PAGES.md), [static app contract](public-app/README.md), and
+[map integration handoff](docs/MAP_STATIC_APP_HANDOFF.md).
 
 ## Storage
 

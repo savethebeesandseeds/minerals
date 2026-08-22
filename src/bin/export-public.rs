@@ -46,6 +46,13 @@ fn run(arguments: Vec<OsString>) -> Result<()> {
         print_help();
         return Ok(());
     };
+    if options.mode == Mode::ListAppFiles {
+        for relative in PUBLIC_APP_FILES {
+            println!("{relative}");
+        }
+        return Ok(());
+    }
+
     let app_root = require_real_directory(&options.app_root, "public app root")?;
     let manifest = match options.mode {
         Mode::Export { data_root, output } => {
@@ -68,11 +75,13 @@ fn run(arguments: Vec<OsString>) -> Result<()> {
                 Ok(published)
             })?
         }
+        Mode::Assemble { source, output } => assemble_catalog_release(&source, &app_root, &output)?,
         Mode::Validate { release } => {
             let release = require_real_directory(&release, "public release")?;
             validate_release_app_separation(&release, &app_root)?;
             validate_existing_release(&release, &app_root)?
         }
+        Mode::ListAppFiles => unreachable!("list mode returns before app-root validation"),
     };
     println!("{}", serde_json::to_string_pretty(&manifest)?);
     Ok(())
@@ -89,6 +98,160 @@ fn validate_release_app_separation(release: &Path, app_root: &Path) -> Result<()
     Ok(())
 }
 
+fn assemble_catalog_release(
+    source: &Path,
+    app_root: &Path,
+    output: &Path,
+) -> Result<PublicCatalogManifest> {
+    let source = require_real_directory(source, "catalog-only source")?;
+    let app_root = require_real_directory(app_root, "public app root")?;
+    let output = resolve_fresh_output(output)?;
+    validate_assembly_separation(&source, &app_root, &output)?;
+    validate_catalog_source_hygiene(&source)?;
+    let expected = validate_public_catalog_release(&source)?;
+
+    stage_and_promote(&output, |staging| {
+        copy_public_app(&app_root, staging)?;
+        let copied_files = copy_catalog_snapshot(&source, staging, &expected)?;
+        let published = validate_existing_release(staging, &app_root)?;
+        if published != expected {
+            bail!("assembled public catalog manifest differs from the validated source");
+        }
+        for relative in copied_files {
+            if !files_are_identical(&source.join(&relative), &staging.join(&relative))? {
+                bail!(
+                    "catalog-only source changed while it was assembled: {}",
+                    relative.display()
+                );
+            }
+        }
+        Ok(published)
+    })
+}
+
+fn validate_assembly_separation(source: &Path, app_root: &Path, output: &Path) -> Result<()> {
+    for (left_label, left, right_label, right) in [
+        ("--assemble-catalog", source, "--app-root", app_root),
+        ("--assemble-catalog", source, "--output", output),
+        ("--app-root", app_root, "--output", output),
+    ] {
+        if left.starts_with(right) || right.starts_with(left) {
+            bail!(
+                "{left_label} and {right_label} must be separate, non-nested directories: {} and {}",
+                left.display(),
+                right.display()
+            );
+        }
+    }
+    Ok(())
+}
+
+fn validate_catalog_source_hygiene(source: &Path) -> Result<()> {
+    let mut found_manifest = false;
+    let mut found_data = false;
+    for entry in fs::read_dir(source)
+        .with_context(|| format!("failed to inspect catalog-only source {}", source.display()))?
+    {
+        let entry = entry?;
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path).with_context(|| {
+            format!(
+                "failed to inspect catalog-only source entry {}",
+                path.display()
+            )
+        })?;
+        if metadata.file_type().is_symlink() {
+            bail!(
+                "catalog-only source cannot contain symlinks: {}",
+                path.display()
+            );
+        }
+        if entry.file_name() == PUBLIC_CATALOG_MANIFEST_FILE {
+            if !metadata.is_file() {
+                bail!(
+                    "catalog-only source manifest must be a regular non-symlink file: {}",
+                    path.display()
+                );
+            }
+            found_manifest = true;
+        } else if entry.file_name() == "data" {
+            if !metadata.is_dir() {
+                bail!(
+                    "catalog-only source data must be a real directory: {}",
+                    path.display()
+                );
+            }
+            found_data = true;
+        } else {
+            bail!(
+                "catalog-only source contains unexpected entry: {}",
+                path.display()
+            );
+        }
+    }
+    if !found_manifest {
+        bail!(
+            "catalog-only source is missing {}",
+            PUBLIC_CATALOG_MANIFEST_FILE
+        );
+    }
+    if !found_data {
+        bail!("catalog-only source is missing data directory");
+    }
+    Ok(())
+}
+
+fn copy_catalog_snapshot(
+    source: &Path,
+    output: &Path,
+    manifest: &PublicCatalogManifest,
+) -> Result<Vec<PathBuf>> {
+    let files = catalog_snapshot_files(manifest)?;
+
+    // Validate every explicit source path before writing anything. This is an
+    // intentionally fixed copy, never a recursive directory traversal.
+    let sources = files
+        .iter()
+        .map(|relative| {
+            require_relative_file_path(source, relative, "catalog-only source file")
+                .map(|path| (relative.clone(), path))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    for (relative, source_file) in &sources {
+        let destination = output.join(relative);
+        let parent = destination
+            .parent()
+            .context("catalog destination has no parent")?;
+        prepare_real_directory(parent, "catalog destination directory")?;
+        copy_file_atomically(source_file, &destination)?;
+    }
+    Ok(sources.into_iter().map(|(relative, _)| relative).collect())
+}
+
+fn catalog_snapshot_files(manifest: &PublicCatalogManifest) -> Result<Vec<PathBuf>> {
+    let database = safe_catalog_relative_path(&manifest.database.path)?;
+    Ok(vec![
+        PathBuf::from(PUBLIC_CATALOG_MANIFEST_FILE),
+        database.clone(),
+        PathBuf::from(format!("{}.br", database.to_string_lossy())),
+        PathBuf::from(format!("{}.gz", database.to_string_lossy())),
+    ])
+}
+
+fn safe_catalog_relative_path(value: &str) -> Result<PathBuf> {
+    let path = PathBuf::from(value);
+    if path.is_absolute()
+        || path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+        || path.parent() != Some(Path::new("data"))
+    {
+        bail!("invalid catalog database path '{value}'");
+    }
+    Ok(path)
+}
+
 #[derive(Debug, PartialEq, Eq)]
 struct Options {
     app_root: PathBuf,
@@ -98,7 +261,9 @@ struct Options {
 #[derive(Debug, PartialEq, Eq)]
 enum Mode {
     Export { data_root: PathBuf, output: PathBuf },
+    Assemble { source: PathBuf, output: PathBuf },
     Validate { release: PathBuf },
+    ListAppFiles,
 }
 
 impl Options {
@@ -113,16 +278,26 @@ impl Options {
         let mut output = None;
         let mut app_root = None;
         let mut validate_release = None;
+        let mut assemble_catalog = None;
+        let mut list_app_files = false;
         let mut arguments = arguments.into_iter();
         while let Some(argument) = arguments.next() {
             let name = argument
                 .to_str()
                 .context("option names must be valid Unicode")?;
+            if name == "--list-app-files" {
+                if list_app_files {
+                    bail!("duplicate option '--list-app-files'");
+                }
+                list_app_files = true;
+                continue;
+            }
             let slot = match name {
                 "--data-root" => &mut data_root,
                 "--output" => &mut output,
                 "--app-root" => &mut app_root,
                 "--validate-release" => &mut validate_release,
+                "--assemble-catalog" => &mut assemble_catalog,
                 _ if name.starts_with('-') => bail!("unknown option '{name}'"),
                 _ => bail!("unexpected positional argument '{name}'"),
             };
@@ -137,11 +312,31 @@ impl Options {
             }
             *slot = Some(PathBuf::from(value));
         }
-        let mode = if let Some(release) = validate_release {
-            if data_root.is_some() || output.is_some() {
-                bail!("--validate-release cannot be combined with --data-root or --output");
+        let mode = if list_app_files {
+            if data_root.is_some()
+                || output.is_some()
+                || app_root.is_some()
+                || validate_release.is_some()
+                || assemble_catalog.is_some()
+            {
+                bail!("--list-app-files cannot be combined with any other option");
+            }
+            Mode::ListAppFiles
+        } else if let Some(release) = validate_release {
+            if data_root.is_some() || output.is_some() || assemble_catalog.is_some() {
+                bail!(
+                    "--validate-release cannot be combined with --data-root, --output, or --assemble-catalog"
+                );
             }
             Mode::Validate { release }
+        } else if let Some(source) = assemble_catalog {
+            if data_root.is_some() {
+                bail!("--assemble-catalog cannot be combined with --data-root");
+            }
+            Mode::Assemble {
+                source,
+                output: output.context("missing required --output PATH")?,
+            }
         } else {
             Mode::Export {
                 data_root: data_root.context("missing required --data-root PATH")?,
@@ -353,10 +548,21 @@ fn validate_existing_release(output: &Path, app_root: &Path) -> Result<PublicCat
 }
 
 fn files_are_identical(left: &Path, right: &Path) -> Result<bool> {
-    let left_metadata = fs::metadata(left)
+    let left_metadata = fs::symlink_metadata(left)
         .with_context(|| format!("failed to inspect public app asset {}", left.display()))?;
-    let right_metadata = fs::metadata(right)
+    let right_metadata = fs::symlink_metadata(right)
         .with_context(|| format!("failed to inspect public app asset {}", right.display()))?;
+    if left_metadata.file_type().is_symlink()
+        || !left_metadata.is_file()
+        || right_metadata.file_type().is_symlink()
+        || !right_metadata.is_file()
+    {
+        bail!(
+            "compared assets must be regular non-symlink files: {} and {}",
+            left.display(),
+            right.display()
+        );
+    }
     if left_metadata.len() != right_metadata.len() {
         return Ok(false);
     }
@@ -473,32 +679,27 @@ fn safe_relative_path(value: &str) -> Result<PathBuf> {
 }
 
 fn require_asset_path(root: &Path, relative: &Path) -> Result<PathBuf> {
+    require_relative_file_path(root, relative, "public app asset")
+}
+
+fn require_relative_file_path(root: &Path, relative: &Path, label: &str) -> Result<PathBuf> {
     let mut current = root.to_path_buf();
     for component in relative.components() {
         let Component::Normal(component) = component else {
-            bail!("invalid public app asset path {}", relative.display());
+            bail!("invalid {label} path {}", relative.display());
         };
         current.push(component);
         let metadata = fs::symlink_metadata(&current)
-            .with_context(|| format!("missing required public app asset {}", current.display()))?;
+            .with_context(|| format!("missing required {label} {}", current.display()))?;
         if metadata.file_type().is_symlink() {
-            bail!(
-                "public app assets cannot use symlinks: {}",
-                current.display()
-            );
+            bail!("{label} cannot use symlinks: {}", current.display());
         }
         let is_last = current == root.join(relative);
         if is_last && !metadata.is_file() {
-            bail!(
-                "public app asset is not a regular file: {}",
-                current.display()
-            );
+            bail!("{label} is not a regular file: {}", current.display());
         }
         if !is_last && !metadata.is_dir() {
-            bail!(
-                "public app asset parent is not a directory: {}",
-                current.display()
-            );
+            bail!("{label} parent is not a directory: {}", current.display());
         }
     }
     Ok(current)
@@ -561,14 +762,29 @@ fn copy_file_atomically(source: &Path, destination: &Path) -> Result<()> {
         .context("public app destination has no parent")?;
     let temporary = unique_temporary_path(parent, "public-app-asset", "tmp")?;
     let result = (|| -> Result<()> {
+        let source_path_metadata = fs::symlink_metadata(source)
+            .with_context(|| format!("failed to inspect source file {}", source.display()))?;
+        if source_path_metadata.file_type().is_symlink() || !source_path_metadata.is_file() {
+            bail!(
+                "source must be a regular non-symlink file: {}",
+                source.display()
+            );
+        }
         let mut input = File::open(source)
-            .with_context(|| format!("failed to open public app asset {}", source.display()))?;
+            .with_context(|| format!("failed to open source file {}", source.display()))?;
         let input_metadata = input
             .metadata()
-            .with_context(|| format!("failed to inspect public app asset {}", source.display()))?;
-        if !input_metadata.is_file() {
+            .with_context(|| format!("failed to inspect source file {}", source.display()))?;
+        let current_path_metadata = fs::symlink_metadata(source)
+            .with_context(|| format!("failed to re-inspect source file {}", source.display()))?;
+        if !input_metadata.is_file()
+            || current_path_metadata.file_type().is_symlink()
+            || !current_path_metadata.is_file()
+            || source_path_metadata.len() != input_metadata.len()
+            || current_path_metadata.len() != input_metadata.len()
+        {
             bail!(
-                "public app asset is not a regular file: {}",
+                "source file changed before it was copied: {}",
                 source.display()
             );
         }
@@ -583,10 +799,10 @@ fn copy_file_atomically(source: &Path, destination: &Path) -> Result<()> {
                 )
             })?;
         let copied = std::io::copy(&mut input, &mut output)
-            .with_context(|| format!("failed to copy public app asset {}", source.display()))?;
+            .with_context(|| format!("failed to copy source file {}", source.display()))?;
         if copied != input_metadata.len() {
             bail!(
-                "public app asset changed while it was copied: {}",
+                "source file changed while it was copied: {}",
                 source.display()
             );
         }
@@ -687,11 +903,15 @@ fn print_help() {
     println!(
         "Export the sanitized public catalog and static app\n\n\
          Usage:\n  export-public --data-root PATH --output PATH [--app-root PATH]\n  \
-         export-public --validate-release PATH [--app-root PATH]\n\n\
+         export-public --assemble-catalog SOURCE --output NEW [--app-root PATH]\n  \
+         export-public --validate-release PATH [--app-root PATH]\n  \
+         export-public --list-app-files\n\n\
          Options:\n  --data-root PATH  Directory containing the live minerals.db\n  \
          --output PATH     New static release directory; must not already exist\n  \
+         --assemble-catalog SOURCE\n                    Assemble a full release from a catalog-only source\n  \
          --validate-release PATH\n                    Validate an existing static release without changing it\n  \
          --app-root PATH   Public app source directory (default: public-app)\n  \
+         --list-app-files  Print the public app allowlist, one path per line\n  \
          -h, --help        Show this help"
     );
 }
@@ -701,6 +921,7 @@ mod tests {
     use std::fs;
 
     use anyhow::Result;
+    use rusqlite::Connection;
     use tempfile::TempDir;
 
     use super::*;
@@ -763,6 +984,70 @@ mod tests {
     }
 
     #[test]
+    fn assembly_mode_is_mutually_exclusive_and_requires_a_fresh_output_name() -> Result<()> {
+        let options = Options::parse(vec![
+            "--assemble-catalog".into(),
+            "catalog-source".into(),
+            "--output".into(),
+            "release".into(),
+            "--app-root".into(),
+            "app".into(),
+        ])?
+        .unwrap();
+        assert_eq!(
+            options,
+            Options {
+                app_root: PathBuf::from("app"),
+                mode: Mode::Assemble {
+                    source: PathBuf::from("catalog-source"),
+                    output: PathBuf::from("release"),
+                },
+            }
+        );
+        assert!(
+            Options::parse(vec!["--assemble-catalog".into(), "catalog-source".into(),]).is_err()
+        );
+        assert!(Options::parse(vec![
+            "--assemble-catalog".into(),
+            "catalog-source".into(),
+            "--data-root".into(),
+            "private".into(),
+            "--output".into(),
+            "release".into(),
+        ])
+        .is_err());
+        assert!(Options::parse(vec![
+            "--assemble-catalog".into(),
+            "catalog-source".into(),
+            "--validate-release".into(),
+            "release".into(),
+        ])
+        .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn app_file_listing_is_a_standalone_mode_without_an_app_root() -> Result<()> {
+        assert_eq!(
+            Options::parse(vec!["--list-app-files".into()])?.unwrap(),
+            Options {
+                app_root: PathBuf::from("public-app"),
+                mode: Mode::ListAppFiles,
+            }
+        );
+        assert!(Options::parse(vec![
+            "--list-app-files".into(),
+            "--app-root".into(),
+            "missing".into(),
+        ])
+        .is_err());
+        assert!(
+            Options::parse(vec!["--list-app-files".into(), "--list-app-files".into(),]).is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
     fn validation_release_and_source_must_be_separate() -> Result<()> {
         let root = TempDir::new()?;
         let app = root.path().join("app");
@@ -774,6 +1059,28 @@ mod tests {
         validate_release_app_separation(&release, &app)?;
         assert!(validate_release_app_separation(&release, &nested).is_err());
         assert!(validate_release_app_separation(&release, &release).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn assembly_source_app_and_output_must_be_pairwise_non_nested() -> Result<()> {
+        let root = TempDir::new()?;
+        let app = root.path().join("app");
+        let nested_source = app.join("catalog-source");
+        let separate_source = root.path().join("catalog-source");
+        let output = root.path().join("release");
+        fs::create_dir(&app)?;
+        fs::create_dir(&nested_source)?;
+        fs::create_dir(&separate_source)?;
+
+        assert!(validate_assembly_separation(&nested_source, &app, &output).is_err());
+        assert!(validate_assembly_separation(
+            &separate_source,
+            &app,
+            &separate_source.join("nested-release")
+        )
+        .is_err());
+        validate_assembly_separation(&separate_source, &app, &output)?;
         Ok(())
     }
 
@@ -947,5 +1254,162 @@ mod tests {
         fs::write(&right, b"different!")?;
         assert!(!files_are_identical(&left, &right)?);
         Ok(())
+    }
+
+    #[test]
+    fn assembles_validated_catalog_and_app_bytes_into_a_fresh_release() -> Result<()> {
+        let root = TempDir::new()?;
+        let source = root.path().join("catalog-source");
+        let app = root.path().join("public-app");
+        let output = root.path().join("release");
+        let expected = prepare_test_catalog(root.path(), &source)?;
+        prepare_test_app(&app)?;
+
+        let published = assemble_catalog_release(&source, &app, &output)?;
+
+        assert_eq!(published, expected);
+        assert_eq!(validate_existing_release(&output, &app)?, expected);
+        for relative in catalog_snapshot_files(&expected)? {
+            assert_eq!(
+                fs::read(source.join(&relative))?,
+                fs::read(output.join(&relative))?,
+                "assembled catalog bytes changed for {}",
+                relative.display()
+            );
+        }
+        for relative in PUBLIC_APP_FILES {
+            assert_eq!(
+                fs::read(app.join(relative))?,
+                fs::read(output.join(relative))?,
+                "assembled app bytes changed for {relative}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn catalog_assembly_rejects_extra_source_entries_without_creating_output() -> Result<()> {
+        let root = TempDir::new()?;
+        let source = root.path().join("catalog-source");
+        let app = root.path().join("public-app");
+        let output = root.path().join("release");
+        prepare_test_catalog(root.path(), &source)?;
+        fs::create_dir(&app)?;
+        fs::write(source.join("private-notes.txt"), b"must not publish")?;
+
+        let error = assemble_catalog_release(&source, &app, &output).unwrap_err();
+        assert!(format!("{error:#}").contains("unexpected entry"));
+        assert!(!output.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn catalog_assembly_never_replaces_an_existing_output() -> Result<()> {
+        let root = TempDir::new()?;
+        let source = root.path().join("catalog-source");
+        let app = root.path().join("public-app");
+        let output = root.path().join("release");
+        fs::create_dir(&source)?;
+        fs::create_dir(&app)?;
+        fs::create_dir(&output)?;
+        fs::write(output.join("marker.txt"), b"keep me")?;
+
+        let error = assemble_catalog_release(&source, &app, &output).unwrap_err();
+        assert!(format!("{error:#}").contains("must not already exist"));
+        assert_eq!(fs::read(output.join("marker.txt"))?, b"keep me");
+        Ok(())
+    }
+
+    #[test]
+    fn catalog_assembly_rejects_symlinked_source_files_where_supported() -> Result<()> {
+        let root = TempDir::new()?;
+        let source = root.path().join("catalog-source");
+        let app = root.path().join("public-app");
+        let output = root.path().join("release");
+        let external_manifest = root.path().join("external-manifest.json");
+        fs::create_dir(&source)?;
+        fs::create_dir(source.join("data"))?;
+        fs::create_dir(&app)?;
+        fs::write(&external_manifest, b"{}")?;
+        if !try_create_file_symlink(
+            &external_manifest,
+            &source.join(PUBLIC_CATALOG_MANIFEST_FILE),
+        )? {
+            return Ok(());
+        }
+
+        let error = assemble_catalog_release(&source, &app, &output).unwrap_err();
+        assert!(format!("{error:#}").contains("cannot contain symlinks"));
+        assert!(!output.exists());
+        Ok(())
+    }
+
+    fn prepare_test_app(app: &Path) -> Result<()> {
+        for (position, relative) in PUBLIC_APP_FILES.iter().enumerate() {
+            let path = app.join(relative);
+            fs::create_dir_all(path.parent().context("test app asset has no parent")?)?;
+            fs::write(path, format!("test app asset {position}: {relative}\0"))?;
+        }
+        Ok(())
+    }
+
+    fn prepare_test_catalog(root: &Path, source: &Path) -> Result<PublicCatalogManifest> {
+        let data_root = root.join("private-registry");
+        fs::create_dir(&data_root)?;
+        fs::create_dir(source)?;
+        let connection = Connection::open(data_root.join("minerals.db"))?;
+        connection.execute_batch(
+            r#"
+            CREATE TABLE images (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                stored_name TEXT NOT NULL UNIQUE
+            );
+            CREATE TABLE minerals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT NOT NULL UNIQUE,
+                common_name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                mineral_family TEXT NOT NULL,
+                formula TEXT NOT NULL,
+                hardness_mohs REAL NOT NULL,
+                density_g_cm3 REAL NOT NULL,
+                crystal_system TEXT NOT NULL,
+                color TEXT NOT NULL,
+                streak TEXT NOT NULL,
+                luster TEXT NOT NULL,
+                major_elements_pct_json TEXT NOT NULL,
+                notes TEXT NOT NULL,
+                image_id INTEGER
+            );
+            "#,
+        )?;
+        drop(connection);
+        minerals::registry::init_registry_database_with_options(&data_root, false)?;
+        export_public_catalog(&data_root, source)
+    }
+
+    #[cfg(unix)]
+    fn try_create_file_symlink(target: &Path, link: &Path) -> Result<bool> {
+        std::os::unix::fs::symlink(target, link)?;
+        Ok(true)
+    }
+
+    #[cfg(windows)]
+    fn try_create_file_symlink(target: &Path, link: &Path) -> Result<bool> {
+        match std::os::windows::fs::symlink_file(target, link) {
+            Ok(()) => Ok(true),
+            Err(error)
+                if error.kind() == ErrorKind::PermissionDenied
+                    || error.raw_os_error() == Some(1314) =>
+            {
+                Ok(false)
+            }
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    fn try_create_file_symlink(_target: &Path, _link: &Path) -> Result<bool> {
+        Ok(false)
     }
 }
