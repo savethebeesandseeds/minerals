@@ -14,3 +14,8 @@ lto = true
 codegen-units = 1
 panic = "abort"
 strip = "symbols"
+
+# Keep the dependency-free WASM renderer independently buildable even though
+# its directory lives below the native application's Cargo workspace.
+[workspace]
+resolver = "2"

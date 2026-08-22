@@ -9,7 +9,9 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 use getrandom::getrandom;
-use minerals::public_catalog::{export_public_catalog, PUBLIC_CATALOG_MANIFEST_FILE};
+use minerals_public_catalog::{
+    export_public_catalog, PublicCatalogManifest, PUBLIC_CATALOG_MANIFEST_FILE,
+};
 
 const PUBLIC_APP_FILES: &[&str] = &[
     "index.html",
@@ -21,7 +23,6 @@ const PUBLIC_APP_FILES: &[&str] = &[
     "vendor/sqlite/index.mjs",
     "vendor/sqlite/sqlite3.wasm",
     "vendor/sqlite/LICENSE.txt",
-    "map/map-app.js",
     "map/map-loader.js",
     "map/map.css",
     "map/minerals_map.wasm",
@@ -42,9 +43,23 @@ fn run(arguments: Vec<OsString>) -> Result<()> {
         print_help();
         return Ok(());
     };
-    validate_private_output_separation(&options.data_root, &options.output)?;
-    copy_public_app(&options.app_root, &options.output)?;
-    let manifest = export_public_catalog(&options.data_root, &options.output)?;
+    let output = resolve_fresh_output(&options.output)?;
+    let data_root = validate_private_output_separation(&options.data_root, &output)?;
+    let app_root = require_real_directory(&options.app_root, "public app root")?;
+    if output.starts_with(&app_root) {
+        bail!(
+            "--output cannot be inside --app-root: {} and {}",
+            output.display(),
+            app_root.display()
+        );
+    }
+
+    let manifest = stage_and_promote(&output, |staging| {
+        copy_public_app(&app_root, staging)?;
+        let manifest = export_public_catalog(&data_root, staging)?;
+        validate_complete_release(staging, &manifest)?;
+        Ok(manifest)
+    })?;
     println!("{}", serde_json::to_string_pretty(&manifest)?);
     Ok(())
 }
@@ -143,14 +158,214 @@ fn copy_public_app(app_root: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
-fn validate_private_output_separation(data_root: &Path, output: &Path) -> Result<()> {
+fn validate_private_output_separation(data_root: &Path, output: &Path) -> Result<PathBuf> {
     let data_root = require_real_directory(data_root, "private data root")?;
-    let output = prepare_real_directory(output, "public export output")?;
-    if output.starts_with(&data_root) || data_root.starts_with(&output) {
+    let output = resolve_path_location(output, "public output location")?;
+    if output.starts_with(&data_root) || data_root.starts_with(output.as_path()) {
         bail!(
             "--output and --data-root must be separate, non-nested directories: {} and {}",
             output.display(),
             data_root.display()
+        );
+    }
+    Ok(data_root)
+}
+
+fn resolve_fresh_output(output: &Path) -> Result<PathBuf> {
+    let output = resolve_path_location(output, "public output location")?;
+    require_absent_path(&output, "--output")?;
+    Ok(output)
+}
+
+fn resolve_path_location(path: &Path, label: &str) -> Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        env::current_dir()
+            .context("failed to resolve the current directory")?
+            .join(path)
+    };
+    reject_symlink_components(&absolute)?;
+    match fs::symlink_metadata(&absolute) {
+        Ok(_) => {
+            return absolute
+                .canonicalize()
+                .with_context(|| format!("failed to canonicalize {label} {}", absolute.display()));
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error)
+                .with_context(|| format!("failed to inspect {label} {}", absolute.display()));
+        }
+    }
+    let file_name = absolute
+        .file_name()
+        .filter(|name| !name.is_empty())
+        .context("--output must name a new release directory")?
+        .to_os_string();
+    let parent = absolute
+        .parent()
+        .context("--output must have an existing parent directory")?;
+    let parent = require_real_directory(parent, "public output parent")?;
+    Ok(parent.join(file_name))
+}
+
+fn require_absent_path(path: &Path, label: &str) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => bail!(
+            "{label} must not already exist; export each release to a fresh directory: {}",
+            path.display()
+        ),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => {
+            Err(error).with_context(|| format!("failed to inspect {label} path {}", path.display()))
+        }
+    }
+}
+
+struct StagingDirectory {
+    path: PathBuf,
+    promoted: bool,
+}
+
+impl StagingDirectory {
+    fn create(parent: &Path) -> Result<Self> {
+        for _ in 0..32 {
+            let candidate = unique_temporary_path(parent, "public-release", "staging")?;
+            match fs::create_dir(&candidate) {
+                Ok(()) => {
+                    return Ok(Self {
+                        path: candidate,
+                        promoted: false,
+                    });
+                }
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+                Err(error) => {
+                    return Err(error).with_context(|| {
+                        format!(
+                            "failed to create public release staging directory {}",
+                            candidate.display()
+                        )
+                    });
+                }
+            }
+        }
+        bail!(
+            "failed to create a public release staging directory in {}",
+            parent.display()
+        )
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn promote(mut self, output: &Path) -> Result<()> {
+        require_absent_path(output, "--output")?;
+        fs::rename(&self.path, output).with_context(|| {
+            format!(
+                "failed to promote completed public release {} to {}",
+                self.path.display(),
+                output.display()
+            )
+        })?;
+        self.promoted = true;
+        Ok(())
+    }
+}
+
+impl Drop for StagingDirectory {
+    fn drop(&mut self) {
+        if !self.promoted {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+}
+
+fn stage_and_promote<T>(output: &Path, build: impl FnOnce(&Path) -> Result<T>) -> Result<T> {
+    let parent = output
+        .parent()
+        .context("public release output has no parent")?;
+    let staging = StagingDirectory::create(parent)?;
+    let value = build(staging.path())?;
+    staging.promote(output)?;
+    Ok(value)
+}
+
+fn validate_complete_release(output: &Path, expected: &PublicCatalogManifest) -> Result<()> {
+    validate_output_hygiene(output)?;
+    for relative in PUBLIC_APP_FILES {
+        let relative = safe_relative_path(relative)?;
+        require_asset_path(output, &relative)?;
+    }
+
+    let manifest_path = require_asset_path(output, Path::new(PUBLIC_CATALOG_MANIFEST_FILE))?;
+    let published: PublicCatalogManifest =
+        serde_json::from_reader(File::open(&manifest_path).with_context(|| {
+            format!(
+                "failed to open completed public catalog manifest {}",
+                manifest_path.display()
+            )
+        })?)
+        .context("failed to parse completed public catalog manifest")?;
+    if &published != expected {
+        bail!("completed public catalog manifest differs from the exported release");
+    }
+
+    let database_relative = safe_relative_path(&published.database.path)?;
+    let database_digest = published
+        .database
+        .sha256
+        .strip_prefix("sha256:")
+        .filter(|digest| {
+            digest.len() == 64
+                && digest
+                    .chars()
+                    .all(|character| character.is_ascii_digit() || ('a'..='f').contains(&character))
+        });
+    let expected_database_relative =
+        database_digest.map(|digest| PathBuf::from(format!("data/catalog-{digest}.sqlite3")));
+    if database_relative.parent() != Some(Path::new("data"))
+        || database_relative
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_none_or(|name| !is_content_addressed_database_name(name))
+        || expected_database_relative.as_ref() != Some(&database_relative)
+    {
+        bail!("completed public catalog manifest names an invalid or mismatched database path");
+    }
+    let database_path = require_asset_path(output, &database_relative)?;
+    let brotli_relative = PathBuf::from(format!("{}.br", published.database.path));
+    let gzip_relative = PathBuf::from(format!("{}.gz", published.database.path));
+    require_asset_path(output, &brotli_relative)?;
+    require_asset_path(output, &gzip_relative)?;
+    let database_bytes = fs::metadata(&database_path)
+        .with_context(|| {
+            format!(
+                "failed to inspect completed public catalog database {}",
+                database_path.display()
+            )
+        })?
+        .len();
+    if database_bytes != published.database.bytes {
+        bail!(
+            "completed public catalog database size is {database_bytes}, expected {}",
+            published.database.bytes
+        );
+    }
+
+    let data_directory = output.join("data");
+    let database_artifact_count = fs::read_dir(&data_directory)
+        .with_context(|| {
+            format!(
+                "failed to inspect completed public catalog data directory {}",
+                data_directory.display()
+            )
+        })?
+        .count();
+    if database_artifact_count != 3 {
+        bail!(
+            "completed public catalog must contain exactly one database and its two precompressed representations, found {database_artifact_count} artifacts"
         );
     }
     Ok(())
@@ -460,7 +675,7 @@ fn print_help() {
         "Export the sanitized public catalog and static app\n\n\
          Usage:\n  export-public --data-root PATH --output PATH [--app-root PATH]\n\n\
          Options:\n  --data-root PATH  Directory containing the live minerals.db\n  \
-         --output PATH     Static-site output directory\n  \
+         --output PATH     New static release directory; must not already exist\n  \
          --app-root PATH   Public app source directory (default: public-app)\n  \
          -h, --help        Show this help"
     );
@@ -556,25 +771,106 @@ mod tests {
     }
 
     #[test]
-    fn output_hygiene_accepts_only_canonical_database_representations() {
+    fn fresh_output_rejects_existing_paths() -> Result<()> {
+        let root = TempDir::new()?;
+        let fresh = root.path().join("release-v1");
+        assert_eq!(
+            resolve_fresh_output(&fresh)?,
+            root.path().canonicalize()?.join("release-v1")
+        );
+
+        fs::create_dir(&fresh)?;
+        let error = resolve_fresh_output(&fresh).unwrap_err();
+        assert!(error.to_string().contains("must not already exist"));
+
+        let missing_parent = root.path().join("missing").join("release-v2");
+        let error = resolve_fresh_output(&missing_parent).unwrap_err();
+        assert!(error.to_string().contains("public output parent"));
+        Ok(())
+    }
+
+    #[test]
+    fn staging_promotes_only_complete_success_and_cleans_failures() -> Result<()> {
+        let root = TempDir::new()?;
+        let successful = root.path().join("release-success");
+        let value = stage_and_promote(&successful, |staging| {
+            assert!(!successful.exists());
+            fs::write(staging.join("complete.txt"), "complete")?;
+            Ok(42)
+        })?;
+        assert_eq!(value, 42);
+        assert_eq!(
+            fs::read_to_string(successful.join("complete.txt"))?,
+            "complete"
+        );
+
+        let failed = root.path().join("release-failed");
+        let error = stage_and_promote(&failed, |staging| -> Result<()> {
+            fs::write(staging.join("partial.txt"), "partial")?;
+            bail!("simulated export failure")
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("simulated export failure"));
+        assert!(!failed.exists());
+        assert!(!fs::read_dir(root.path())?.any(|entry| {
+            entry.is_ok_and(|entry| entry.file_name().to_string_lossy().contains(".staging"))
+        }));
+        Ok(())
+    }
+
+    #[test]
+    fn staging_never_replaces_an_existing_output() -> Result<()> {
+        let root = TempDir::new()?;
+        let output = root.path().join("deployed-release");
+        fs::create_dir(&output)?;
+        fs::write(output.join("marker.txt"), "original")?;
+
+        let error = stage_and_promote(&output, |staging| {
+            fs::write(staging.join("marker.txt"), "replacement")?;
+            Ok(())
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("must not already exist"));
+        assert_eq!(fs::read_to_string(output.join("marker.txt"))?, "original");
+        assert_eq!(fs::read_dir(root.path())?.count(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn completed_release_validation_requires_exact_manifest_database_and_assets() -> Result<()> {
+        let output = TempDir::new()?;
+        for relative in PUBLIC_APP_FILES {
+            let path = output.path().join(relative);
+            fs::create_dir_all(path.parent().unwrap())?;
+            fs::write(path, "asset")?;
+        }
         let digest = "a".repeat(64);
-        assert!(is_content_addressed_database_name(&format!(
-            "catalog-{digest}.sqlite3"
-        )));
-        assert!(is_content_addressed_database_name(&format!(
-            "catalog-{digest}.sqlite3.br"
-        )));
-        assert!(is_content_addressed_database_name(&format!(
-            "catalog-{digest}.sqlite3.gz"
-        )));
-        assert!(!is_content_addressed_database_name(&format!(
-            "catalog-{digest}.sqlite3.zst"
-        )));
-        assert!(!is_content_addressed_database_name(&format!(
-            "catalog-{digest}.br"
-        )));
-        assert!(!is_content_addressed_database_name(&format!(
-            "catalog-{digest}.sqlite3.br.bak"
-        )));
+        let database_relative = format!("data/catalog-{digest}.sqlite3");
+        let database_path = output.path().join(&database_relative);
+        fs::create_dir_all(database_path.parent().unwrap())?;
+        fs::write(&database_path, "database")?;
+        fs::write(format!("{}.br", database_path.display()), "brotli")?;
+        fs::write(format!("{}.gz", database_path.display()), "gzip")?;
+        let manifest = PublicCatalogManifest {
+            format: "waajacu-public-catalog-v1".to_string(),
+            schema_version: 1,
+            generated_at: "2026-08-21T00:00:00.000Z".to_string(),
+            release_id: format!("sha256:{}", "b".repeat(64)),
+            mineral_count: 0,
+            database: minerals_public_catalog::PublicCatalogDatabase {
+                path: database_relative,
+                sha256: format!("sha256:{digest}"),
+                bytes: 8,
+            },
+        };
+        fs::write(
+            output.path().join(PUBLIC_CATALOG_MANIFEST_FILE),
+            serde_json::to_vec_pretty(&manifest)?,
+        )?;
+        validate_complete_release(output.path(), &manifest)?;
+
+        fs::write(output.path().join("unexpected.txt"), "not public")?;
+        assert!(validate_complete_release(output.path(), &manifest).is_err());
+        Ok(())
     }
 }

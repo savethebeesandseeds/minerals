@@ -7,6 +7,7 @@ FROM rust:${RUST_VERSION}-bookworm AS builder
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock askama.toml ./
+COPY crates ./crates
 COPY src ./src
 COPY static ./static
 
@@ -20,11 +21,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 FROM debian:bookworm-slim AS runtime
 
 LABEL org.opencontainers.image.title="Waajacu's Minerals" \
-      org.opencontainers.image.description="Multilingual mineral catalog and research engine" \
+      org.opencontainers.image.description="Private mineral catalog administration service" \
       org.opencontainers.image.licenses="AGPL-3.0-only"
 
 ENV PORT=7979 \
-    RUST_LOG=minerals=info,tower_http=info \
+    RUST_LOG=minerals=info \
     HOME=/tmp \
     XDG_CACHE_HOME=/tmp
 
@@ -32,20 +33,6 @@ RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
-        fontconfig \
-        fonts-noto-cjk \
-        fonts-noto-core \
-        fonts-noto-extra \
-        latexmk \
-        sqlite3 \
-        texlive-fonts-recommended \
-        texlive-lang-arabic \
-        texlive-lang-cjk \
-        texlive-lang-chinese \
-        texlive-lang-japanese \
-        texlive-lang-other \
-        texlive-latex-extra \
-        texlive-xetex \
         util-linux \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 minerals \
@@ -61,7 +48,6 @@ WORKDIR /app
 
 COPY --from=builder /out/minerals /usr/local/bin/minerals
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/minerals-entrypoint
-COPY --chown=minerals:minerals static ./static
 
 USER minerals:minerals
 

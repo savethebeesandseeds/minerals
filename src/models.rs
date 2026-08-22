@@ -64,24 +64,6 @@ pub struct Mineral {
     pub image_path: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default)]
-pub struct ReportRequest {
-    pub audience: String,
-    pub purpose: String,
-    pub site_context: String,
-}
-
-impl Default for ReportRequest {
-    fn default() -> Self {
-        Self {
-            audience: "technical geologist".to_string(),
-            purpose: "exploration briefing".to_string(),
-            site_context: "pilot drill campaign".to_string(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct MineralFormData {
     pub draft_id: Option<String>,
@@ -389,74 +371,6 @@ pub fn load_minerals(data_root: &Path, lang_code: &str) -> Result<Vec<Mineral>> 
 
     minerals.sort_by(|a, b| a.common_name.cmp(&b.common_name));
     Ok(minerals)
-}
-
-pub fn load_registered_image(
-    data_root: &Path,
-    stored_name: &str,
-) -> Result<Option<(Vec<u8>, String)>> {
-    if stored_name.is_empty()
-        || stored_name.len() > 255
-        || !stored_name
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_'))
-        || matches!(stored_name, "." | "..")
-    {
-        return Ok(None);
-    }
-
-    let conn = open_connection(data_root)?;
-    let stored_content_type = conn
-        .query_row(
-            "SELECT COALESCE(content_type, '') FROM images WHERE stored_name = ?1",
-            params![stored_name],
-            |row| row.get::<_, String>(0),
-        )
-        .optional()
-        .context("failed to resolve registered image")?;
-    let Some(stored_content_type) = stored_content_type else {
-        return Ok(None);
-    };
-    let content_type = if stored_content_type.is_empty() {
-        Path::new(stored_name)
-            .extension()
-            .and_then(|value| value.to_str())
-            .map(content_type_from_ext)
-            .unwrap_or("")
-            .to_string()
-    } else {
-        stored_content_type
-    };
-    if !matches!(
-        content_type.as_str(),
-        "image/png" | "image/jpeg" | "image/gif" | "image/webp"
-    ) {
-        return Ok(None);
-    }
-
-    let images_root = data_root.join(IMAGES_DIR);
-    let image_path = images_root.join(stored_name);
-    let metadata = match fs::symlink_metadata(&image_path) {
-        Ok(metadata) if metadata.file_type().is_file() && !metadata.file_type().is_symlink() => {
-            metadata
-        }
-        Ok(_) => return Ok(None),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(err) => return Err(err).context("failed to inspect registered image"),
-    };
-    if metadata.len() > 25 * 1024 * 1024 {
-        return Ok(None);
-    }
-    let canonical_root = fs::canonicalize(&images_root)
-        .with_context(|| format!("failed to resolve {}", images_root.display()))?;
-    let canonical_image = fs::canonicalize(&image_path)
-        .with_context(|| format!("failed to resolve {}", image_path.display()))?;
-    if !canonical_image.starts_with(&canonical_root) {
-        return Ok(None);
-    }
-    let bytes = fs::read(&canonical_image)
-        .with_context(|| format!("failed to read registered image {}", image_path.display()))?;
-    Ok(Some((bytes, content_type)))
 }
 
 pub fn save_localized_mineral_records(

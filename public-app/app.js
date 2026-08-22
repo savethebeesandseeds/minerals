@@ -13,6 +13,7 @@ const releaseSummary = document.querySelector("#release-summary");
 const localeSelect = document.querySelector("#locale-select");
 const themeToggle = document.querySelector("#theme-toggle");
 const mapModuleMeta = document.querySelector('meta[name="waajacu-map-module"]');
+const APP_BASE_PATH = new URL(".", import.meta.url).pathname;
 
 const STORAGE_KEYS = Object.freeze({ theme: "waajacu.theme", locale: "waajacu.locale" });
 const SUPPORTED_LOCALES = new Set(["en", "es", "de", "fr", "cs", "zh", "ar", "pt", "hi", "ja"]);
@@ -383,37 +384,12 @@ function pager(search, result) {
   return nav;
 }
 
-function catalogMapPreview() {
-  const container = element("div", {
-    className: "catalog-map-preview-map",
-    attrs: {
-      "data-catalog-map-preview": "",
-      "aria-busy": "true",
-    },
-  }, [paragraph("Loading map…", "muted")]);
-  return element("aside", {
-    className: "catalog-map-preview",
-    attrs: { "aria-label": "World context map" },
-  }, [
-    container,
-    element("div", { className: "catalog-map-preview-note" }, [
-      paragraph("Forest context only — mineral locations are not included yet.", "muted"),
-      routeLink("/map", `${t("map")} →`, "text-link"),
-    ]),
-  ]);
-}
-
 async function renderMinerals(route, signal) {
   const result = await catalog.search(route.search, signal);
   const section = element("section", { className: "view" }, [
-    element("div", { className: "catalog-heading-grid" }, [
-      element("div", { className: "catalog-heading-copy" }, [
-        paragraph("Public catalog", "eyebrow"),
-        element("h1", { text: t("minerals") }),
-        paragraph("Search the immutable release by name, chemical formula, mineral family, or indexed keyword.", "view-intro"),
-      ]),
-      catalogMapPreview(),
-    ]),
+    paragraph("Public catalog", "eyebrow"),
+    element("h1", { text: t("minerals") }),
+    paragraph("Search the immutable release by name, chemical formula, mineral family, or indexed keyword.", "view-intro"),
     searchForm(route.search),
   ]);
   const summary = result.total === 1 ? "1 mineral" : `${result.total.toLocaleString(preferences.locale)} minerals`;
@@ -574,16 +550,15 @@ async function teardownMap() {
   }
 }
 
-function mapCatalogFacade(signal) {
-  return Object.freeze({
-    search: (input = {}) => catalog.search(input, signal),
-    detail: (slug) => catalog.detail(slug, signal),
-    evidence: (slug) => catalog.evidence(slug, signal),
-    offers: (slug) => catalog.offers(slug, signal),
-  });
-}
+async function renderMap(sequence) {
+  const section = element("section", { className: "view map-shell" }, [
+    paragraph("Spatial catalog", "eyebrow"), element("h1", { text: t("map") }),
+    paragraph("Explore the optional geographic view. Catalog records remain available even when the map package is not installed.", "view-intro"),
+  ]);
+  const container = element("div", { id: "catalog-map-root", className: "map-container", attrs: { role: "region", "aria-label": "Mineral map", "aria-busy": "true" } }, [paragraph("Loading map…", "muted")]);
+  section.append(container);
+  main.replaceChildren(section);
 
-async function mountConfiguredMap(container, sequence, onUnavailable) {
   const controller = new AbortController();
   mapLifecycle = { controller, cleanup: undefined };
   try {
@@ -592,15 +567,11 @@ async function mountConfiguredMap(container, sequence, onUnavailable) {
     const moduleUrl = new URL(configured, import.meta.url);
     if (moduleUrl.origin !== location.origin || moduleUrl.username || moduleUrl.password || moduleUrl.hash) throw new Error("The map module URL must be same-origin.");
     const module = await import(moduleUrl.href);
-    if (controller.signal.aborted || sequence !== renderSequence) return;
-    if (typeof module.mountWaajacuMap !== "function") throw new Error("The map module does not export mountWaajacuMap().");
+    if (controller.signal.aborted || sequence !== renderSequence) return section;
+    if (typeof module.mountMineralsMap !== "function") throw new Error("The map module does not export mountMineralsMap().");
     container.replaceChildren();
     container.removeAttribute("aria-busy");
-    const cleanup = await module.mountWaajacuMap({
-      container,
-      catalog: mapCatalogFacade(controller.signal),
-      navigate,
-      locale: preferences.locale,
+    const cleanup = await module.mountMineralsMap(container, {
       theme: resolvedTheme(),
       signal: controller.signal,
     });
@@ -613,23 +584,10 @@ async function mountConfiguredMap(container, sequence, onUnavailable) {
   } catch (error) {
     if (!controller.signal.aborted && sequence === renderSequence) {
       container.removeAttribute("aria-busy");
-      onUnavailable(error);
+      container.replaceChildren(element("div", { className: "empty-panel" }, [element("h2", { text: t("mapUnavailable") }), paragraph("Browse the mineral list while the optional map package is absent."), routeLink("/minerals", t("minerals"), "secondary-button")]));
       console.info("Optional map module unavailable:", error);
     }
   }
-}
-
-async function renderMap(sequence) {
-  const section = element("section", {
-    className: "view map-shell map-shell--compact",
-    attrs: { "aria-label": t("map") },
-  });
-  const container = element("div", { id: "catalog-map-root", className: "map-container", attrs: { role: "region", "aria-label": "Mineral map", "aria-busy": "true" } }, [paragraph("Loading map…", "muted")]);
-  section.append(container);
-  main.replaceChildren(section);
-  await mountConfiguredMap(container, sequence, () => {
-    container.replaceChildren(element("div", { className: "empty-panel" }, [element("h2", { text: t("mapUnavailable") }), paragraph("Browse the mineral list while the optional map package is absent."), routeLink("/minerals", t("minerals"), "secondary-button")]));
-  });
   return section;
 }
 
@@ -638,7 +596,7 @@ async function renderCurrentRoute({ focus = true } = {}) {
   routeController?.abort();
   routeController = new AbortController();
   await teardownMap();
-  const route = parseRoute(location.href);
+  const route = parseRoute(location.href, APP_BASE_PATH);
   applyPreferences();
   setActiveNavigation(route);
   titleFor(route);
@@ -659,17 +617,7 @@ async function renderCurrentRoute({ focus = true } = {}) {
       default: content = renderNotFound();
     }
     if (sequence !== renderSequence || routeController.signal.aborted) return;
-    if (content) {
-      main.replaceChildren(content);
-      if (route.name === "minerals") {
-        const preview = content.querySelector("[data-catalog-map-preview]");
-        if (preview) {
-          await mountConfiguredMap(preview, sequence, () => {
-            preview.replaceChildren(paragraph(t("mapUnavailable"), "muted"));
-          });
-        }
-      }
-    }
+    if (content) main.replaceChildren(content);
     if (focus && hasRendered) main.focus({ preventScroll: true });
     hasRendered = true;
   } catch (error) {
@@ -726,7 +674,7 @@ themeToggle.addEventListener("click", () => {
 });
 
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  if (preferences.theme === "system" && ["map", "minerals"].includes(parseRoute(location.href).name)) renderCurrentRoute({ focus: false });
+  if (preferences.theme === "system" && parseRoute(location.href, APP_BASE_PATH).name === "map") renderCurrentRoute({ focus: false });
 });
 
 addEventListener("popstate", () => renderCurrentRoute());

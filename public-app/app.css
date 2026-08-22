@@ -601,53 +601,6 @@ code {
   transform: translateY(0);
 }
 
-.catalog-heading-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(19rem, 0.8fr);
-  gap: clamp(1rem, 3vw, 2rem);
-  align-items: center;
-  margin-bottom: 1.2rem;
-}
-
-.catalog-heading-copy,
-.catalog-map-preview,
-.catalog-map-preview-map {
-  min-width: 0;
-}
-
-.catalog-heading-copy .view-intro {
-  margin-bottom: 0;
-}
-
-.catalog-map-preview .map-stage {
-  box-shadow: var(--shadow-sm);
-}
-
-.catalog-map-preview .map-view-options {
-  display: none;
-}
-
-.catalog-map-preview .map-source-credit {
-  font-size: 0.5rem;
-}
-
-.catalog-map-preview-note {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.35rem 0.75rem;
-  margin: 0.35rem 0.1rem 0;
-  font-size: 0.72rem;
-  line-height: 1.3;
-}
-
-.catalog-map-preview-note p {
-  margin: 0;
-}
-
-.catalog-map-preview-note a {
-  flex: 0 0 auto;
-}
-
 .search-form {
   max-width: 55rem;
   display: grid;
@@ -1190,24 +1143,6 @@ code {
     var(--surface-soft);
 }
 
-.map-shell.map-shell--compact {
-  display: block;
-  min-height: 0;
-  overflow: visible;
-  padding-block: clamp(0.42rem, 1.4vw, 0.9rem);
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.map-shell--compact .map-container,
-.map-shell--compact #catalog-map-root {
-  min-height: 0;
-  overflow: visible;
-  background: transparent;
-}
-
 .map-fallback,
 .map-container > .loading-panel,
 #catalog-map-root > .loading-panel,
@@ -1347,14 +1282,6 @@ code {
     opacity: 0.5;
   }
 
-  .catalog-heading-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .catalog-map-preview {
-    width: min(100%, 38rem);
-  }
-
   .search-form {
     grid-template-columns: 1fr;
   }
@@ -1410,11 +1337,6 @@ code {
     border-radius: var(--radius);
   }
 
-  .map-shell.map-shell--compact {
-    min-height: 0;
-    border-radius: 0;
-  }
-
   .site-footer {
     align-items: flex-start;
     flex-direction: column;
@@ -1426,11 +1348,6 @@ code {
 }
 
 @media (max-width: 25rem) {
-  .catalog-map-preview-note {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .brand-copy {
     display: none;
   }

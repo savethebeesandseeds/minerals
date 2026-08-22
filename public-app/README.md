@@ -4,14 +4,14 @@ This directory is a standalone, static browser application. The browser loads a 
 
 ## Serve and deploy
 
-`public-app/` is the checked-in asset source, not a complete release: it intentionally has no manifest or catalog database. Build `export-public` and run it as documented in the root README (for example, `./target/release/export-public --data-root ./data --output ./public-dist`), then serve the generated `public-dist/` as the origin root over HTTPS. Literal localhost or loopback HTTP is supported for development. Opening `index.html` with `file:` is unsupported because module workers, WebAssembly, `fetch()`, and Web Crypto require a secure origin.
+`public-app/` is the checked-in asset source, not a complete release: it intentionally has no manifest or catalog database. Build `export-public` and run it as documented in the root README, passing a fresh release path under an existing parent (for example, `./target/release/export-public --data-root ./data --output ./public-releases/release-2026-08-21-1`). The exporter assembles and validates a sibling staging directory before renaming it to that path; it rejects an existing output and cleans staging after failure. Atomically switch the static host to the completed release, then serve it at an origin root or same-origin directory subpath over HTTP(S). Opening `index.html` with `file:` is unsupported because module workers, WebAssembly, and `fetch()` require an HTTP origin. Application, worker, map, manifest, database, and SQLite URLs resolve from their owning modules, so a release mounted at a path such as `/catalog/` stays within that path.
 
 The deployment must:
 
-- serve `.mjs` as `text/javascript`, `.wasm` as `application/wasm`, and `.sqlite3` as `application/octet-stream`;
-- negotiate the generated `.sqlite3.br` and `.sqlite3.gz` sidecars for the canonical `.sqlite3` URL, preferring Brotli, then gzip, then the uncompressed file;
-- optionally rewrite the clean routes `/minerals`, `/minerals/*`, `/map`, and `/about` to `/index.html` without rewriting asset or catalog requests (canonical links use hash routes and need no rewrites);
+- serve `.mjs` as `text/javascript`, `.wasm` as `application/wasm`, and `.sqlite3` as `application/vnd.sqlite3`;
+- use canonical hash routes for portable directory-subpath deployments; clean-path rewrites are optional and require host-specific asset-base handling;
 - send `Cache-Control: no-cache` for `catalog-manifest.json`, and may send `Cache-Control: public, max-age=31536000, immutable` for `data/catalog-<sha256>.sqlite3`;
+- negotiate the generated `.sqlite3.br` and `.sqlite3.gz` sidecars for the canonical `.sqlite3` URL, preferring Brotli, then gzip, then the uncompressed file; `fetch()` supplies the decoded bytes that the manifest size and SHA-256 checks verify;
 - preserve same-origin URLs for the manifest, database, worker, SQLite runtime, and optional map module; and
 - reproduce the CSP in `index.html` as an HTTP response header in production, adding `frame-ancestors 'none'` (which a CSP meta element cannot enforce) and `X-Content-Type-Options: nosniff`.
 
@@ -47,26 +47,26 @@ Accept-Encoding includes gzip  -> serve .sqlite3.gz with Content-Encoding: gzip
 otherwise                      -> serve .sqlite3 unchanged
 ```
 
-Every variant must use `Content-Type: application/octet-stream`,
+Every variant must use `Content-Type: application/vnd.sqlite3`,
 `Vary: Accept-Encoding`, and `Cache-Control: public, max-age=31536000,
 immutable`. Use representation-specific strong ETags, or weak ETags; do not
 reuse one strong ETag across differently encoded bodies. Caddy's
 `file_server { precompressed br gzip }` and equivalent CDN
-precompressed-file features implement this negotiation. For nginx, enable a
-build containing the optional static gzip and Brotli modules, then use
-`gzip_static on;`, `brotli_static on;`, and `gzip_vary on;` (the last setting
-is not enabled by default). A basic static server that lacks precompressed
-file negotiation safely falls back to the uncompressed `.sqlite3` file.
+precompressed-file features implement this negotiation. For nginx, enable
+`gzip_static on;`; a build with the optional Brotli module can additionally use
+`brotli_static on;`. A basic static server that lacks precompressed-file
+negotiation safely falls back to the uncompressed `.sqlite3` file.
 
 HTTP Fetch transparently decodes `Content-Encoding` before the worker receives
 the response body. The worker therefore needs no decompression dependency: it
 still verifies the decoded byte length and SHA-256 before opening SQLite.
 
 The repository exporter also copies the finalized map package at
-`map/map-app.js`, `map/map-loader.js`, `map/map.css`, and
-`map/minerals_map.wasm`. Those files are fetched only after either the `/map`
-route or the small `/minerals` world-context preview mounts a connected
-container. Their absence must not break catalog routes.
+`map/map-loader.js`, `map/map.css`, and `map/minerals_map.wasm`. None of those
+files is fetched before the `/map` route
+mounts its connected container, and their absence must not break catalog
+routes. This directory is also the canonical map build output; there is no
+duplicate copy under the private server's `static/` assets.
 
 ## Manifest contract
 
@@ -134,7 +134,7 @@ All search, pagination, detail, evidence, and offer operations are fixed worker 
 
 ## Verification and read-only guarantees
 
-The worker validates the manifest, fetches the named database, receives the transparently decoded representation, checks the exact uncompressed byte count, computes SHA-256 with Web Crypto, and compares the bare result to the digest in both `database.sha256` and the content-addressed filename. Only then does it deserialize through the official SQLite WASM API with `SQLITE_DESERIALIZE_READONLY | SQLITE_DESERIALIZE_FREEONCLOSE`, enable `PRAGMA query_only`, and validate schema and metadata. Any mismatch fails closed; unverified bytes are never queried. This is an integrity check rooted in the same-origin manifest, not a digital signature: deployment still depends on HTTPS and origin security for authenticity.
+The worker validates the manifest, fetches the named database, checks the exact byte count, computes SHA-256 with Web Crypto, and compares the bare result to the digest in both `database.sha256` and the content-addressed filename. Only then does it deserialize through the official SQLite WASM API with `SQLITE_DESERIALIZE_READONLY | SQLITE_DESERIALIZE_FREEONCLOSE`, enable `PRAGMA query_only`, and validate schema and metadata. Any mismatch fails closed; unverified bytes are never queried. This is an integrity check rooted in the same-origin manifest, not a digital signature: deployment still depends on HTTPS and origin security for authenticity.
 
 ## Routing
 
@@ -155,20 +155,13 @@ catalog-only deployment degrades gracefully when those files are omitted.
 `index.html` identifies the ESM entry point with:
 
 ```html
-<meta name="waajacu-map-module" content="/map/map-app.js">
+<meta name="waajacu-map-module" content="./map/map-loader.js">
 ```
 
-The application dynamically imports that URL only after `/map` or the optional
-`/minerals` preview has inserted a connected map container into the document.
-The preview is forest context only and explicitly does not represent mineral
-occurrences. The module must export:
+The application dynamically imports that URL only after the `/map` route has inserted its map markup and connected container into the document. The module must export:
 
 ```js
-export async function mountWaajacuMap({
-  container,
-  catalog,
-  navigate,
-  locale,
+export async function mountMineralsMap(container, {
   theme,
   signal,
 }) {
@@ -179,10 +172,14 @@ export async function mountWaajacuMap({
 The arguments are:
 
 - `container`: the connected `HTMLElement` owned by the route;
-- `catalog`: a read-only facade with `search(input)`, `detail(slug)`, `evidence(slug)`, and `offers(slug)` promise methods, backed by the same validated worker;
-- `navigate(to, options?)`: SPA navigation without a document reload;
-- `locale`: the active BCP 47 UI language tag;
 - `theme`: the resolved `"light"` or `"dark"` theme;
 - `signal`: an `AbortSignal` that fires when the route is left or superseded.
 
-`mountWaajacuMap` may resolve to `undefined` or a cleanup function. On route teardown the shell aborts `signal` and then invokes that cleanup function once. The module must keep all rendering inside `container`, treat catalog values as untrusted text, honor aborts, and must not replace history, global preference handlers, or the catalog worker. A missing module is a supported deployment state and produces an accessible map-unavailable message rather than breaking the rest of the catalog.
+`mountMineralsMap` may resolve to `undefined` or a cleanup function. On route
+teardown the shell aborts `signal` and then invokes that cleanup function once.
+The module keeps all rendering inside `container`, honors aborts, and does not
+replace history, global preference handlers, or the catalog worker. It renders
+only after load, resize, theme, projection, or direct globe input; the globe has
+a fixed Greenwich-centred default and never rotates automatically. A missing
+module is a supported deployment state and produces an accessible
+map-unavailable message rather than breaking the rest of the catalog.

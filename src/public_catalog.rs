@@ -19,6 +19,7 @@ const BROTLI_WINDOW_BITS: i32 = 22;
 pub const PUBLIC_CATALOG_FORMAT: &str = "waajacu-public-catalog-v1";
 pub const PUBLIC_CATALOG_SCHEMA_VERSION: u32 = 1;
 pub const PUBLIC_CATALOG_MANIFEST_FILE: &str = "catalog-manifest.json";
+const PUBLIC_CATALOG_PAGE_SIZE: i64 = 8192;
 
 const PUBLIC_TABLES: &[&str] = &[
     "catalog_meta",
@@ -120,6 +121,7 @@ pub fn export_public_catalog(data_root: &Path, output: &Path) -> Result<PublicCa
     destination
         .execute_batch(
             r#"
+            PRAGMA page_size = 8192;
             PRAGMA journal_mode = DELETE;
             PRAGMA synchronous = FULL;
             PRAGMA foreign_keys = ON;
@@ -785,6 +787,12 @@ fn copy_offers(
 }
 
 fn validate_public_database(destination: &Connection, mineral_count: u64) -> Result<()> {
+    let page_size: i64 = destination
+        .query_row("PRAGMA page_size", [], |row| row.get(0))
+        .context("failed to verify public catalog page size")?;
+    if page_size != PUBLIC_CATALOG_PAGE_SIZE {
+        bail!("public catalog page size is {page_size}, expected {PUBLIC_CATALOG_PAGE_SIZE}");
+    }
     let integrity: String = destination
         .query_row("PRAGMA integrity_check", [], |row| row.get(0))
         .context("failed to run public catalog integrity check")?;
@@ -1420,6 +1428,8 @@ mod tests {
         assert_eq!(fts_slug, "public-quartz");
         let journal_mode: String = public.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
         assert_eq!(journal_mode.to_ascii_lowercase(), "delete");
+        let page_size: i64 = public.query_row("PRAGMA page_size", [], |row| row.get(0))?;
+        assert_eq!(page_size, PUBLIC_CATALOG_PAGE_SIZE);
         drop(public);
 
         let exported_bytes = fs::read(&first_database_path)?;
@@ -1571,7 +1581,7 @@ mod tests {
         encoder.write_all(b"unexpected second member")?;
         encoder.finish()?.sync_all()?;
         assert!(
-            verify_precompressed(&multiple_members, CompressionEncoding::Gzip, &sha256, bytes,)
+            verify_precompressed(&multiple_members, CompressionEncoding::Gzip, &sha256, bytes)
                 .is_err()
         );
 
@@ -1581,7 +1591,7 @@ mod tests {
         trailing_file.write_all(b"not another gzip member")?;
         trailing_file.sync_all()?;
         assert!(
-            verify_precompressed(&trailing, CompressionEncoding::Gzip, &sha256, bytes,).is_err()
+            verify_precompressed(&trailing, CompressionEncoding::Gzip, &sha256, bytes).is_err()
         );
         Ok(())
     }
@@ -1603,7 +1613,7 @@ mod tests {
         trailing_file.sync_all()?;
 
         assert!(
-            verify_precompressed(&trailing, CompressionEncoding::Brotli, &sha256, bytes,).is_err()
+            verify_precompressed(&trailing, CompressionEncoding::Brotli, &sha256, bytes).is_err()
         );
         Ok(())
     }
@@ -1899,7 +1909,7 @@ mod tests {
             "#,
         )?;
         drop(connection);
-        crate::registry::init_registry_database_with_options(data_root, false)
+        minerals::registry::init_registry_database_with_options(data_root, false)
     }
 
     fn file_snapshot(path: &Path) -> Result<(u64, String)> {

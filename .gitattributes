@@ -1,0 +1,7 @@
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+# Preserve the official vendored SQLite ESM byte-for-byte; upstream contains
+# intentional trailing tabs that must not be normalized locally.
+public-app/vendor/sqlite/index.mjs whitespace=-trailing-space

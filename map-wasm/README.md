@@ -1,6 +1,6 @@
-# Minerals forest-map demo
+# Minerals public forest-map renderer
 
-This crate is the renderer used by the isolated `GET /map` demo. It has no
+This crate is the renderer used by the static public catalog's map route. It has no
 dependencies, allocator, framework, network client, WebGL code, map engine, or
 `wasm-bindgen` shim. Rust/WebAssembly selects the categorical map cells,
 applies the light or dark palette, draws the coastline, and writes the RGBA
@@ -23,10 +23,11 @@ rustup target add --toolchain 1.96.0 wasm32-unknown-unknown
 ```
 
 The script runs the native renderer tests, builds the release module, and
-copies it to `static/map/minerals_map.wasm`. The compiled module is checked in
-so the existing application and Docker build need no additional toolchain. The
-build script pins Rust 1.96.0 and refuses map-data or WASM hashes that have not
-been reviewed. The expected module SHA-256 is
+copies it to the canonical deployable location at
+`public-app/map/minerals_map.wasm`. There is no second server-static copy to
+synchronize. The compiled module is checked in so deployment needs no Rust
+toolchain. The build script pins Rust 1.96.0 and refuses map-data or WASM hashes
+that have not been reviewed. The expected module SHA-256 is
 `f095257a885fe1545c7ccf1b18e480da4685b0726f5b9a2532c2cecd6212799f`.
 
 When Node.js is available, verify the compiled browser ABI as well:

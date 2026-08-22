@@ -710,7 +710,7 @@ mod tests {
 
     #[test]
     fn browser_loader_uses_the_same_render_status_contract() {
-        let loader = include_str!("../../static/map-loader.js");
+        let loader = include_str!("../../public-app/map/map-loader.js");
         assert!(loader.contains("wasm.render_globe_pose("));
         assert!(loader.contains("wasm.render_globe("));
         assert!(loader.contains("wasm.render_view("));

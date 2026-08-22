@@ -57,82 +57,107 @@ function ensureStylesheet(documentObject, windowObject) {
 }
 
 function mapMarkup(documentObject, id) {
-  const root = documentObject.createElement("div");
-  root.className = "map-component";
-  root.dataset.mapComponent = "";
-  root.dataset.state = "loading";
-  root.setAttribute("role", "region");
+  const root = documentObject.createElement("section");
+  root.className = "minerals-map";
+  root.dataset.mineralsMap = "";
   root.setAttribute("aria-labelledby", `${id}-title`);
   root.innerHTML = `
-    <h2 id="${id}-title" class="map-visually-hidden">Estimated forest presence, 2020</h2>
+    <header class="minerals-map__hero">
+      <div>
+        <p class="minerals-map__kicker">Local Rust + WebAssembly map</p>
+        <h2 id="${id}-title">Estimated forest presence, 2020</h2>
+        <p class="minerals-map__lead">
+          A deliberately small world atlas with land, water, and a coarse forest-presence layer. It uses no cities, routes, satellite imagery, accounts, or remote map service.
+        </p>
+      </div>
+      <dl class="minerals-map__facts" aria-label="Map properties">
+        <div><dt>Renderer</dt><dd>Rust / WASM</dd></div>
+        <div><dt>Network</dt><dd>Same origin only</dd></div>
+        <div><dt>View</dt><dd>Flat + draggable globe</dd></div>
+      </dl>
+    </header>
 
-    <div class="map-stage" data-map-stage aria-busy="true">
-    <canvas
-      id="${id}-canvas"
-      data-forest-map
-      width="960"
-      height="480"
-      tabindex="0"
-      role="img"
-      aria-roledescription="interactive world map"
-      aria-label="Draggable single orthographic globe map of estimated forest presence in 2020"
-      aria-describedby="${id}-instructions ${id}-detail-note ${id}-caveat"
-    >The world map cannot be displayed in this browser.</canvas>
+    <div class="minerals-map__workspace">
+      <div class="minerals-map__panel minerals-map__map-panel">
+        <div class="minerals-map__toolbar">
+          <p class="minerals-map__status" data-map-status data-state="loading" role="status" aria-live="polite">
+            Loading the local map renderer…
+          </p>
+          <div class="minerals-map__toolbar-tools">
+            <div class="minerals-map__view-control">
+              <span id="${id}-view-label" class="minerals-map__view-label">Projection</span>
+              <div class="minerals-map__view-options" role="radiogroup" aria-labelledby="${id}-view-label">
+                <button type="button" role="radio" aria-checked="false" aria-controls="${id}-canvas" tabindex="-1" data-map-view="flat">Flat</button>
+                <button type="button" role="radio" aria-checked="true" aria-controls="${id}-canvas" aria-label="Globe — single orthographic sphere" tabindex="0" data-map-view="globe">Globe</button>
+              </div>
+            </div>
+            <p class="minerals-map__year">Reference year <strong>2020</strong></p>
+          </div>
+        </div>
 
-    <div class="map-status-indicator" data-map-status-indicator data-state="loading">
-      <span class="map-status-dot" aria-hidden="true"></span>
-      <span class="map-visually-hidden" data-map-status data-state="loading" role="status" aria-live="polite">Loading map…</span>
+        <figure class="minerals-map__figure">
+          <div class="minerals-map__stage" data-map-stage aria-busy="true">
+            <canvas
+              id="${id}-canvas"
+              data-forest-map
+              width="960"
+              height="480"
+              tabindex="0"
+              role="img"
+              aria-roledescription="interactive world map"
+              aria-label="Draggable single orthographic globe map of estimated forest presence in 2020"
+              aria-describedby="${id}-instructions ${id}-detail ${id}-caveat"
+            >The interactive map requires a browser with Canvas and WebAssembly support.</canvas>
+            <span class="minerals-map__marker" data-map-marker hidden aria-hidden="true"></span>
+            <div class="minerals-map__fallback" data-map-fallback hidden role="note">
+              <strong>The interactive map is unavailable.</strong>
+              <span>You can still read the legend, source, and limitations below.</span>
+            </div>
+          </div>
+          <figcaption id="${id}-instructions" data-map-instructions>
+            Drag the globe left, right, up, or down to rotate it. Hover to inspect an estimate; tap or click without dragging to keep a point selected. With the map focused, use Control plus the arrow keys to rotate, 0 to reset the globe, unmodified arrow keys to move the inspector, and Escape to clear the selection. Space outside the globe has no map sample.
+          </figcaption>
+        </figure>
+      </div>
+
+      <aside class="minerals-map__sidebar" aria-label="Map details">
+        <section class="minerals-map__panel minerals-map__readout" aria-labelledby="${id}-readout-title">
+          <p class="minerals-map__section-label">Point inspection</p>
+          <h3 id="${id}-readout-title">Forest estimate</h3>
+          <output id="${id}-detail" data-map-detail aria-live="polite">
+            Move over the globe or focus the map with the keyboard to inspect a map cell.
+          </output>
+          <p class="minerals-map__detail-note" data-map-detail-note>The inspector reports forest, land, or water inside the globe. Space outside it has no sample; the coastline is a non-data overlay.</p>
+        </section>
+
+        <section class="minerals-map__panel minerals-map__legend" aria-labelledby="${id}-legend-title">
+          <p class="minerals-map__section-label">Legend</p>
+          <h3 id="${id}-legend-title">Map key</h3>
+          <ul>
+            <li><span class="minerals-map__swatch minerals-map__swatch--water" aria-hidden="true"></span><span>Water / no estimate</span></li>
+            <li><span class="minerals-map__swatch minerals-map__swatch--land" aria-hidden="true"></span><span>Land / forest not shown at this sample</span></li>
+            <li><span class="minerals-map__swatch minerals-map__swatch--forest" aria-hidden="true"></span><span>Estimated forest presence (2020)</span></li>
+            <li><span class="minerals-map__swatch minerals-map__swatch--coast" aria-hidden="true"></span><span>Coastline overlay (Natural Earth)</span></li>
+            <li data-map-outside-key><span class="minerals-map__swatch minerals-map__swatch--outside" aria-hidden="true"></span><span>Outside globe / no map sample</span></li>
+          </ul>
+        </section>
+
+        <section class="minerals-map__panel minerals-map__source" aria-labelledby="${id}-source-title">
+          <p class="minerals-map__section-label">Data &amp; limits</p>
+          <h3 id="${id}-source-title">Coarse global context</h3>
+          <p>
+            Forest data © European Union, 2026 — JRC Global Forest Cover 2020 v3 (modified for display),
+            <a href="https://doi.org/10.2905/JRC.354CG88" target="_blank" rel="noopener noreferrer">DOI 10.2905/JRC.354CG88</a>.
+          </p>
+          <p>
+            World land geometry: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a> (public domain).
+          </p>
+          <p id="${id}-caveat" class="minerals-map__caveat">
+            This offline display snapshot was repacked and recoloured by Minerals. It is a visual overview only: do not draw quantitative or statistical inferences from it. It is not suitable for local, legal, conservation, or land-use decisions.
+          </p>
+        </section>
+      </aside>
     </div>
-
-    <div class="map-view-options" role="radiogroup" aria-label="Projection">
-      <button type="button" role="radio" aria-checked="false" aria-controls="${id}-canvas" tabindex="-1" data-map-view="flat">Flat</button>
-      <button type="button" role="radio" aria-checked="true" aria-controls="${id}-canvas" aria-label="Globe — single orthographic sphere" tabindex="0" data-map-view="globe">Globe</button>
-    </div>
-
-    <ul class="map-compact-legend" aria-label="Map key">
-      <li><span class="map-swatch map-swatch-forest" aria-hidden="true"></span><span>Forest</span></li>
-      <li><span class="map-swatch map-swatch-land" aria-hidden="true"></span><span>Land</span></li>
-      <li><span class="map-swatch map-swatch-water" aria-hidden="true"></span><span>Water</span></li>
-    </ul>
-
-    <output class="map-state-chip" data-map-detail aria-hidden="true" hidden></output>
-    <span class="map-marker" data-map-marker hidden aria-hidden="true"></span>
-    <span class="map-year-mark">
-      Estimated forest presence <span aria-hidden="true">·</span> Reference year <strong>2020</strong>
-    </span>
-
-    <div class="map-fallback" data-map-fallback hidden role="note">
-      <strong>Map unavailable</strong>
-      <span>The world overview could not be displayed.</span>
-    </div>
-    </div>
-
-    <p
-      class="map-source-credit"
-      role="note"
-      aria-label="Sources: Forest data © European Union, 2026 — JRC Global Forest Cover 2020 version 3, modified for display, DOI 10.2905/JRC.354CG88. World land geometry: Natural Earth, public domain."
-      title="Forest data © European Union, 2026 — JRC Global Forest Cover 2020 v3 (modified for display), DOI 10.2905/JRC.354CG88 · World land geometry: Natural Earth (public domain)"
-    >
-      <a
-        href="https://doi.org/10.2905/JRC.354CG88"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="JRC Global Forest Cover 2020 version 3 data source, DOI 10.2905/JRC.354CG88"
-      >EU/JRC GFC 2020 v3</a>
-      · modified display ·
-      <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>
-    </p>
-
-    <p id="${id}-instructions" class="map-visually-hidden" data-map-instructions>
-      Drag to rotate; tap or click to select. Control plus Arrow keys rotates, 0 resets, Arrow keys inspect, and Escape clears.
-    </p>
-    <p id="${id}-detail-note" class="map-visually-hidden" data-map-detail-note>
-      The inspector reports forest, land, or water. Space outside the globe has no sample.
-    </p>
-    <p id="${id}-caveat" class="map-visually-hidden">
-      The coastline is a non-data overlay. This modified display snapshot is a coarse visual overview only. Do not draw quantitative or statistical inferences from it, and do not use it for local, legal, conservation, or land-use decisions.
-    </p>
-    <span class="map-visually-hidden" data-map-inspection-status role="status" aria-live="polite"></span>
   `;
   return root;
 }
@@ -178,13 +203,12 @@ function createMapController(container, { wasmUrl, theme }) {
   };
   const canvas = required("[data-forest-map]");
   const stage = required("[data-map-stage]");
-  const statusIndicator = required("[data-map-status-indicator]");
   const status = required("[data-map-status]");
   const fallback = required("[data-map-fallback]");
   const detail = required("[data-map-detail]");
   const detailNote = required("[data-map-detail-note]");
   const instructions = required("[data-map-instructions]");
-  const inspectionStatus = required("[data-map-inspection-status]");
+  const outsideKey = required("[data-map-outside-key]");
   const marker = required("[data-map-marker]");
   const viewButtons = Array.from(root.querySelectorAll("[data-map-view]"));
   const context = typeof canvas.getContext === "function"
@@ -199,13 +223,12 @@ function createMapController(container, { wasmUrl, theme }) {
     root,
     canvas,
     stage,
-    statusIndicator,
     status,
     fallback,
     detail,
     detailNote,
     instructions,
-    inspectionStatus,
+    outsideKey,
     marker,
     viewButtons,
     context,
@@ -220,7 +243,7 @@ function createMapController(container, { wasmUrl, theme }) {
     compatibilityFlat: false,
     rendererFailed: false,
     disposed: false,
-    frameRequest: 0,
+    animationFrame: 0,
     renderPending: false,
     renderAnnouncementPending: false,
     pendingPointer: null,
@@ -247,8 +270,6 @@ function createMapController(container, { wasmUrl, theme }) {
   };
 
   const setStatus = (nextState, message) => {
-    state.root.dataset.state = nextState;
-    state.statusIndicator.dataset.state = nextState;
     if (state.status.dataset.state === nextState && state.status.textContent.trim() === message) return;
     state.status.dataset.state = nextState;
     state.status.textContent = message;
@@ -258,27 +279,19 @@ function createMapController(container, { wasmUrl, theme }) {
     if (element.textContent.trim() !== message) element.textContent = message;
   };
 
-  const hideDetail = () => {
-    state.detail.hidden = true;
-    delete state.detail.dataset.sample;
-    setText(state.detail, "");
-  };
-
   const setCanvasLabel = (message) => {
     if (state.canvas.getAttribute("aria-label") !== message) {
       state.canvas.setAttribute("aria-label", message);
     }
   };
 
+  const viewName = () => state.activeView === "globe" ? "Globe" : "Flat";
+
   const canRenderGlobe = () => (
-    state.supportsGlobePose
-    || state.supportsGlobeRotation
-    || state.supportsViewRendering
+    state.supportsGlobePose || state.supportsGlobeRotation || state.supportsViewRendering
   );
 
-  const canManipulateGlobe = () => (
-    state.supportsGlobePose || state.supportsGlobeRotation
-  );
+  const canManipulateGlobe = () => state.supportsGlobePose || state.supportsGlobeRotation;
 
   const globeIsDraggable = () => Boolean(
     state.wasm
@@ -300,18 +313,22 @@ function createMapController(container, { wasmUrl, theme }) {
     return "Single orthographic globe map of estimated forest presence in 2020";
   };
 
+  const defaultDetail = () => state.activeView === "globe"
+    ? "Move over the globe or focus the map with the keyboard to inspect a map cell."
+    : "Move over the map or focus it with the keyboard to inspect a map cell.";
+
   const defaultDetailNote = () => state.activeView === "globe"
     ? "The inspector reports forest, land, or water inside the globe. Space outside it has no sample; the coastline is a non-data overlay."
     : "The inspector reports the underlying forest, land, or water state; the coastline is a non-data overlay.";
 
   const globeInstructions = () => {
     if (!state.wasm || state.supportsGlobePose) {
-      return "Drag to rotate; tap or click to select. Control plus Arrow keys rotates, 0 resets, Arrow keys inspect, and Escape clears.";
+      return "Drag the globe left, right, up, or down to rotate it. Hover to inspect an estimate; tap or click without dragging to keep a point selected. With the map focused, use Control plus the arrow keys to rotate, 0 to reset the globe, unmodified arrow keys to move the inspector, and Escape to clear the selection. Space outside the globe has no map sample.";
     }
     if (state.supportsGlobeRotation) {
-      return "Drag left or right to rotate; tap or click to select. Control plus Left or Right rotates, 0 resets, Arrow keys inspect, and Escape clears.";
+      return "Drag the globe left or right to rotate it. Hover to inspect an estimate; tap or click without dragging to keep a point selected. With the map focused, use Control plus Left or Right to rotate, 0 to reset the globe, unmodified arrow keys to move the inspector, and Escape to clear the selection. Space outside the globe has no map sample.";
     }
-    return "Tap or click to select. Arrow keys inspect and Escape clears.";
+    return "Globe view shows one static orthographic sphere. Hover to inspect an estimate; tap or click to keep a point selected. With the map focused, use the arrow keys to move the inspector and Escape to clear the selection. Space outside the globe has no map sample.";
   };
 
   const resolveDarkTheme = () => {
@@ -345,9 +362,7 @@ function createMapController(container, { wasmUrl, theme }) {
     state.canvas.dataset.dragAxes = enabled
       ? state.supportsGlobePose ? "both" : "horizontal"
       : "none";
-    state.canvas.dataset.dragging = String(Boolean(
-      enabled && state.dragState && state.dragState.moved,
-    ));
+    state.canvas.dataset.dragging = String(Boolean(enabled && state.dragState?.moved));
     if (!enabled) {
       state.canvas.removeAttribute("aria-keyshortcuts");
       return;
@@ -366,33 +381,33 @@ function createMapController(container, { wasmUrl, theme }) {
       state.instructions,
       state.activeView === "globe"
         ? globeInstructions()
-        : "Tap or click to select. Arrow keys inspect and Escape clears.",
+        : "Flat view shows the full world plane. Hover to inspect an estimate; tap or click to keep a point selected. With the map focused, use the arrow keys to move the inspector and Escape to clear the selection.",
     );
-    hideDetail();
-    setText(state.inspectionStatus, "");
+    state.outsideKey.hidden = state.activeView !== "globe";
+    setText(state.detail, defaultDetail());
     setText(state.detailNote, defaultDetailNote());
     updateDragAffordance();
   };
 
-  const cancelScheduledFrame = () => {
-    if (!state.frameRequest) return;
-    state.windowObject.cancelAnimationFrame(state.frameRequest);
-    state.frameRequest = 0;
-  };
-
   const cancelActiveDrag = () => {
-    const activeDrag = state.dragState;
+    const drag = state.dragState;
     state.dragState = null;
     state.pendingPointer = null;
     state.canvas.dataset.dragging = "false";
-    if (!activeDrag || typeof state.canvas.hasPointerCapture !== "function") return;
+    if (!drag || typeof state.canvas.hasPointerCapture !== "function") return;
     try {
-      if (state.canvas.hasPointerCapture(activeDrag.pointerId)) {
-        state.canvas.releasePointerCapture(activeDrag.pointerId);
+      if (state.canvas.hasPointerCapture(drag.pointerId)) {
+        state.canvas.releasePointerCapture(drag.pointerId);
       }
-    } catch (_captureError) {
+    } catch {
       // Pointer capture may already have been released by the browser.
     }
+  };
+
+  const cancelScheduledFrame = () => {
+    if (!state.animationFrame) return;
+    state.windowObject.cancelAnimationFrame(state.animationFrame);
+    state.animationFrame = 0;
   };
 
   const fail = () => {
@@ -409,12 +424,11 @@ function createMapController(container, { wasmUrl, theme }) {
     state.fallback.hidden = false;
     state.canvas.hidden = true;
     state.marker.hidden = true;
-    hideDetail();
-    setText(state.inspectionStatus, "");
     for (const button of state.viewButtons) {
       button.disabled = true;
       button.setAttribute("aria-disabled", "true");
     }
+    setText(state.detail, "The forest layer could not be loaded in this browser.");
     setText(state.detailNote, "The legend, source, and limitations remain available.");
   };
 
@@ -453,32 +467,18 @@ function createMapController(container, { wasmUrl, theme }) {
     state.marker.style.top = `${normalizedV * 100}%`;
 
     const forestState = forestStateAt(normalizedU, normalizedV);
-    const chipText = {
-      forest: "Forest",
-      land: "Land",
-      water: "Water",
-      outside: "No data",
-    };
     const stateText = {
       forest: "Estimated forest presence at this sampled cell.",
       land: "Forest not shown at this sampled cell.",
       water: "Water / no estimate at this sampled cell.",
       outside: "Outside the globe; no map sample at this point.",
     };
-    state.detail.hidden = false;
-    state.detail.dataset.sample = forestState ?? "unavailable";
     setText(
       state.detail,
-      forestState === null ? "No data" : chipText[forestState],
+      forestState === null
+        ? `${interaction} point: sample unavailable.`
+        : `${interaction} point. ${stateText[forestState]}`,
     );
-    if (interaction !== "Hovered") {
-      setText(
-        state.inspectionStatus,
-        forestState === null
-          ? `${interaction} point: sample unavailable.`
-          : `${interaction} point. ${stateText[forestState]}`,
-      );
-    }
     setText(
       state.detailNote,
       forestState === "outside"
@@ -487,13 +487,21 @@ function createMapController(container, { wasmUrl, theme }) {
           ? "Selection kept. Click another point or press Escape to clear it. The coastline is a non-data overlay."
           : defaultDetailNote(),
     );
-    if (interaction !== "Hovered") {
-      setCanvasLabel(
-        forestState === null
-          ? `${baseCanvasLabel()}. The current sample is unavailable.`
-          : `${baseCanvasLabel()}. ${stateText[forestState]}`,
-      );
+    setCanvasLabel(
+      forestState === null
+        ? `${baseCanvasLabel()}. The current sample is unavailable.`
+        : `${baseCanvasLabel()}. ${stateText[forestState]}`,
+    );
+  };
+
+  const readyMessage = () => {
+    if (state.compatibilityFlat) {
+      return "Map ready · Flat compatibility view · local WebAssembly";
     }
+    if (state.activeView === "globe" && !canManipulateGlobe()) {
+      return "Map ready · Static Globe compatibility view · local WebAssembly";
+    }
+    return `Map ready · ${viewName()} view · local WebAssembly`;
   };
 
   const renderMap = (announceStatus) => {
@@ -501,7 +509,7 @@ function createMapController(container, { wasmUrl, theme }) {
     const bounds = state.canvas.getBoundingClientRect();
     if (bounds.width < 1) return false;
 
-    const maximumPixelRatio = state.dragState && state.dragState.moved
+    const maximumPixelRatio = state.dragState?.moved
       ? DRAG_DEVICE_PIXEL_RATIO
       : MAX_DEVICE_PIXEL_RATIO;
     const pixelRatio = Math.min(
@@ -563,26 +571,22 @@ function createMapController(container, { wasmUrl, theme }) {
       state.canvas.height = height;
     }
 
-    const cacheMatches = Boolean(
+    const cacheMatches = (
       state.cachedImage
       && state.cachedMemoryBuffer === memoryBuffer
       && state.cachedPixelPointer === pixelPointer
       && state.cachedPixelLength === pixelLength
       && state.cachedImage.width === width
-      && state.cachedImage.height === height,
+      && state.cachedImage.height === height
     );
     if (!cacheMatches) {
       state.cachedPixels = new Uint8ClampedArray(memoryBuffer, pixelPointer, pixelLength);
       state.cachedImageIsDirect = false;
       if (typeof state.windowObject.ImageData === "function") {
         try {
-          state.cachedImage = new state.windowObject.ImageData(
-            state.cachedPixels,
-            width,
-            height,
-          );
+          state.cachedImage = new state.windowObject.ImageData(state.cachedPixels, width, height);
           state.cachedImageIsDirect = true;
-        } catch (_imageDataError) {
+        } catch {
           state.cachedImage = null;
         }
       }
@@ -603,30 +607,27 @@ function createMapController(container, { wasmUrl, theme }) {
     return true;
   };
 
-  const readyMessage = () => "Map available.";
-
+  let runAnimationFrame;
   const hasFrameWork = () => Boolean(
-    state.renderPending
-    || state.pendingPointer
-    || (state.dragState && state.dragState.pendingPoint),
+    state.renderPending || state.pendingPointer || state.dragState?.pendingPoint,
   );
 
-  const requestFrame = () => {
+  const requestAnimationWork = () => {
     if (
-      state.frameRequest
+      state.animationFrame
       || state.rendererFailed
       || state.disposed
       || state.documentObject.hidden
       || !hasFrameWork()
     ) return;
-    state.frameRequest = state.windowObject.requestAnimationFrame(flushFrame);
+    state.animationFrame = state.windowObject.requestAnimationFrame(runAnimationFrame);
   };
 
   const scheduleRender = ({ announce = false } = {}) => {
     if (state.disposed || state.rendererFailed) return;
     state.renderPending = true;
     state.renderAnnouncementPending ||= announce;
-    requestFrame();
+    requestAnimationWork();
   };
 
   const normalizePhase = (value) => {
@@ -640,7 +641,7 @@ function createMapController(container, { wasmUrl, theme }) {
   );
 
   const applyPendingDrag = () => {
-    if (!state.dragState || !state.dragState.moved || !state.dragState.pendingPoint) return;
+    if (!state.dragState?.moved || !state.dragState.pendingPoint) return;
     const point = state.dragState.pendingPoint;
     state.dragState.pendingPoint = null;
     const deltaX = point.x - state.dragState.startX;
@@ -649,9 +650,7 @@ function createMapController(container, { wasmUrl, theme }) {
       state.dragState.startPhase - deltaX * PHASE_TURN / state.dragState.width,
     );
     const nextPitch = state.supportsGlobePose
-      ? clampPitch(
-        state.dragState.startPitch + deltaY * PHASE_TURN / state.dragState.width,
-      )
+      ? clampPitch(state.dragState.startPitch + deltaY * PHASE_TURN / state.dragState.width)
       : state.globePitch;
     if (nextPhase === state.globePhase && nextPitch === state.globePitch) return;
     state.globePhase = nextPhase;
@@ -659,8 +658,8 @@ function createMapController(container, { wasmUrl, theme }) {
     state.renderPending = true;
   };
 
-  function flushFrame() {
-    state.frameRequest = 0;
+  runAnimationFrame = () => {
+    state.animationFrame = 0;
     if (state.disposed) return;
     applyPendingDrag();
 
@@ -676,14 +675,13 @@ function createMapController(container, { wasmUrl, theme }) {
         return;
       }
     }
-
     if (state.pendingPointer && !state.dragState) {
       const point = state.pendingPointer;
       state.pendingPointer = null;
       inspect(point.u, point.v, "Hovered");
     }
-    requestFrame();
-  }
+    requestAnimationWork();
+  };
 
   const pointFromEvent = (event) => {
     const bounds = state.canvas.getBoundingClientRect();
@@ -699,8 +697,6 @@ function createMapController(container, { wasmUrl, theme }) {
     state.selection = null;
     state.pendingPointer = null;
     state.marker.hidden = true;
-    hideDetail();
-    setText(state.inspectionStatus, "");
     updateViewCopy();
   };
 
@@ -709,14 +705,10 @@ function createMapController(container, { wasmUrl, theme }) {
   };
 
   const markDragMoved = (x, y) => {
-    if (!state.dragState || state.dragState.moved) {
-      return Boolean(state.dragState && state.dragState.moved);
-    }
+    if (!state.dragState || state.dragState.moved) return Boolean(state.dragState?.moved);
     const deltaX = x - state.dragState.startX;
     const deltaY = y - state.dragState.startY;
-    const distance = state.supportsGlobePose
-      ? Math.hypot(deltaX, deltaY)
-      : Math.abs(deltaX);
+    const distance = state.supportsGlobePose ? Math.hypot(deltaX, deltaY) : Math.abs(deltaX);
     if (distance < DRAG_THRESHOLD_PX) return false;
     state.dragState.moved = true;
     state.pendingPointer = null;
@@ -727,27 +719,27 @@ function createMapController(container, { wasmUrl, theme }) {
 
   const finishDrag = (event, canceled) => {
     if (!state.dragState || event.pointerId !== state.dragState.pointerId) return;
-    const activeDrag = state.dragState;
+    const drag = state.dragState;
     if (
-      activeDrag.moved
+      drag.moved
       && Number.isFinite(event.clientX)
       && Number.isFinite(event.clientY)
     ) {
-      activeDrag.pendingPoint = { x: event.clientX, y: event.clientY };
+      drag.pendingPoint = { x: event.clientX, y: event.clientY };
       applyPendingDrag();
     }
     state.dragState = null;
     state.canvas.dataset.dragging = "false";
     if (typeof state.canvas.hasPointerCapture === "function") {
       try {
-        if (state.canvas.hasPointerCapture(activeDrag.pointerId)) {
-          state.canvas.releasePointerCapture(activeDrag.pointerId);
+        if (state.canvas.hasPointerCapture(drag.pointerId)) {
+          state.canvas.releasePointerCapture(drag.pointerId);
         }
-      } catch (_captureError) {
+      } catch {
         // Pointer capture may already have been released by the browser.
       }
     }
-    if (!activeDrag.moved) return;
+    if (!drag.moved) return;
 
     state.pendingPointer = null;
     if (!canceled) {
@@ -775,7 +767,7 @@ function createMapController(container, { wasmUrl, theme }) {
     clearSelection();
     if (render && state.wasm) {
       state.stage.setAttribute("aria-busy", "true");
-      setStatus("loading", "Loading map…");
+      setStatus("loading", `Rendering ${viewName()} view…`);
       scheduleRender({ announce: true });
     }
   };
@@ -807,12 +799,8 @@ function createMapController(container, { wasmUrl, theme }) {
     if (state.activeView !== "globe" || !canManipulateGlobe()) return false;
     let nextPhase = state.globePhase;
     let nextPitch = state.globePitch;
-    if (direction[0] < 0) {
-      nextPhase = normalizePhase(state.globePhase + KEYBOARD_YAW_STEP);
-    }
-    if (direction[0] > 0) {
-      nextPhase = normalizePhase(state.globePhase - KEYBOARD_YAW_STEP);
-    }
+    if (direction[0] < 0) nextPhase = normalizePhase(state.globePhase + KEYBOARD_YAW_STEP);
+    if (direction[0] > 0) nextPhase = normalizePhase(state.globePhase - KEYBOARD_YAW_STEP);
     if (state.supportsGlobePose && direction[1] < 0) {
       nextPitch = clampPitch(state.globePitch - KEYBOARD_PITCH_STEP);
     }
@@ -876,7 +864,7 @@ function createMapController(container, { wasmUrl, theme }) {
     if (typeof state.canvas.setPointerCapture === "function") {
       try {
         state.canvas.setPointerCapture(event.pointerId);
-      } catch (_captureError) {
+      } catch {
         // The gesture can still work while the pointer stays over the canvas.
       }
     }
@@ -891,28 +879,25 @@ function createMapController(container, { wasmUrl, theme }) {
       if (!markDragMoved(latest.clientX, latest.clientY)) return;
       state.dragState.pendingPoint = { x: latest.clientX, y: latest.clientY };
       event.preventDefault();
-      requestFrame();
+      requestAnimationWork();
       return;
     }
 
     if (state.pinned || event.pointerType === "touch") return;
     state.pendingPointer = pointFromEvent(event);
-    if (state.pendingPointer) requestFrame();
+    if (state.pendingPointer) requestAnimationWork();
   });
-  listen(state, state.canvas, "pointerup", (event) => {
-    finishDrag(event, false);
-  });
-  listen(state, state.canvas, "pointercancel", (event) => {
-    finishDrag(event, true);
-  });
-  listen(state, state.canvas, "lostpointercapture", (event) => {
-    finishDrag(event, true);
-  });
+
+  listen(state, state.canvas, "pointerup", (event) => finishDrag(event, false));
+  listen(state, state.canvas, "pointercancel", (event) => finishDrag(event, true));
+  listen(state, state.canvas, "lostpointercapture", (event) => finishDrag(event, true));
+
   listen(state, state.canvas, "pointerleave", () => {
     if (state.dragState) return;
     state.pendingPointer = null;
     clearUnpinnedSelection();
   });
+
   listen(state, state.canvas, "click", (event) => {
     if (state.suppressNextClick) {
       state.suppressNextClick = false;
@@ -925,6 +910,7 @@ function createMapController(container, { wasmUrl, theme }) {
     state.pinned = true;
     inspect(point.u, point.v, "Selected");
   });
+
   listen(state, state.canvas, "keydown", (event) => {
     const keyDirections = {
       ArrowLeft: [-1, 0],
@@ -968,12 +954,14 @@ function createMapController(container, { wasmUrl, theme }) {
     state.pinned = true;
     inspect(next.u, next.v, "Selected");
   });
+
   listen(state, state.canvas, "focus", () => {
     if (!state.selection && !state.dragState) {
       const point = defaultInspectionPoint();
       inspect(point.u, point.v, "Focused");
     }
   });
+
   listen(state, state.canvas, "blur", () => {
     if (!state.pinned) clearSelection();
   });
@@ -992,12 +980,12 @@ function createMapController(container, { wasmUrl, theme }) {
 
   listen(state, state.documentObject, "visibilitychange", () => {
     if (state.documentObject.hidden) {
-      if (state.dragState && state.dragState.moved) state.renderPending = true;
+      if (state.dragState?.moved) state.renderPending = true;
       cancelActiveDrag();
       cancelScheduledFrame();
       return;
     }
-    requestFrame();
+    requestAnimationWork();
   });
 
   if (typeof windowObject.MutationObserver === "function") {
@@ -1114,9 +1102,9 @@ async function instantiateMap(state) {
       throw new TypeError("The map module does not provide the expected safe interface");
     }
 
-    state.compatibilityFlat = !state.supportsGlobePose
-      && !state.supportsGlobeRotation
-      && !state.supportsViewRendering;
+    state.compatibilityFlat = !(
+      state.supportsGlobePose || state.supportsGlobeRotation || state.supportsViewRendering
+    );
     if (state.compatibilityFlat) state.setActiveView("flat", { render: false });
     state.updateViewButtons();
     state.updateViewCopy();

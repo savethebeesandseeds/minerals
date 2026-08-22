@@ -7,6 +7,11 @@ import {
 
 const MAX_MANIFEST_BYTES = 64 * 1024;
 const MAX_DATABASE_BYTES = 512 * 1024 * 1024;
+const RELEASE_SWITCH_DATABASE_ERRORS = new Set([
+  "DATABASE_FETCH_FAILED",
+  "DATABASE_SIZE_MISMATCH",
+  "DATABASE_HASH_MISMATCH",
+]);
 const REQUIRED_COLUMNS = Object.freeze({
   catalog_meta: ["key", "value"],
   minerals: [
@@ -317,7 +322,7 @@ async function fetchDatabase(manifest) {
   }
   const bytes = await response.arrayBuffer();
   if (bytes.byteLength !== manifest.database.bytes) {
-    throw catalogError("DATABASE_SIZE_MISMATCH", "The downloaded catalog database size does not match the signed manifest value.");
+    throw catalogError("DATABASE_SIZE_MISMATCH", "The downloaded catalog database size does not match the declared manifest value.");
   }
   const digest = await sha256Hex(bytes);
   if (digest !== manifest.database.digest) {
@@ -392,8 +397,17 @@ async function initializeCatalog(manifestUrlText) {
     return publicManifestResult();
   }
 
-  const manifest = await fetchManifest(manifestUrl);
-  const bytes = await fetchDatabase(manifest);
+  let manifest = await fetchManifest(manifestUrl);
+  let bytes;
+  try {
+    bytes = await fetchDatabase(manifest);
+  } catch (error) {
+    if (!(error instanceof CatalogError) || !RELEASE_SWITCH_DATABASE_ERRORS.has(error.code)) throw error;
+    const refreshedManifest = await fetchManifest(manifestUrl);
+    if (refreshedManifest.database.sha256 === manifest.database.sha256) throw error;
+    manifest = refreshedManifest;
+    bytes = await fetchDatabase(manifest);
+  }
   const candidate = await deserializeDatabase(bytes);
   database = candidate;
   try {

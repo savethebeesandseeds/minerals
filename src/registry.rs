@@ -8,7 +8,6 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Duration as ChronoDuration, NaiveDateTime, SecondsFormat, Utc};
-use reqwest::Url;
 use ring::digest::{digest, Context as DigestContext, SHA256};
 use rusqlite::{
     params, Connection, DatabaseName, OptionalExtension, Transaction, TransactionBehavior,
@@ -16,6 +15,7 @@ use rusqlite::{
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use thiserror::Error;
+use url::Url;
 
 const DATABASE_FILE: &str = "minerals.db";
 const REGISTRY_MIGRATION: &str = "registry_v1";

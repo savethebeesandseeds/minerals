@@ -1,4 +1,6 @@
-use crate::registry::{
+use anyhow::{bail, Context, Result};
+use chrono::{DateTime, NaiveDate};
+use minerals::registry::{
     canonical_mineral_chunk_hash, canonical_mineral_manifest_hash, canonical_mineral_records_hash,
     MineralArtifactDescriptor, MineralDatasetDescriptor, MineralDatasetManifest,
     MineralIngestionChunk, MineralIngestionItem, MineralIngestionPolicy, MineralOfficialFacts,
@@ -6,8 +8,6 @@ use crate::registry::{
     MineralSnapshotKind, MineralSourceAttribution, MineralSourceDescriptor,
     MAX_MINERAL_INGESTION_CHUNK_ITEMS, MINERAL_INGESTION_SCHEMA_VERSION,
 };
-use anyhow::{bail, Context, Result};
-use chrono::{DateTime, NaiveDate};
 use ring::digest::{digest, SHA256};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

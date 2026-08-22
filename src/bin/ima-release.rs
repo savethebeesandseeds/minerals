@@ -1,11 +1,11 @@
 use anyhow::{bail, Context, Result};
-use minerals::ima_adapter::{
+use minerals::registry::MAX_MINERAL_INGESTION_CHUNK_ITEMS;
+use minerals_ima_release::{
     build_release_bundle, evolve_identity_ledger, initialize_identity_ledger,
     initialize_identity_ledger_with_overrides, load_identity_ledger, load_identity_overrides,
     load_verified_extraction, stage_release_bundle, verify_release_bundle, write_identity_ledger,
     ImaBundleBuildOptions,
 };
-use minerals::registry::MAX_MINERAL_INGESTION_CHUNK_ITEMS;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashSet};
 use std::env;

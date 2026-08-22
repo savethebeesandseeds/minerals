@@ -117,13 +117,37 @@ function routeSource(url) {
   return { source: "history", routeUrl: url };
 }
 
-export function parseRoute(locationLike) {
+function relativeRoutePath(pathname, applicationBasePath) {
+  if (typeof applicationBasePath !== "string" || !applicationBasePath.startsWith("/")) {
+    throw new TypeError("application base path must be an absolute pathname");
+  }
+  const parsedBase = new URL(applicationBasePath, "https://catalog.invalid/");
+  if (
+    parsedBase.origin !== "https://catalog.invalid"
+    || parsedBase.search
+    || parsedBase.hash
+  ) {
+    throw new TypeError("application base path must be an absolute pathname");
+  }
+  const basePath = parsedBase.pathname.endsWith("/")
+    ? parsedBase.pathname
+    : `${parsedBase.pathname}/`;
+  if (basePath === "/") return pathname;
+  if (pathname === basePath.slice(0, -1)) return "/";
+  if (!pathname.startsWith(basePath)) return null;
+  return `/${pathname.slice(basePath.length)}`;
+}
+
+export function parseRoute(locationLike, applicationBasePath = "/") {
   const base = typeof locationLike === "string"
     ? locationLike
     : locationLike?.href ?? `https://catalog.invalid${locationLike?.pathname ?? "/"}${locationLike?.search ?? ""}${locationLike?.hash ?? ""}`;
   const url = new URL(base, "https://catalog.invalid/");
   const { source, routeUrl } = routeSource(url);
-  const rawSegments = routeUrl.pathname.split("/").filter(Boolean);
+  const routePath = source === "history"
+    ? relativeRoutePath(routeUrl.pathname, applicationBasePath)
+    : routeUrl.pathname;
+  const rawSegments = (routePath ?? "/__outside_application_base__").split("/").filter(Boolean);
   let segments;
   try {
     segments = rawSegments.map((part) => decodeURIComponent(part));
@@ -141,13 +165,13 @@ export function parseRoute(locationLike) {
     const slug = normalizeSlug(segments[1]);
     route = slug
       ? { name: "mineral", path: `/minerals/${encodeURIComponent(slug)}`, slug }
-      : { name: "not-found", path: routeUrl.pathname };
+      : { name: "not-found", path: routePath ?? routeUrl.pathname };
   } else if (segments.length === 1 && segments[0] === "about") {
     route = { name: "about", path: "/about" };
   } else if (segments.length === 1 && segments[0] === "map") {
     route = { name: "map", path: "/map" };
   } else {
-    route = { name: "not-found", path: routeUrl.pathname };
+    route = { name: "not-found", path: routePath ?? routeUrl.pathname };
   }
 
   return { ...route, source, search };

@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-const modulePath = new URL("../static/map/minerals_map.wasm", import.meta.url);
+const modulePath = new URL("../public-app/map/minerals_map.wasm", import.meta.url);
 const bytes = await readFile(modulePath);
 const compiled = await WebAssembly.compile(bytes);
 const imports = WebAssembly.Module.imports(compiled);

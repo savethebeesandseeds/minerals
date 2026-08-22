@@ -5,6 +5,8 @@ import { createServer } from "node:http";
 import test from "node:test";
 import { brotliDecompressSync, gunzipSync } from "node:zlib";
 
+import { mountMineralsMap } from "./map/map-loader.js";
+
 import {
   CATALOG_FORMAT,
   CATALOG_SCHEMA_VERSION,
@@ -56,6 +58,20 @@ test("clean pathname and encoded query fallbacks remain parseable", () => {
   assert.equal(fallback.source, "query");
   assert.equal(fallback.name, "minerals");
   assert.deepEqual(fallback.search, { query: "iron", page: 3, pageSize: 24 });
+});
+
+test("clean routes are interpreted relative to an application subpath", () => {
+  const basePath = "/releases/2026-08/";
+  assert.equal(parseRoute("https://catalog.example/releases/2026-08/", basePath).name, "home");
+  assert.equal(parseRoute("https://catalog.example/releases/2026-08/index.html", basePath).name, "home");
+  assert.equal(parseRoute("https://catalog.example/releases/2026-08/map", basePath).name, "map");
+  assert.equal(
+    parseRoute("https://catalog.example/releases/2026-08/minerals/hematite", basePath).slug,
+    "hematite",
+  );
+  assert.equal(parseRoute("https://catalog.example/another-app/map", basePath).name, "not-found");
+  assert.equal(parseRoute("https://catalog.example/another-app/#/about", basePath).name, "about");
+  assert.throws(() => parseRoute("https://catalog.example/", "https://evil.example/"), /base path/);
 });
 
 test("invalid and encoded-separator slugs cannot become detail routes", () => {
@@ -135,21 +151,65 @@ test("offer expiry follows registry semantics and fails closed for malformed dat
   assert.equal(isOfferActiveAt("not-a-date", now), false);
 });
 
-test("the shell boots from deep clean routes and app-owned code avoids HTML sinks", async () => {
-  const [index, app, worker] = await Promise.all([
+test("the shell is subpath-relative and app-owned code avoids HTML sinks", async () => {
+  const [index, app, worker, mapLoader] = await Promise.all([
     readFile(new URL("./index.html", import.meta.url), "utf8"),
     readFile(new URL("./app.js", import.meta.url), "utf8"),
     readFile(new URL("./catalog-worker.js", import.meta.url), "utf8"),
+    readFile(new URL("./map/map-loader.js", import.meta.url), "utf8"),
   ]);
-  assert.match(index, /href="\/app\.css"/);
-  assert.match(index, /src="\/app\.js"/);
+  assert.match(index, /href="\.\/app\.css"/);
+  assert.match(index, /src="\.\/app\.js"/);
   assert.match(index, /href="#\/minerals"/);
+  assert.match(index, /name="waajacu-map-module" content="\.\/map\/map-loader\.js"/);
+  assert.doesNotMatch(index, /(?:href|src|content)="\/(?:app\.(?:css|js)|map\/)/);
+
+  const deploymentUrl = new URL("https://catalog.example/releases/2026-08/index.html");
+  const cssPath = index.match(/<link rel="stylesheet" href="([^"]+)"/)?.[1];
+  const scriptPath = index.match(/<script type="module" src="([^"]+)"/)?.[1];
+  const mapPath = index.match(/name="waajacu-map-module" content="([^"]+)"/)?.[1];
+  assert.equal(new URL(cssPath, deploymentUrl).href, "https://catalog.example/releases/2026-08/app.css");
+  const appModuleUrl = new URL(scriptPath, deploymentUrl);
+  assert.equal(appModuleUrl.href, "https://catalog.example/releases/2026-08/app.js");
+  assert.equal(new URL(mapPath, appModuleUrl).href, "https://catalog.example/releases/2026-08/map/map-loader.js");
+  assert.match(app, /new Worker\(new URL\("\.\/catalog-worker\.js", import\.meta\.url\)/);
+  assert.match(app, /new URL\("\.\/catalog-manifest\.json", import\.meta\.url\)/);
+  assert.match(app, /const APP_BASE_PATH = new URL\("\.\", import\.meta\.url\)\.pathname/);
+  assert.match(app, /parseRoute\(location\.href, APP_BASE_PATH\)/);
   assert.doesNotMatch(app, /\b(?:innerHTML|outerHTML|insertAdjacentHTML)\b/);
-  assert.match(app, /data-catalog-map-preview/);
-  assert.match(app, /Forest context only — mineral locations are not included yet\./);
-  assert.match(app, /mountConfiguredMap/);
+  assert.match(app, /module\.mountMineralsMap\(container,/);
+  assert.doesNotMatch(app, /function\s+mapCatalog|catalog:\s*\w+\(/);
   assert.match(worker, /import\("\.\/vendor\/sqlite\/index\.mjs"\)/);
   assert.match(worker, /sqlite3_deserialize/);
+  assert.match(mapLoader, /wasm\.render_globe_pose\(/);
+  assert.match(mapLoader, /new URL\("\.\/map\.css", import\.meta\.url\)/);
+  assert.match(mapLoader, /new URL\("\.\/minerals_map\.wasm", import\.meta\.url\)/);
+  assert.match(mapLoader, /"pointerdown"/);
+  assert.doesNotMatch(mapLoader, /ROTATION_PERIOD_MS|setInterval|requestAnimationFrame\([^)]*rotat/i);
+  assert.equal(typeof mountMineralsMap, "function");
+  await assert.rejects(mountMineralsMap(null), /map container element is required/);
+});
+
+test("the bundled map WASM exposes the dependency-free two-axis pose ABI", async () => {
+  const bytes = await readFile(new URL("./map/minerals_map.wasm", import.meta.url));
+  const compiled = await WebAssembly.compile(bytes);
+  assert.deepEqual(WebAssembly.Module.imports(compiled), []);
+  const { exports: wasm } = await WebAssembly.instantiate(compiled, {});
+  for (const name of [
+    "memory",
+    "render",
+    "render_view",
+    "render_globe",
+    "render_globe_pose",
+    "pixel_ptr",
+    "pixel_len",
+    "forest_at",
+  ]) {
+    assert.equal(name in wasm, true, `missing WebAssembly export: ${name}`);
+  }
+  assert.equal(wasm.render_globe_pose(720, 360, 0, 0, 8_192), 1);
+  assert.equal(wasm.pixel_len(), 720 * 360 * 4);
+  assert.equal(wasm.forest_at(0, 0), 254);
 });
 
 test("optional exported snapshot passes the real worker integrity, schema, and query pipeline", {
@@ -159,6 +219,16 @@ test("optional exported snapshot passes the real worker integrity, schema, and q
   const snapshotDirectory = process.env.WAAJACU_CATALOG_SMOKE_DIR;
   const manifestText = await readFile(join(snapshotDirectory, "catalog-manifest.json"), "utf8");
   const rawManifest = JSON.parse(manifestText);
+  const staleDigest = "0".repeat(64);
+  const staleManifest = {
+    ...rawManifest,
+    release_id: `sha256:${"1".repeat(64)}`,
+    database: {
+      ...rawManifest.database,
+      path: `data/catalog-${staleDigest}.sqlite3`,
+      sha256: `sha256:${staleDigest}`,
+    },
+  };
   const databaseFile = await readFile(join(snapshotDirectory, rawManifest.database.path));
   const brotliFile = await readFile(join(snapshotDirectory, `${rawManifest.database.path}.br`));
   const gzipFile = await readFile(join(snapshotDirectory, `${rawManifest.database.path}.gz`));
@@ -167,17 +237,21 @@ test("optional exported snapshot passes the real worker integrity, schema, and q
   assert.deepEqual(brotliDecompressSync(brotliFile), databaseFile);
   assert.deepEqual(gunzipSync(gzipFile), databaseFile);
   const wasmBytes = new Uint8Array(await readFile(new URL("./vendor/sqlite/sqlite3.wasm", import.meta.url)));
+  let manifestFetchCount = 0;
   const server = createServer((request, response) => {
     const url = new URL(request.url, "http://127.0.0.1");
     const [, mode, ...segments] = url.pathname.split("/");
     const resource = segments.join("/");
     if (resource === "catalog-manifest.json") {
+      manifestFetchCount += 1;
+      const selectedManifest = manifestFetchCount === 1 ? staleManifest : rawManifest;
+      const selectedText = JSON.stringify(selectedManifest);
       response.writeHead(200, {
         "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(manifestText),
+        "Content-Length": Buffer.byteLength(selectedText),
         "Cache-Control": "no-cache",
       });
-      response.end(manifestText);
+      response.end(selectedText);
       return;
     }
     if (resource === rawManifest.database.path) {
@@ -261,6 +335,7 @@ test("optional exported snapshot passes the real worker integrity, schema, and q
     assert.equal(typeof onMessage, "function");
     const initialized = await request("init", { manifestUrl: `${origin}/br/catalog-manifest.json` });
     assert.equal(initialized.ok, true, initialized.error?.message);
+    assert.equal(manifestFetchCount, 2, "a release switch should refresh the manifest exactly once");
     assert.equal(initialized.result.manifest.mineral_count, rawManifest.mineral_count);
 
     const search = await request("search", { query: "quartz", page: 1, pageSize: 5 });

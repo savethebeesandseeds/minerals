@@ -1,0 +1,28 @@
+[package]
+name = "minerals-public-catalog"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+path = "../../src/public_catalog.rs"
+
+[[bin]]
+name = "export-public"
+path = "../../src/bin/export-public.rs"
+
+[dependencies]
+anyhow.workspace = true
+brotli.workspace = true
+chrono.workspace = true
+flate2.workspace = true
+getrandom.workspace = true
+ring.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+minerals = { package = "minerals-registry", path = "../registry-core" }
+tempfile.workspace = true

@@ -4,8 +4,8 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $Manifest = Join-Path $PSScriptRoot "Cargo.toml"
 $BuiltModule = Join-Path $PSScriptRoot "target\wasm32-unknown-unknown\release\minerals_map.wasm"
 $MapAsset = Join-Path $PSScriptRoot "assets\world_forest_v1.bin"
-$StaticDirectory = Join-Path $ProjectRoot "static\map"
-$StaticModule = Join-Path $StaticDirectory "minerals_map.wasm"
+$PublicMapDirectory = Join-Path $ProjectRoot "public-app\map"
+$PublicModule = Join-Path $PublicMapDirectory "minerals_map.wasm"
 $ExpectedAssetHash = "970e006dac8927e4aa7e659eab20d295f244aab92567f58caf629ce013a7a944"
 $ExpectedModuleHash = "f095257a885fe1545c7ccf1b18e480da4685b0726f5b9a2532c2cecd6212799f"
 
@@ -35,8 +35,8 @@ if ($BuiltHash -ne $ExpectedModuleHash) {
     throw "WebAssembly build hash is not the reviewed value: $BuiltHash"
 }
 
-New-Item -ItemType Directory -Force $StaticDirectory | Out-Null
-Copy-Item -LiteralPath $BuiltModule -Destination $StaticModule -Force
+New-Item -ItemType Directory -Force $PublicMapDirectory | Out-Null
+Copy-Item -LiteralPath $BuiltModule -Destination $PublicModule -Force
 
-Write-Host "Built $StaticModule"
+Write-Host "Built $PublicModule"
 Write-Host "SHA-256 $BuiltHash"

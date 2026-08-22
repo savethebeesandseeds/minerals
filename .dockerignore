@@ -5,6 +5,8 @@
 !Cargo.lock
 !askama.toml
 !docker-entrypoint.sh
+!crates/
+!crates/**
 !src/
 !src/**
 !static/
