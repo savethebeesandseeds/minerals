@@ -6,7 +6,6 @@
 /.tmp/
 /tmp/
 /.archives/
-/.history-backup/
 /.cloudflared/
 **/__pycache__/
 /data/reports/

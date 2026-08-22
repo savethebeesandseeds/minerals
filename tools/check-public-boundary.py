@@ -16,7 +16,6 @@ MAX_SECRET_SCAN_BYTES = 2 * 1024 * 1024
 FORBIDDEN_ROOTS = (
     ".archives",
     ".cloudflared",
-    ".history-backup",
     ".tmp",
     "dist",
     "public-dist",

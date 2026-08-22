@@ -67,12 +67,9 @@ paths and high-confidence secret formats.
 1. Rotate the API key and administrator password currently held in the local,
    ignored `.env.local`. Ignoring a file prevents future commits; it does not
    revoke a credential that has already been exposed to a process or copied.
-2. Complete the [history cleanup](#clean-the-existing-git-history). Earlier
-   commits contain an operational `data/minerals.db` blob and generated `.tmp`
-   files. Treat anything in that database as previously obtainable.
-3. Review all catalog rows, evidence licenses, offer data, and attribution that
+2. Review all catalog rows, evidence licenses, offer data, and attribution that
    the exporter will intentionally make public.
-4. Commit and push the release's application source to `main`. The release tag,
+3. Commit and push the release's application source to `main`. The release tag,
    archive, and deployment must all refer to that same commit.
 
 ## Build and validate the public release
@@ -294,46 +291,3 @@ Confirm that:
 
 Finally, load search, a mineral detail, the map, back/forward navigation, and a
 mobile viewport in a fresh browser profile.
-
-## Clean the existing Git history
-
-The current ignore rules protect new work, but they cannot remove old blobs.
-Earlier history includes the live `data/minerals.db`, private generated media
-and reports, and build output under `.tmp`. History rewriting changes commit
-IDs and requires every collaborator to replace or carefully rebase old clones.
-It also cannot make copies already downloaded by other people disappear.
-
-Install [git-filter-repo](https://github.com/newren/git-filter-repo), make
-`main` the only local branch, and start with a clean worktree. Then run the
-explicit opt-in script:
-
-```powershell
-.\tools\sanitize-git-history.ps1 `
-  -ConfirmHistoryRewrite REWRITE-MAIN-HISTORY
-```
-
-The script first creates an all-refs bundle and ref/remote inventories under
-the ignored `.history-backup` directory. It then uses `git filter-repo` to
-remove known databases, journals, backups, reports, local environment files,
-tunnel state, release/build artifacts, and private-key containers from every
-reachable ref. It runs:
-
-```bash
-python3 tools/check-public-boundary.py --history
-```
-
-afterward and verifies the backup bundle again. The script never runs
-`git push`. `git filter-repo` may remove the `origin` remote as an additional
-safety measure; its old value is recorded beside the bundle.
-
-Review the rewritten log and coordinate a maintenance window before reconnecting
-the remote and force-updating `main`. Remove or rewrite any old release tags or
-other server refs that still retain the old commits. GitHub may retain cached
-or forked objects after the branch moves, so follow GitHub's
-[sensitive-data removal guidance](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/removing-sensitive-data-from-a-repository)
-when confidentiality matters. Keep the backup bundle encrypted and offline: it
-contains the material intentionally removed from the public repository.
-
-Credential rotation is required independently of history cleanup. A rewritten
-commit graph cannot revoke an API key, password, session, or copy that already
-left the machine.
