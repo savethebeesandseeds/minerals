@@ -82,6 +82,56 @@ class PagesLiveVerificationTests(unittest.TestCase):
             "https://example.test/minerals/",
         )
 
+    def test_webmcp_response_headers_fail_closed_without_overrequiring_pages(self) -> None:
+        VERIFY.validate_live_response_headers(
+            "https://example.test/minerals/webmcp.mjs",
+            {
+                "Content-Type": "text/javascript; charset=utf-8",
+                "Cache-Control": "no-store",
+            },
+        )
+        VERIFY.validate_live_response_headers(
+            "https://example.test/minerals/",
+            {"Content-Type": "text/html; charset=utf-8"},
+        )
+        VERIFY.validate_live_response_headers(
+            "https://example.test/minerals/index.html",
+            {
+                "Content-Type": "text/html",
+                "Origin-Agent-Cluster": "?1",
+                "Permissions-Policy": "camera=(), tools=(self)",
+            },
+        )
+        with self.assertRaisesRegex(VERIFY.VerificationError, "non-JavaScript"):
+            VERIFY.validate_live_response_headers(
+                "https://example.test/minerals/webmcp.mjs",
+                {"Content-Type": "application/octet-stream"},
+            )
+        with self.assertRaisesRegex(VERIFY.VerificationError, "immutable"):
+            VERIFY.validate_live_response_headers(
+                "https://example.test/minerals/webmcp.mjs",
+                {
+                    "Content-Type": "application/javascript",
+                    "Cache-Control": "public, max-age=31536000, immutable",
+                },
+            )
+        with self.assertRaisesRegex(VERIFY.VerificationError, "opts out"):
+            VERIFY.validate_live_response_headers(
+                "https://example.test/minerals/",
+                {
+                    "Content-Type": "text/html",
+                    "Origin-Agent-Cluster": "?0",
+                },
+            )
+        with self.assertRaisesRegex(VERIFY.VerificationError, "limit.*self"):
+            VERIFY.validate_live_response_headers(
+                "https://example.test/minerals/",
+                {
+                    "Content-Type": "text/html",
+                    "Permissions-Policy": "tools=()",
+                },
+            )
+
     def test_verify_once_checks_canonical_urls_and_reports_each_mismatch(self) -> None:
         expected = {"": b"root", "app.js": b"current"}
         seen: list[str] = []

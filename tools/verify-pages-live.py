@@ -21,10 +21,17 @@ PUBLIC_APP_FILES = (
     "app.css",
     "app.js",
     "app-core.mjs",
+    "webmcp.mjs",
     "catalog-worker.js",
     "THIRD_PARTY_NOTICES.md",
-    "assets/logo_transparent.png",
-    "assets/logo_transparent_dark.png",
+    "assets/atlas-chemical-family-v2.png",
+    "assets/atlas-crystal-system-v2.png",
+    "assets/atlas-method-v2.png",
+    "assets/atlas-mountain-v2.png",
+    "assets/atlas-place-origin-v2.png",
+    "assets/atlas-quartz-v2.png",
+    "assets/atlas-source-v2.png",
+    "assets/waajacu-minerals-social.png",
     "vendor/sqlite/index.mjs",
     "vendor/sqlite/sqlite3.wasm",
     "vendor/sqlite/LICENSE.txt",
@@ -108,6 +115,53 @@ def public_url(base_url: str, relative: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
 
 
+def validate_live_response_headers(url: str, headers: dict[str, str]) -> None:
+    normalized = {name.lower(): value for name, value in headers.items()}
+    path = urlsplit(url).path
+    media_type = normalized.get("content-type", "").split(";", 1)[0].strip().lower()
+    if path.endswith(".mjs"):
+        if media_type not in {
+            "text/javascript",
+            "application/javascript",
+            "text/ecmascript",
+            "application/ecmascript",
+        }:
+            raise VerificationError(
+                f"WebMCP module has a non-JavaScript Content-Type for {url}: "
+                f"{media_type or 'missing'}"
+            )
+        if re.search(
+            r"(?:^|,)\s*immutable\s*(?:,|$)",
+            normalized.get("cache-control", ""),
+            re.IGNORECASE,
+        ):
+            raise VerificationError(
+                f"stable-named WebMCP module must not use immutable caching: {url}"
+            )
+
+    if path.endswith("/") or path.endswith("/index.html"):
+        if media_type != "text/html":
+            raise VerificationError(
+                f"catalog document has an invalid Content-Type for {url}: "
+                f"{media_type or 'missing'}"
+            )
+        origin_agent_cluster = normalized.get("origin-agent-cluster")
+        if origin_agent_cluster is not None and origin_agent_cluster.strip() != "?1":
+            raise VerificationError(
+                f"catalog document opts out of the WebMCP origin agent cluster: {url}"
+            )
+        permissions_policy = normalized.get("permissions-policy", "")
+        tools = re.search(
+            r"(?:^|,)\s*tools\s*=\s*(\([^)]*\))",
+            permissions_policy,
+            re.IGNORECASE,
+        )
+        if tools and re.sub(r"\s+", "", tools.group(1)).lower() != "(self)":
+            raise VerificationError(
+                f"catalog document does not limit WebMCP tools to self: {url}"
+            )
+
+
 def fetch_bytes(url: str, maximum_bytes: int, timeout_seconds: float) -> bytes:
     request = Request(
         url,
@@ -119,6 +173,11 @@ def fetch_bytes(url: str, maximum_bytes: int, timeout_seconds: float) -> bytes:
     with urlopen(request, timeout=max(1.0, min(90.0, timeout_seconds))) as response:
         if response.status != 200:
             raise VerificationError(f"unexpected HTTP status {response.status} for {url}")
+        response_headers = {
+            name.lower(): ", ".join(response.headers.get_all(name) or [])
+            for name in response.headers.keys()
+        }
+        validate_live_response_headers(url, response_headers)
         content = response.read(maximum_bytes + 1)
     if len(content) > maximum_bytes:
         raise VerificationError(f"live response is larger than expected for {url}")

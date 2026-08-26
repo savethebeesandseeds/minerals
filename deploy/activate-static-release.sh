@@ -49,6 +49,8 @@ for relative_path in \
     index.html \
     app.css \
     app.js \
+    app-core.mjs \
+    webmcp.mjs \
     catalog-worker.js \
     catalog-manifest.json \
     vendor/sqlite/index.mjs \

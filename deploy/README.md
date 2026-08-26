@@ -65,13 +65,14 @@ and serves `/srv/waajacu/current`. It provides:
 - `text/javascript` for `.js` and `.mjs`;
 - `application/wasm` for `.wasm`;
 - the registered `application/vnd.sqlite3` type for `.sqlite3`;
-- `no-cache` for the manifest and stable-named application assets;
+- `no-cache` for the manifest and `no-store` for stable-named application assets;
 - a one-year immutable policy only for the SHA-256-named catalog database;
 - verified prebuilt gzip delivery for SQLite plus dynamic gzip transfer
   compression for WASM, JavaScript, CSS, and JSON (deployments with the
   optional Brotli module may prefer the exported `.br` sidecar); and
 - the application's CSP as an HTTP header, including `frame-ancestors 'none'`,
-  plus MIME-sniffing, framing, referrer, and browser-permission defenses.
+  plus MIME-sniffing, framing, referrer, origin-agent-cluster, and
+  self-only WebMCP permission defenses.
 
 Install it on a conventional nginx host with:
 
@@ -114,7 +115,9 @@ curl --fail --head http://127.0.0.1:8080/healthz
 The manifest response must say `Cache-Control: no-cache`. The map and SQLite
 WASM responses must use `application/wasm`. A manifest-named catalog database
 must use `application/vnd.sqlite3` and the immutable cache policy. Application
-and worker modules must use `text/javascript`.
+and worker modules must use `text/javascript`. Production responses should
+also include `Origin-Agent-Cluster: ?1` and a `Permissions-Policy` whose
+`tools` feature is limited to `self`.
 
 Because `current` can change between requests, stable-named assets always
 revalidate. Only the database is immutable because its URL includes its

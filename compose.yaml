@@ -1,55 +1,191 @@
+name: minerals
+
+x-minerals-base: &minerals-base
+  image: rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663
+  pull_policy: if_not_present
+  init: true
+  # Setup and runtime failures receive three automatic retries, then stop
+  # instead of entering an unbounded package-install or rebuild loop.
+  restart: "on-failure:3"
+  user: "0:0"
+  working_dir: /workspace
+  entrypoint:
+    - /bin/bash
+    - /bootstrap/setup.sh
+  environment:
+    MINERALS_BASE_IMAGE: rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663
+    MINERALS_CONTAINER_CONTEXT: waajacu-minerals-runtime-v1
+    MINERALS_BUILD_UID: "10001"
+    MINERALS_BUILD_GID: "10001"
+    CARGO_HOME: /usr/local/cargo
+    CARGO_TARGET_DIR: /build/target
+  privileged: false
+  read_only: false
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  cap_add:
+    - CHOWN
+    - DAC_OVERRIDE
+    - FOWNER
+    - FSETID
+    # Required only by root tini to forward stop signals to the permanently
+    # unprivileged service process; setup.sh drops it from the child runtime.
+    - KILL
+    - SETFCAP
+    - SETGID
+    - SETPCAP
+    - SETUID
+  pids_limit: 512
+  cpus: "${MINERALS_CPUS:-2.0}"
+  mem_limit: "${MINERALS_MEMORY_LIMIT:-2g}"
+  mem_reservation: "${MINERALS_MEMORY_RESERVATION:-512m}"
+  tmpfs:
+    - /tmp:rw,nosuid,nodev,exec,mode=1777,size=2g
+    - /run:rw,nosuid,nodev,noexec,mode=755,size=32m
+  volumes:
+    - ./setup.sh:/bootstrap/setup.sh:ro
+    - ./compose.yaml:/bootstrap/compose.yaml:ro
+    - ./Cargo.toml:/workspace/Cargo.toml:ro
+    - ./Cargo.lock:/workspace/Cargo.lock:ro
+    - ./askama.toml:/workspace/askama.toml:ro
+    - ./crates:/workspace/crates:ro
+    - ./src:/workspace/src:ro
+    - ./static:/workspace/static:ro
+    - cargo-registry:/usr/local/cargo/registry
+    - cargo-git:/usr/local/cargo/git
+    - cargo-target:/build/target
+  logging:
+    driver: json-file
+    options:
+      max-size: "${MINERALS_LOG_MAX_SIZE:-10m}"
+      max-file: "${MINERALS_LOG_MAX_FILES:-5}"
+  stop_grace_period: "${MINERALS_STOP_GRACE_PERIOD:-90s}"
+
 services:
-  minerals:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ${MINERALS_IMAGE:-waajacu/minerals:local}
-    init: true
-    restart: unless-stopped
+  admin:
+    <<: *minerals-base
+    container_name: minerals-admin
+    command: [admin]
     env_file:
       - path: ./.env
         required: false
       - path: ./.env.local
         required: false
     environment:
+      MINERALS_BASE_IMAGE: rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663
+      MINERALS_CONTAINER_CONTEXT: waajacu-minerals-runtime-v1
+      MINERALS_BUILD_UID: "10001"
+      MINERALS_BUILD_GID: "10001"
+      MINERALS_RUNTIME_UID: "11001"
+      MINERALS_RUNTIME_GID: "11001"
+      CARGO_HOME: /usr/local/cargo
+      CARGO_TARGET_DIR: /build/target
       BIND_ADDRESS: "0.0.0.0"
       DATA_ROOT: /app/data
       PORT: "7979"
-    # Root exists only for the exact /app/data permission bootstrap. The
-    # entrypoint then drops to the bind mount owner (or 10001 on Desktop),
-    # clears all capabilities, and execs the service.
-    user: "0:0"
     ports:
-      - "${MINERALS_BIND_ADDRESS:-127.0.0.1}:${MINERALS_HOST_PORT:-7979}:7979"
+      - target: 7979
+        published: "${MINERALS_HOST_PORT:-7979}"
+        host_ip: "${MINERALS_BIND_ADDRESS:-127.0.0.1}"
+        protocol: tcp
+    networks:
+      - admin-egress
     volumes:
-      - type: bind
-        source: ./data
-        target: /app/data
-    read_only: true
-    tmpfs:
-      - /tmp:rw,nosuid,nodev,size=512m
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-      - FOWNER
-      - SETGID
-      # Required only so setpriv can remove the bounding capability set.
-      - SETPCAP
-      - SETUID
-    security_opt:
-      - no-new-privileges:true
-    pids_limit: 256
-    # Resource defaults are guardrails, not capacity guarantees. Rehearse each
-    # intended source release before changing them; never remove the memory bound.
-    cpus: "${MINERALS_CPUS:-2.0}"
-    mem_limit: "${MINERALS_MEMORY_LIMIT:-1g}"
-    mem_reservation: "${MINERALS_MEMORY_RESERVATION:-512m}"
-    logging:
-      driver: json-file
-      options:
-        max-size: "${MINERALS_LOG_MAX_SIZE:-10m}"
-        max-file: "${MINERALS_LOG_MAX_FILES:-5}"
-    # A committed 500-record chunk must have time to finish after SIGTERM.
-    stop_grace_period: "${MINERALS_STOP_GRACE_PERIOD:-90s}"
+      - ./setup.sh:/bootstrap/setup.sh:ro
+      - ./compose.yaml:/bootstrap/compose.yaml:ro
+      - ./Cargo.toml:/workspace/Cargo.toml:ro
+      - ./Cargo.lock:/workspace/Cargo.lock:ro
+      - ./askama.toml:/workspace/askama.toml:ro
+      - ./crates:/workspace/crates:ro
+      - ./src:/workspace/src:ro
+      - ./static:/workspace/static:ro
+      - ./data:/app/data
+      - admin-runtime:/runtime
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - cargo-target:/build/target
+    healthcheck:
+      test: [CMD, setpriv, --reuid=65534, --regid=65534, --clear-groups, --no-new-privs, --bounding-set=-all, --inh-caps=-all, --ambient-caps=-all, curl, --fail, --silent, --show-error, --max-time, "4", http://127.0.0.1:7979/readyz]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 15m
+
+  web:
+    <<: *minerals-base
+    container_name: minerals-web
+    command: [web]
+    environment:
+      MINERALS_BASE_IMAGE: rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663
+      MINERALS_CONTAINER_CONTEXT: waajacu-minerals-runtime-v1
+      MINERALS_BUILD_UID: "10001"
+      MINERALS_BUILD_GID: "10001"
+      MINERALS_RUNTIME_UID: "10002"
+      MINERALS_RUNTIME_GID: "10002"
+      CARGO_HOME: /usr/local/cargo
+      CARGO_TARGET_DIR: /build/target
+    ports:
+      - target: 18965
+        published: "${PUBLIC_CATALOG_HOST_PORT:-18965}"
+        host_ip: "${PUBLIC_CATALOG_BIND_ADDRESS:-127.0.0.1}"
+        protocol: tcp
+    networks:
+      - web-egress
+    volumes:
+      - ./setup.sh:/bootstrap/setup.sh:ro
+      - ./compose.yaml:/bootstrap/compose.yaml:ro
+      - ./Cargo.toml:/workspace/Cargo.toml:ro
+      - ./Cargo.lock:/workspace/Cargo.lock:ro
+      - ./askama.toml:/workspace/askama.toml:ro
+      - ./crates:/workspace/crates:ro
+      - ./src:/workspace/src:ro
+      - ./static:/workspace/static:ro
+      - ./public-app:/workspace/public-app:ro
+      - ./public-catalog:/workspace/public-catalog:ro
+      - ./deploy/nginx/minerals-selector-review.conf:/bootstrap/minerals-selector-review.conf:ro
+      - web-runtime:/runtime
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - cargo-target:/build/target
+    healthcheck:
+      test: [CMD, setpriv, --reuid=65534, --regid=65534, --clear-groups, --no-new-privs, --bounding-set=-all, --inh-caps=-all, --ambient-caps=-all, curl, --fail, --silent, --show-error, --max-time, "4", http://127.0.0.1:18965/catalog-manifest.json]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 15m
+
+networks:
+  # Separate bridge networks preserve outbound package/API access and host
+  # loopback publication without giving either service a route to the other.
+  admin-egress:
+    driver: bridge
+    labels:
+      io.waajacu.minerals.role: private-admin-egress
+  web-egress:
+    driver: bridge
+    labels:
+      io.waajacu.minerals.role: public-review-egress
+
+volumes:
+  admin-runtime:
+    name: minerals-admin-runtime
+    labels:
+      io.waajacu.minerals.role: admin-runtime
+  web-runtime:
+    name: minerals-web-runtime
+    labels:
+      io.waajacu.minerals.role: web-runtime
+  cargo-registry:
+    name: minerals-cargo-registry
+    labels:
+      io.waajacu.minerals.role: build-cache
+  cargo-git:
+    name: minerals-cargo-git
+    labels:
+      io.waajacu.minerals.role: build-cache
+  cargo-target:
+    name: minerals-cargo-target
+    labels:
+      io.waajacu.minerals.role: build-cache

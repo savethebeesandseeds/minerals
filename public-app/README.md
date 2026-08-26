@@ -24,10 +24,11 @@ The deployment must:
 
 - serve `.mjs` with a JavaScript MIME type and `.wasm` as `application/wasm`; prefer `application/vnd.sqlite3` for `.sqlite3` (a generic binary MIME type is also safe because the database is fetched as bytes rather than executed);
 - use canonical hash routes for portable directory-subpath deployments; clean-path rewrites are optional and require host-specific asset-base handling;
-- send `Cache-Control: no-cache` for `catalog-manifest.json`, and may send `Cache-Control: public, max-age=31536000, immutable` for `data/catalog-<sha256>.sqlite3`;
+- send `Cache-Control: no-store` for the HTML/CSS/JavaScript boot graph, `Cache-Control: no-cache` for `catalog-manifest.json`, and may send `Cache-Control: public, max-age=31536000, immutable` for `data/catalog-<sha256>.sqlite3`;
 - keep the generated `.sqlite3.gz` beside the canonical database: the worker prefers that smaller same-origin file, decompresses it with the browser's native gzip stream, bounds the decoded size, verifies the manifest SHA-256, and falls back to the canonical `.sqlite3` file when the native decoder or sidecar is unavailable;
 - when the host supports transparent precompressed-file negotiation, it may also select the generated `.sqlite3.br` or `.sqlite3.gz` representation for the canonical `.sqlite3` URL, preferring Brotli, then gzip, then the uncompressed file; `fetch()` supplies the decoded bytes that the same manifest checks verify;
-- preserve same-origin URLs for the manifest, database, worker, SQLite runtime, and optional map module; and
+- preserve same-origin URLs for the manifest, database, worker, SQLite runtime, optional map module, and WebMCP tool module;
+- keep the document in an origin-keyed agent cluster (the nginx example sends `Origin-Agent-Cluster: ?1`) and allow the WebMCP `tools` Permissions Policy only for the same origin; and
 - reproduce the CSP in `index.html` as an HTTP response header in production, adding `frame-ancestors 'none'` (which a CSP meta element cannot enforce) and `X-Content-Type-Options: nosniff`.
 
 For a local smoke test, run any static HTTP server in this directory and use the hash route form described below. The dependency-free unit suite is `node tests.mjs`.
@@ -37,8 +38,18 @@ For a local smoke test, run any static HTTP server in this directory and use the
 Generated releases add the manifest and content-addressed database to the checked-in application files:
 
 ```text
-assets/logo_transparent.png
-assets/logo_transparent_dark.png
+assets/atlas-chemical-family-v2.png
+assets/atlas-crystal-system-v2.png
+assets/atlas-method-v2.png
+assets/atlas-mountain-v2.png
+assets/atlas-place-origin-v2.png
+assets/atlas-quartz-v2.png
+assets/atlas-source-v2.png
+assets/waajacu-minerals-social.png
+app-core.mjs
+app.js
+webmcp.mjs
+catalog-worker.js
 catalog-manifest.json
 data/catalog-<64 lowercase hex SHA-256>.sqlite3
 data/catalog-<64 lowercase hex SHA-256>.sqlite3.br
@@ -76,15 +87,19 @@ additionally use `brotli_static on;`. A basic static server that lacks
 precompressed-file negotiation safely falls back to the uncompressed
 `.sqlite3` file. GitHub Pages uses that fallback; Cloudflare can dynamically
 compress the canonical response as described in the
-[Pages deployment guide](../docs/GITHUB_PAGES.md#compression-rule).
+[Pages deployment guide](../docs/GITHUB_PAGES.md#cache-rules).
 
 HTTP Fetch transparently decodes `Content-Encoding` before the worker receives
 the response body. The worker therefore needs no decompression dependency: it
 still verifies the decoded byte length and SHA-256 before opening SQLite.
 
-The checked-in `assets/` directory contains the light- and dark-theme macaw
-artwork used by the public shell. The exporter treats both PNG files as required
-allowlisted assets and copies their bytes unchanged into every release.
+The checked-in `assets/` directory contains the transparent mineral field-atlas
+plates used by the public home, catalog, map, record, and source views, plus the
+site-wide social preview. The exporter treats these PNG
+files as required allowlisted assets and copies their bytes unchanged into every
+release. Only the hero plate loads eagerly; below-fold plates are lazy-loaded.
+The PNG compression is intrinsic to each image and remains separate from the
+catalog database's Brotli/gzip sidecars.
 
 The repository exporter also copies the finalized map package at
 `map/map-loader.js`, `map/map.css`, and `map/minerals_map.wasm`. None of those
@@ -92,6 +107,49 @@ files is fetched before the `/map` route
 mounts its connected container, and their absence must not break catalog
 routes. This directory is also the canonical map build output; there is no
 duplicate copy under the private server's `static/` assets.
+
+## WebMCP / site tools
+
+The app progressively registers two imperative WebMCP tools through the
+standard `document.modelContext` API when the visiting browser provides it:
+
+- `search_minerals` searches the integrity-checked public catalog with a required bounded query
+  and returns at most five compact records per page; and
+- `get_mineral` reads one exact search-result slug and returns a compact mineral
+  record with a bounded evidence summary.
+
+Both tools are read-only and mark their catalog-derived output as untrusted.
+They reuse the same lazy catalog initialization, SHA-256 verification, fixed
+worker operations, slug/query normalization, and per-request abort signals as
+the visible interface. Tool results are ordinary JSON-serializable objects and
+are held to a 1,500-character budget. Raw SQL, arbitrary worker messages,
+external navigation, offers, claim JSON, provider URLs, and map/WASM internals
+are not exposed.
+
+`webmcp.mjs` is a self-hosted ES module allowed by the existing strict
+`script-src 'self'` policy. There is no polyfill, third-party dependency,
+inline script, or production CSP exception. Browsers without WebMCP continue
+to use the complete semantic HTML interface without an error or extra catalog
+load. The feature requires a secure context; literal localhost/loopback HTTP is
+appropriate only for local testing. Production should use HTTPS, avoid
+`Origin-Agent-Cluster: ?0`, and keep `Permissions-Policy: tools=(self)`.
+
+As of August 2026, ordinary Chrome testing requires
+`chrome://flags/#enable-webmcp-testing`; production Chrome access is available
+through the Chrome 149 origin trial. Codex and ChatGPT site-tool availability
+is controlled by their own supported model, account, workspace, and rollout
+settings. Do not commit an origin-trial token unless it was issued for the
+exact production origin.
+
+The dependency-free unit suite uses a fake model context to verify registration,
+schemas, abort lifetimes, strict inputs, compact projections, and unsupported-
+browser fallback. Runtime testing also remains possible in a WebMCP-enabled
+browser without changing the application build.
+
+The implementation follows the current
+[W3C WebMCP Community Group draft](https://webmachinelearning.github.io/webmcp/),
+[Chrome WebMCP guidance](https://developer.chrome.com/docs/ai/webmcp), and
+[OpenAI site-tools guidance](https://learn.chatgpt.com/docs/webmcp).
 
 ## Manifest contract
 

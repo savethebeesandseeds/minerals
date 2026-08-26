@@ -31,12 +31,20 @@ verified scientific fact.
 
 ## Quick start with Docker
 
-For Docker Compose, create `.env.local` with a long random admin password and
-stable reviewer ID. Compose injects these values into the service process:
+The local Compose stack is Dockerfile-free and has two independent services:
+
+- `web` serves the selector-safe public review site on
+  `http://127.0.0.1:18965/`;
+- `admin` serves the private control plane on `http://127.0.0.1:7979/`.
+
+Both ports bind to host loopback by default. The services use separate bridge
+networks and do not receive a route to each other. Create `.env.local` for local
+operator settings and optional secrets; Compose injects this file only into the
+`admin` service:
 
 ```dotenv
-ADMIN_PASSWORD=replace-with-at-least-12-random-characters
 ADMIN_REVIEWER_ID=replace-with-a-stable-operator-id
+# ADMIN_PASSWORD=optional-explicit-12-plus-character-secret
 # SQLITE_DURABILITY=FULL
 # INGESTION_API_TOKEN=optional-32-plus-character-machine-staging-secret
 # INGESTION_ADAPTER_ID=required-when-machine-staging-is-enabled
@@ -48,23 +56,49 @@ ADMIN_REVIEWER_ID=replace-with-a-stable-operator-id
 Then:
 
 ```bash
-docker compose up -d --build
+docker compose config --quiet
+docker compose up -d --no-build
+docker compose ps
+curl --fail http://127.0.0.1:18965/healthz
 curl --fail http://127.0.0.1:7979/livez
 curl --fail http://127.0.0.1:7979/readyz
 ```
 
-Open the private control plane:
+There is no project image build or Dockerfile. On first start, `setup.sh` runs
+inside the digest-pinned Rust container, installs its explicit package profile,
+and builds the locked Rust targets there. Later starts reuse named Cargo and
+runtime volumes. Setup or runtime failures receive at most three automatic
+retries (`on-failure:3`) instead of looping indefinitely.
 
+If `ADMIN_PASSWORD` is absent or shorter than 12 characters, the `admin`
+service generates a strong local password and stores it in the private
+`minerals-admin-runtime` volume. Retrieve it only from a trusted local terminal:
+
+```bash
+docker compose exec -T --user 0:0 admin cat /runtime/admin-password
+```
+
+The command prints a secret: do not paste its output into chat, tickets, logs,
+or shell scripts. The file is present only when the generated fallback is in
+use. Open:
+
+- `http://127.0.0.1:18965/` - selector-safe public design review;
 - `http://127.0.0.1:7979/admin` - authenticated mineral management;
 - `http://127.0.0.1:7979/admin/reviews` - individual mineral review queue;
 - `http://127.0.0.1:7979/admin/ingestion` - dataset release review queue.
 
-The container builds with the locked Rust dependency graph, uses a read-only
-root filesystem, and persists only `./data`. It contains no TeX toolchain,
-report worker, or SQLite command-line program. Compose uses a small root bootstrap to make the bind mount private,
-then clears all capabilities and runs the service as the mount owner (or UID
-10001 on Docker Desktop). It also provides configurable CPU/memory bounds, log
-rotation, and a graceful shutdown window longer than one ingestion chunk.
+The admin database persists through the host bind `./data:/app/data`. The named
+`minerals-admin-runtime` and `minerals-web-runtime` volumes retain runtime
+state; `minerals-cargo-registry`, `minerals-cargo-git`, and
+`minerals-cargo-target` retain build caches. `docker compose down` removes the
+containers and networks but retains those volumes and `./data`;
+`docker compose down -v` also removes the named volumes, including the
+generated password and caches, while leaving `./data` on the host. Inspect the
+stack with `docker compose ps` and `docker compose logs --tail=200 web admin`.
+
+The local `web` service deliberately uses the narrow selector-review CSP. It is
+not the production origin. Production exports continue to use the strict CSP
+and immutable Nginx deployment described in [the deployment guide](deploy/README.md).
 
 ## Native development
 
@@ -283,7 +317,7 @@ The admin SQL endpoint is disabled by default. If explicitly enabled with
 | `BIND_ADDRESS` | `127.0.0.1` | Native bind address |
 | `DATA_ROOT` | `data` | Private mutable storage root |
 | `DEFAULT_LANG` | `en` | Default UI/profile language |
-| `ADMIN_PASSWORD` | required | Admin password; minimum 12 characters |
+| `ADMIN_PASSWORD` | required natively; generated and persisted by local Compose when absent or too short | Admin password; minimum 12 characters |
 | `ADMIN_REVIEWER_ID` | `local-admin` | Stable server-side review actor; override in production |
 | `INGESTION_API_TOKEN` | unset | Optional machine-staging bearer secret; minimum 32 characters and no publication authority |
 | `INGESTION_ADAPTER_ID` | unset | Stable adapter actor; required with an ingestion token |
@@ -294,7 +328,9 @@ The admin SQL endpoint is disabled by default. If explicitly enabled with
 | `COOKIE_SECURE` | `false` | Add `Secure` to the admin cookie behind HTTPS |
 | `TRUSTED_PROXY_IPS` | unset | Exact TCP-peer IPs allowed to supply `X-Forwarded-For`, separated by commas |
 | `ADMIN_SQL_ENABLED` | `false` | Enable read-only emergency SQL diagnostics |
-| `PUBLIC_CATALOG_BASE_URL` | unset natively; `http://127.0.0.1:8080` in the tracked Compose `.env` | Static-catalog base URL used for admin navigation; use HTTPS outside literal-loopback development |
+| `PUBLIC_CATALOG_BASE_URL` | unset natively; `http://127.0.0.1:18965` in the tracked Compose `.env` | Static-catalog base URL used for admin navigation; use HTTPS outside literal-loopback development |
+| `PUBLIC_CATALOG_HOST_PORT` | `18965` | Host loopback port for the local Compose review site |
+| `PUBLIC_CATALOG_BIND_ADDRESS` | `127.0.0.1` | Host bind address for the local Compose review site |
 | `OPENAI_API_KEY` | unset | AI-assisted image drafting and translation |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Drafting model |
 | `OPENAI_TRANSLATION_MODEL` | same as `OPENAI_MODEL` | Translation model |

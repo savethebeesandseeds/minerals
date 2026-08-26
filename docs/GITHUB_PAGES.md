@@ -214,11 +214,19 @@ Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none';
 X-Content-Type-Options: nosniff
 X-Frame-Options: DENY
 Referrer-Policy: no-referrer
-Permissions-Policy: camera=(), geolocation=(), microphone=()
+Origin-Agent-Cluster: ?1
+Permissions-Policy: camera=(), geolocation=(), microphone=(), tools=(self)
 ```
 
 The HTML contains a compatible CSP meta policy. The response header adds
-`frame-ancestors`, which a meta element cannot enforce.
+`frame-ancestors`, which a meta element cannot enforce. The origin-agent
+header makes WebMCP's required origin-keyed agent cluster explicit, while the
+permissions policy limits site-tool discovery to the catalog's own origin.
+The live deployment verifier also requires a JavaScript MIME type and
+non-immutable caching for `.mjs` files. Because native Pages cannot add custom
+security headers, it permits those headers to be absent, but rejects an
+explicit `Origin-Agent-Cluster: ?0` or a `tools` policy broader or narrower
+than `self`.
 
 ## Keep administration separate
 

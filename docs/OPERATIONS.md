@@ -1,9 +1,9 @@
 # Waajacu's Minerals operations
 
-This service is intentionally a single-writer Rust/Axum application backed by
-SQLite. A complete image-free mineral catalog is small for SQLite; ingestion
-correctness, source lineage, recovery, and predictable publication are the
-operational constraints.
+The private admin service is intentionally a single-writer Rust/Axum
+application backed by SQLite. A complete image-free mineral catalog is small
+for SQLite; ingestion correctness, source lineage, recovery, and predictable
+publication are the operational constraints.
 
 ## Production topology
 
@@ -24,9 +24,11 @@ Static catalog releases use a separate immutable deployment root. Follow
 `/srv/waajacu/releases/<release-id>`, validate the content-addressed database,
 and atomically switch `/srv/waajacu/current`. The included nginx configuration
 listens on port 8080 and supplies the required SQLite/WASM MIME types, cache
-policy, CSP response header, and gzip transfer compression. When nginx runs in
-a container, mount all of `/srv/waajacu` read-only so a host-side `current`
-symlink switch becomes visible without restarting the container.
+policy, strict production CSP response header, and gzip transfer compression.
+This production origin is separate from the local Compose `web` review service.
+When production nginx runs in a container, mount all of `/srv/waajacu`
+read-only so a host-side `current` symlink switch becomes visible without
+restarting the container.
 
 Each export includes immutable `.sqlite3.br` and `.sqlite3.gz` sidecars. The
 included nginx configuration uses the gzip sidecar when supported; origins with
@@ -34,12 +36,17 @@ the optional Brotli static module should prefer the Brotli sidecar. All encoded
 responses must retain `Vary: Accept-Encoding`, while the manifest continues to
 describe and authenticate the decoded database bytes.
 
-The image defaults to unprivileged UID/GID `10001:10001`. Compose starts a
-minimal root entrypoint with only the capabilities required to normalize the
-exact `/app/data` bind mount, then drops its identity and complete capability
-bounding set before executing application code. The root filesystem is
-read-only, `/tmp` is bounded and disposable, privilege escalation is disabled,
-and PIDs, CPU, memory, and local log growth are limited.
+The Dockerfile-free local Compose stack has two services. `web` publishes the
+selector-safe review site only on `127.0.0.1:18965`; `admin` publishes the
+private control plane only on `127.0.0.1:7979`. Each service has its own bridge
+network, so neither receives a route to the other. Both start from the same
+digest-pinned Rust image and run the read-only mounted `setup.sh`. Package
+installation and locked builds happen inside the containers, never on the host.
+The setup phase starts as root with a reduced capability set, then permanently
+drops to the service-specific non-root identity with an empty capability
+bounding set before opening its listener. Temporary files are bounded,
+privilege escalation is disabled, and PIDs, CPU, memory, and local log growth
+are limited.
 
 ## Probes
 
@@ -58,20 +65,21 @@ period for the active, at-most-500-record chunk to finish.
 
 ## Configuration and secrets
 
-The service's `env_file` list loads `.env` and then `.env.local`; the latter
-takes precedence for application variables such as `RUST_LOG`. Keep
+The `admin` service's `env_file` list loads `.env` and then `.env.local`; the
+latter takes precedence for application variables such as `RUST_LOG`. Keep
 development secrets in the gitignored `.env.local` and use the platform secret
-store in production. Neither file is sent to the Docker builder. This loading
-is performed by Docker Compose: the Rust binary itself reads only its process
-environment and never opens `.env` files.
+store in production. The files are injected as environment values and are not
+source-mounted into either container. This loading is performed by Docker
+Compose: the Rust binary itself reads only its process environment and never
+opens `.env` files. The public `web` review service receives no admin env file.
 
-Compose `${MINERALS_*}` interpolation for ports and resource limits is a
-separate phase: it reads the invoking shell and the project `.env`, not the
-service's `env_file` list. To put those deployment values in `.env.local`, pass
-both files explicitly, with the local file last:
+Compose `${MINERALS_*}` and `${PUBLIC_CATALOG_*}` interpolation for ports and
+resource limits is a separate phase: it reads the invoking shell and the
+project `.env`, not the service's `env_file` list. To put those deployment
+values in `.env.local`, pass both files explicitly, with the local file last:
 
 ```bash
-docker compose --env-file .env --env-file .env.local up -d --build
+docker compose --env-file .env --env-file .env.local up -d --no-build
 ```
 
 `docker compose config` expands and prints environment values. Use its
@@ -82,7 +90,7 @@ Application settings:
 
 | Variable | Production guidance |
 |---|---|
-| `ADMIN_PASSWORD` | Required browser-admin secret; at least 12 characters and preferably randomly generated. |
+| `ADMIN_PASSWORD` | Required browser-admin secret natively. Local Compose generates and persists a strong fallback when it is absent or shorter than 12 characters. |
 | `ADMIN_REVIEWER_ID` | Stable, non-secret operator identifier recorded with approval/rejection decisions. Do not reuse a display name that can be reassigned. |
 | `INGESTION_API_TOKEN` | Optional machine-staging bearer token of at least 32 characters. It cannot approve or publish a release. |
 | `INGESTION_ADAPTER_ID` | Stable adapter identity recorded for machine-staged releases. Set it whenever the ingestion token is enabled. |
@@ -93,7 +101,7 @@ Application settings:
 | `COOKIE_SECURE` | Set `true` behind HTTPS. |
 | `TRUSTED_PROXY_IPS` | Comma-separated exact IP allowlist for direct reverse-proxy TCP peers. `X-Forwarded-For` is ignored when the peer is not listed. Keep empty without a proxy; a same-host TLS proxy commonly uses `127.0.0.1,::1`. |
 | `ADMIN_SQL_ENABLED` | Keep `false`; enable only for short, supervised, read-only diagnostics. |
-| `PUBLIC_CATALOG_BASE_URL` | HTTPS base URL for links to the deployed static catalog. The tracked Compose `.env` points at the local nginx example on `http://127.0.0.1:8080`; native runs default to unset, and literal-loopback HTTP is accepted only for development. |
+| `PUBLIC_CATALOG_BASE_URL` | HTTPS base URL for links to the deployed static catalog. The tracked Compose `.env` points at the local review service on `http://127.0.0.1:18965`; native runs default to unset, and literal-loopback HTTP is accepted only for development. |
 | `DEFAULT_LANG` | Default UI language; `en` when unset. |
 | `OPENAI_API_KEY` | Optional for drafting/translation; not required to serve or ingest an image-free catalog. |
 | `RUST_LOG` | Structured log filter. Never log credentials, bearer tokens, raw payloads, source URLs with secrets, or full review notes. |
@@ -110,28 +118,44 @@ secrets:
 | Variable | Default |
 |---|---:|
 | `MINERALS_CPUS` | `2.0` |
-| `MINERALS_MEMORY_LIMIT` | `1g` |
+| `MINERALS_MEMORY_LIMIT` | `2g` |
 | `MINERALS_MEMORY_RESERVATION` | `512m` |
 | `MINERALS_LOG_MAX_SIZE` | `10m` |
 | `MINERALS_LOG_MAX_FILES` | `5` |
 | `MINERALS_STOP_GRACE_PERIOD` | `90s` |
 | `MINERALS_HOST_PORT` | `7979` |
 | `MINERALS_BIND_ADDRESS` | `127.0.0.1` |
+| `PUBLIC_CATALOG_HOST_PORT` | `18965` |
+| `PUBLIC_CATALOG_BIND_ADDRESS` | `127.0.0.1` |
 
 Raise a resource or quarantine limit only after measuring the intended release
 artifact on the deployment topology. Always retain a memory limit and log
 rotation; a higher safety ceiling is not evidence of higher capacity.
 
+When `ADMIN_PASSWORD` is absent or too short, `setup.sh` writes a generated
+local secret to `/runtime/admin-password` in the private
+`minerals-admin-runtime` named volume with mode `0400`. It survives ordinary
+container replacement and `docker compose down`. Retrieve it only from a
+trusted local terminal:
+
+```bash
+docker compose exec -T --user 0:0 admin cat /runtime/admin-password
+```
+
+The command prints the password. Never attach its output to a ticket or log,
+paste it into chat, or capture it in shell automation. The file does not exist
+when a valid `ADMIN_PASSWORD` is configured explicitly.
+
 ## Data-directory permissions
 
-No UID/GID exports or `chmod 777` workaround are needed. On each Compose start,
-the entrypoint targets only the real `/app/data` directory, retains a non-root
-bind mount owner's numeric UID/GID (or uses `10001:10001` for a root-owned
-Docker Desktop mount), and normalizes ownership without following symlinks.
-It sets every private directory to `0700`, every regular file to `0600`, and a
-`077` umask for new database, WAL, image, and backup files. The process
-then clears all capabilities and executes the service under that non-root
-identity.
+No UID/GID exports or `chmod 777` workaround are needed. On each `admin` start,
+`setup.sh` targets only the real `/app/data` directory, retains a non-root bind
+mount owner's numeric UID/GID (or uses the configured UID/GID fallback for a
+root-owned Docker Desktop mount), and normalizes ownership without following
+symlinks. It sets every private directory to `0700`, every regular file to
+`0600`, and a `077` umask for new database, WAL, image, and backup files. The
+process then clears all capabilities and executes the service under that
+non-root identity.
 
 The tracked `data/minerals/` tree is the immutable legacy import seed for a
 clean checkout. `data/minerals.db`, its sidecars, and backups are private
@@ -141,23 +165,34 @@ source control; take backups using the database procedure below.
 ## Build and start
 
 ```bash
-docker compose build --pull
-docker compose up -d
+docker compose config --quiet
+docker compose up -d --no-build
 docker compose ps
+curl --fail http://127.0.0.1:18965/healthz
+curl --fail http://127.0.0.1:18965/catalog-manifest.json
 curl --fail http://127.0.0.1:7979/livez
 curl --fail http://127.0.0.1:7979/readyz
+docker compose logs --tail=200 web admin
 ```
 
-The build uses `Cargo.lock` and a pinned Rust toolchain. Update the pin
-deliberately when applying toolchain/security updates:
+There is no Dockerfile and `--build` must not be used. Compose pulls the
+digest-pinned Rust base image when it is absent. On first start, each service's
+`setup.sh` installs its explicit Debian package profile inside that container,
+then compiles the required locked Cargo target from read-only source mounts.
+The shared `minerals-cargo-registry`, `minerals-cargo-git`, and
+`minerals-cargo-target` named volumes serialize and retain build work;
+`minerals-admin-runtime` retains the executable and generated local password,
+while `minerals-web-runtime` retains the validated selector-review release. The
+services use `restart: on-failure:3`, so setup or runtime failures stop after
+three automatic retries rather than entering an unbounded install/build loop.
 
-```bash
-docker compose build --pull --build-arg RUST_VERSION=1.96.0
-```
-
-The host port binds only to loopback by default. If a controlled environment
-must bind directly, set `MINERALS_BIND_ADDRESS=0.0.0.0` and enforce network
-access outside the container.
+Update the Rust image pin deliberately by changing the matching audited digest
+in both `compose.yaml` and `setup.sh`, then validate and rehearse the stack. The
+host ports bind only to loopback by default. If a controlled environment must
+bind directly, set the corresponding `MINERALS_BIND_ADDRESS` or
+`PUBLIC_CATALOG_BIND_ADDRESS` and enforce network access outside the container.
+The selector-safe Nginx configuration mounted by `web` is for local review only;
+production continues to use the strict `deploy/nginx/minerals-static.conf`.
 
 ## Release-ingestion runbook
 
@@ -316,15 +351,17 @@ must prevent a second instance from sharing the file.
 Inspect logs and storage:
 
 ```bash
-docker compose logs --tail=200 minerals
-docker compose exec minerals sh -c \
+docker compose ps
+docker compose logs --tail=200 web admin
+docker compose exec -T --user 0:0 admin sh -c \
   'du -h /app/data/minerals.db /app/data/minerals.db-wal 2>/dev/null || true'
 ```
 
-The production image intentionally has no `sqlite3` executable. Use a pinned
-operator workstation/container with access to the bind-mounted `./data` path
-and run it as the same numeric UID/GID as the service. During a quiet
-maintenance window, stop request traffic, then verify and optimize:
+The runtime dependency profile intentionally does not install a `sqlite3`
+executable. Use a pinned operator workstation/container with access to the
+bind-mounted `./data` path and run it as the same numeric UID/GID as the
+service. During a quiet maintenance window, stop request traffic, then verify
+and optimize:
 
 ```bash
 sqlite3 ./data/minerals.db \
@@ -473,9 +510,10 @@ the reports with the tested image digest and host specification.
 
 ## Updates and shutdown
 
-Before an image update, make and verify a complete backup, run the new image
-against a copy, and exercise probes, admin authentication, ingestion status,
-and a verified public export. Image rollback does not roll back the
+Before a pinned base-image or dependency update, make and verify a complete
+backup, rehearse the updated `setup.sh` and Compose stack against a copy, and
+exercise both services' probes, admin authentication, ingestion status, and a
+verified public export. Rolling back the container inputs does not roll back the
 bind-mounted database; restore the matching data snapshot if a migration is not
 backward compatible.
 
@@ -483,5 +521,19 @@ backward compatible.
 docker compose down
 ```
 
-`down` leaves `./data` intact. Never use destructive cleanup against the data
+`down` removes the two containers and their separate networks, but retains the
+named runtime/Cargo volumes and the host-bound `./data` directory. To reset only
+the containers later, run the same `docker compose up -d --no-build` command.
+
+```bash
+docker compose down -v
+```
+
+`down -v` additionally deletes `minerals-admin-runtime`,
+`minerals-web-runtime`, and the three named Cargo cache volumes. That discards
+the generated admin password and forces a cold Cargo/release build on the next
+start. Package installation and setup run in newly created containers after
+either form of `down`; ordinary `down` can still reuse the named build caches
+and password. Neither command deletes the host bind `./data`. Use `-v` only
+when that reset is intentional. Never run destructive cleanup against the data
 root unless a verified external backup exists.

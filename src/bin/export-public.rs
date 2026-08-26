@@ -19,10 +19,17 @@ const PUBLIC_APP_FILES: &[&str] = &[
     "app.css",
     "app.js",
     "app-core.mjs",
+    "webmcp.mjs",
     "catalog-worker.js",
     "THIRD_PARTY_NOTICES.md",
-    "assets/logo_transparent.png",
-    "assets/logo_transparent_dark.png",
+    "assets/atlas-chemical-family-v2.png",
+    "assets/atlas-crystal-system-v2.png",
+    "assets/atlas-method-v2.png",
+    "assets/atlas-mountain-v2.png",
+    "assets/atlas-place-origin-v2.png",
+    "assets/atlas-quartz-v2.png",
+    "assets/atlas-source-v2.png",
+    "assets/waajacu-minerals-social.png",
     "vendor/sqlite/index.mjs",
     "vendor/sqlite/sqlite3.wasm",
     "vendor/sqlite/LICENSE.txt",
@@ -1132,7 +1139,7 @@ mod tests {
     }
 
     #[test]
-    fn public_app_copy_preserves_macaw_assets_byte_for_byte() -> Result<()> {
+    fn public_app_copy_preserves_atlas_assets_byte_for_byte() -> Result<()> {
         let app = TempDir::new()?;
         let output = TempDir::new()?;
         for relative in PUBLIC_APP_FILES {
@@ -1141,20 +1148,20 @@ mod tests {
             fs::write(path, "managed")?;
         }
 
-        let light = b"\x89PNG\r\n\x1a\nlight\0macaw";
-        let dark = b"\x89PNG\r\n\x1a\ndark\0macaw";
-        fs::write(app.path().join("assets/logo_transparent.png"), light)?;
-        fs::write(app.path().join("assets/logo_transparent_dark.png"), dark)?;
+        let quartz = b"\x89PNG\r\n\x1a\nquartz\0plate";
+        let source = b"\x89PNG\r\n\x1a\nsource\0strata";
+        fs::write(app.path().join("assets/atlas-quartz-v2.png"), quartz)?;
+        fs::write(app.path().join("assets/atlas-source-v2.png"), source)?;
 
         copy_public_app(app.path(), output.path())?;
 
         assert_eq!(
-            fs::read(output.path().join("assets/logo_transparent.png"))?,
-            light
+            fs::read(output.path().join("assets/atlas-quartz-v2.png"))?,
+            quartz
         );
         assert_eq!(
-            fs::read(output.path().join("assets/logo_transparent_dark.png"))?,
-            dark
+            fs::read(output.path().join("assets/atlas-source-v2.png"))?,
+            source
         );
         Ok(())
     }

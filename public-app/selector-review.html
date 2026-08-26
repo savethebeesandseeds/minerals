@@ -3,23 +3,20 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
     <meta name="color-scheme" content="dark light">
     <meta name="theme-color" content="#061b18">
+    <!--
+      Local-only Codex design-review entry. It relaxes only inline style elements
+      used by the annotation overlay. Keep this file outside the release allowlist.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; child-src 'self'; manifest-src 'self'; form-action 'self'"
+      content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; script-src-attr 'none'; style-src 'self'; style-src-elem 'self' 'unsafe-inline'; style-src-attr 'none'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; child-src 'self'; manifest-src 'self'; form-action 'self'"
     >
     <meta name="waajacu-map-module" content="./map/map-loader.js">
     <meta name="description" content="Waajacu’s open atlas for exploring minerals, formulas, crystal systems, evidence, and place.">
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="Waajacu’s Minerals — Read the Earth">
-    <meta property="og:description" content="An open atlas of minerals, evidence, and place.">
-    <meta property="og:image" content="https://minerals.waajacu.com/assets/waajacu-minerals-social.png">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Waajacu’s Minerals — Read the Earth">
-    <meta name="twitter:description" content="An open atlas of minerals, evidence, and place.">
-    <meta name="twitter:image" content="https://minerals.waajacu.com/assets/waajacu-minerals-social.png">
-    <title>Waajacu’s Minerals — Read the Earth</title>
+    <title>Waajacu’s Minerals — Selector Review</title>
     <link rel="stylesheet" href="./app.css?v=0f7b8700b0846403d88dc3be8fc2052f0b961cc401830f127127961920f9552c">
     <script type="module" src="./app.js?v=de5905a9a6d227a87797d5085e4d3146a6c063fea52ccbc4833b2edbaf0f97d5"></script>
   </head>
