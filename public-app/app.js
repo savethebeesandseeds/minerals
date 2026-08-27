@@ -22,22 +22,22 @@ const mapModuleMeta = document.querySelector('meta[name="waajacu-map-module"]');
 
 const SUPPORTED_LOCALES = new Set(["en", "es", "de", "fr", "cs", "zh", "ar", "pt", "hi", "ja"]);
 const ENGLISH = Object.freeze({
-  catalog: "Catalog", map: "Map", source: "Source", language: "Language",
+  catalog: "Atlas", map: "Map", source: "Source", language: "Language",
   search: "Search", searchLabel: "Search minerals", searchHint: "Name, formula, family, or keyword",
   previous: "Previous", next: "Next", evidence: "Evidence", offers: "Offers", details: "Scientific profile",
-  opening: "Opening the verified catalog…", failed: "The public catalog could not be opened.", retry: "Try again",
+  opening: "Opening the verified atlas…", failed: "The public atlas could not be opened.", retry: "Try again",
 });
 const TRANSLATIONS = Object.freeze({
   en: ENGLISH,
-  es: { catalog: "Catálogo", map: "Mapa", source: "Fuente", language: "Idioma", search: "Buscar", searchLabel: "Buscar minerales", searchHint: "Nombre, fórmula, familia o palabra clave", previous: "Anterior", next: "Siguiente", evidence: "Evidencia", offers: "Ofertas", details: "Perfil científico", opening: "Abriendo el catálogo verificado…", failed: "No se pudo abrir el catálogo público.", retry: "Reintentar" },
-  de: { catalog: "Katalog", map: "Karte", source: "Quelle", language: "Sprache", search: "Suchen", searchLabel: "Minerale suchen", searchHint: "Name, Formel, Familie oder Stichwort", previous: "Zurück", next: "Weiter", evidence: "Nachweise", offers: "Angebote", details: "Wissenschaftliches Profil", opening: "Verifizierter Katalog wird geöffnet…", failed: "Der öffentliche Katalog konnte nicht geöffnet werden.", retry: "Erneut versuchen" },
-  fr: { catalog: "Catalogue", map: "Carte", source: "Source", language: "Langue", search: "Rechercher", searchLabel: "Rechercher des minéraux", searchHint: "Nom, formule, famille ou mot-clé", previous: "Précédent", next: "Suivant", evidence: "Sources", offers: "Offres", details: "Profil scientifique", opening: "Ouverture du catalogue vérifié…", failed: "Impossible d’ouvrir le catalogue public.", retry: "Réessayer" },
-  cs: { catalog: "Katalog", map: "Mapa", source: "Zdroj", language: "Jazyk", search: "Hledat", searchLabel: "Hledat minerály", searchHint: "Název, vzorec, skupina nebo klíčové slovo", previous: "Předchozí", next: "Další", evidence: "Zdroje", offers: "Nabídky", details: "Vědecký profil", opening: "Otevírání ověřeného katalogu…", failed: "Veřejný katalog se nepodařilo otevřít.", retry: "Zkusit znovu" },
-  zh: { catalog: "目录", map: "地图", source: "来源", language: "语言", search: "搜索", searchLabel: "搜索矿物", searchHint: "名称、化学式、类别或关键词", previous: "上一页", next: "下一页", evidence: "证据", offers: "报价", details: "科学档案", opening: "正在打开已验证目录…", failed: "无法打开公共目录。", retry: "重试" },
-  ar: { catalog: "الفهرس", map: "الخريطة", source: "المصدر", language: "اللغة", search: "بحث", searchLabel: "البحث عن المعادن", searchHint: "الاسم أو الصيغة أو العائلة أو كلمة مفتاحية", previous: "السابق", next: "التالي", evidence: "الأدلة", offers: "العروض", details: "الملف العلمي", opening: "جارٍ فتح الكتالوج المتحقق منه…", failed: "تعذر فتح الكتالوج العام.", retry: "إعادة المحاولة" },
-  pt: { catalog: "Catálogo", map: "Mapa", source: "Fonte", language: "Idioma", search: "Pesquisar", searchLabel: "Pesquisar minerais", searchHint: "Nome, fórmula, família ou palavra-chave", previous: "Anterior", next: "Seguinte", evidence: "Evidências", offers: "Ofertas", details: "Perfil científico", opening: "Abrindo o catálogo verificado…", failed: "Não foi possível abrir o catálogo público.", retry: "Tentar novamente" },
-  hi: { catalog: "सूची", map: "मानचित्र", source: "स्रोत", language: "भाषा", search: "खोजें", searchLabel: "खनिज खोजें", searchHint: "नाम, सूत्र, परिवार या मुख्य शब्द", previous: "पिछला", next: "अगला", evidence: "साक्ष्य", offers: "प्रस्ताव", details: "वैज्ञानिक प्रोफ़ाइल", opening: "सत्यापित सूची खोली जा रही है…", failed: "सार्वजनिक सूची नहीं खोली जा सकी।", retry: "फिर प्रयास करें" },
-  ja: { catalog: "カタログ", map: "地図", source: "ソース", language: "言語", search: "検索", searchLabel: "鉱物を検索", searchHint: "名前、化学式、分類、キーワード", previous: "前へ", next: "次へ", evidence: "根拠", offers: "オファー", details: "科学プロフィール", opening: "検証済みカタログを開いています…", failed: "公開カタログを開けませんでした。", retry: "再試行" },
+  es: { catalog: "Atlas", map: "Mapa", source: "Fuente", language: "Idioma", search: "Buscar", searchLabel: "Buscar minerales", searchHint: "Nombre, fórmula, familia o palabra clave", previous: "Anterior", next: "Siguiente", evidence: "Evidencia", offers: "Ofertas", details: "Perfil científico", opening: "Abriendo el atlas verificado…", failed: "No se pudo abrir el atlas público.", retry: "Reintentar" },
+  de: { catalog: "Atlas", map: "Karte", source: "Quelle", language: "Sprache", search: "Suchen", searchLabel: "Minerale suchen", searchHint: "Name, Formel, Familie oder Stichwort", previous: "Zurück", next: "Weiter", evidence: "Nachweise", offers: "Angebote", details: "Wissenschaftliches Profil", opening: "Verifizierter Atlas wird geöffnet…", failed: "Der öffentliche Atlas konnte nicht geöffnet werden.", retry: "Erneut versuchen" },
+  fr: { catalog: "Atlas", map: "Carte", source: "Source", language: "Langue", search: "Rechercher", searchLabel: "Rechercher des minéraux", searchHint: "Nom, formule, famille ou mot-clé", previous: "Précédent", next: "Suivant", evidence: "Sources", offers: "Offres", details: "Profil scientifique", opening: "Ouverture de l’atlas vérifié…", failed: "Impossible d’ouvrir l’atlas public.", retry: "Réessayer" },
+  cs: { catalog: "Atlas", map: "Mapa", source: "Zdroj", language: "Jazyk", search: "Hledat", searchLabel: "Hledat minerály", searchHint: "Název, vzorec, skupina nebo klíčové slovo", previous: "Předchozí", next: "Další", evidence: "Zdroje", offers: "Nabídky", details: "Vědecký profil", opening: "Otevírání ověřeného atlasu…", failed: "Veřejný atlas se nepodařilo otevřít.", retry: "Zkusit znovu" },
+  zh: { catalog: "图集", map: "地图", source: "来源", language: "语言", search: "搜索", searchLabel: "搜索矿物", searchHint: "名称、化学式、类别或关键词", previous: "上一页", next: "下一页", evidence: "证据", offers: "报价", details: "科学档案", opening: "正在打开已验证图集…", failed: "无法打开公共图集。", retry: "重试" },
+  ar: { catalog: "الأطلس", map: "الخريطة", source: "المصدر", language: "اللغة", search: "بحث", searchLabel: "البحث عن المعادن", searchHint: "الاسم أو الصيغة أو العائلة أو كلمة مفتاحية", previous: "السابق", next: "التالي", evidence: "الأدلة", offers: "العروض", details: "الملف العلمي", opening: "جارٍ فتح الأطلس المتحقق منه…", failed: "تعذر فتح الأطلس العام.", retry: "إعادة المحاولة" },
+  pt: { catalog: "Atlas", map: "Mapa", source: "Fonte", language: "Idioma", search: "Pesquisar", searchLabel: "Pesquisar minerais", searchHint: "Nome, fórmula, família ou palavra-chave", previous: "Anterior", next: "Seguinte", evidence: "Evidências", offers: "Ofertas", details: "Perfil científico", opening: "Abrindo o atlas verificado…", failed: "Não foi possível abrir o atlas público.", retry: "Tentar novamente" },
+  hi: { catalog: "एटलस", map: "मानचित्र", source: "स्रोत", language: "भाषा", search: "खोजें", searchLabel: "खनिज खोजें", searchHint: "नाम, सूत्र, परिवार या मुख्य शब्द", previous: "पिछला", next: "अगला", evidence: "साक्ष्य", offers: "प्रस्ताव", details: "वैज्ञानिक प्रोफ़ाइल", opening: "सत्यापित एटलस खोला जा रहा है…", failed: "सार्वजनिक एटलस नहीं खोला जा सका।", retry: "फिर प्रयास करें" },
+  ja: { catalog: "アトラス", map: "地図", source: "ソース", language: "言語", search: "検索", searchLabel: "鉱物を検索", searchHint: "名前、化学式、分類、キーワード", previous: "前へ", next: "次へ", evidence: "根拠", offers: "オファー", details: "科学プロフィール", opening: "検証済みアトラスを開いています…", failed: "公開アトラスを開けませんでした。", retry: "再試行" },
 });
 
 function storedValue(key) {
@@ -120,6 +120,19 @@ function externalLink(value, label, className = "source-link") {
   return href
     ? element("a", { text: label, className, attrs: { href, target: "_blank", rel: "noopener noreferrer" } })
     : element("span", { text: label, className: `${className} disabled` });
+}
+
+function githubIcon() {
+  const namespace = "http://www.w3.org/2000/svg";
+  const icon = document.createElementNS(namespace, "svg");
+  icon.setAttribute("class", "github-mark");
+  icon.setAttribute("viewBox", "0 0 16 16");
+  icon.setAttribute("aria-hidden", "true");
+  icon.setAttribute("focusable", "false");
+  const path = document.createElementNS(namespace, "path");
+  path.setAttribute("d", "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.53-.49-.33-.84-.81-1.07-.81-1.07-.66-.45.05-.44.05-.44.73.05 1.11.75 1.11.75.65 1.11 1.69.79 2.1.6.07-.47.25-.79.46-.97-1.6-.18-3.29-.8-3.29-3.56 0-.79.28-1.43.74-1.93-.07-.18-.32-.91.07-1.9 0 0 .6-.19 1.98.74A6.9 6.9 0 0 1 8 3.89c.61 0 1.23.08 1.8.24 1.38-.93 1.98-.74 1.98-.74.39.99.14 1.72.07 1.9.46.5.74 1.14.74 1.93 0 2.77-1.69 3.38-3.3 3.56.26.22.49.66.49 1.34 0 .97-.01 1.75-.01 1.99 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z");
+  icon.append(path);
+  return icon;
 }
 
 function humanLabel(value) {
@@ -338,15 +351,12 @@ function updateManifestBindings() {
   releaseSummary.textContent = `${count} minerals · ${formatDate(manifest.generated_at)}`;
 }
 
-function classificationCard({ path, index, title, copy, src, alt, className = "" }) {
+function classificationCard({ path, title, src, alt, width, height, className = "" }) {
   return element("a", {
     className: `classification-card ${className}`.trim(),
-    attrs: { href: routeHref(path), "data-route-link": "", "aria-label": `${title}: ${copy}` },
+    attrs: { href: routeHref(path), "data-route-link": "", "aria-label": title },
   }, [
-    element("span", { className: "classification-number", text: index }),
-    element("div", { className: "classification-copy" }, [element("h2", { text: title }), paragraph(copy)]),
-    image(src, alt, "classification-art", "2048", "809"),
-    element("span", { className: "classification-arrow", text: "↗", attrs: { "aria-hidden": "true" } }),
+    image(src, alt, "classification-art", width, height),
   ]);
 }
 
@@ -367,12 +377,12 @@ function renderHome() {
   const view = element("div", { className: "home-view" });
   const hero = element("section", { className: "atlas-hero", attrs: { "aria-labelledby": "home-title" } });
   const copy = element("div", { className: "hero-copy" }, [
-    paragraph("OPEN DATA / EARTH SCIENCES", "kicker kicker-gold"),
-    element("h1", { id: "home-title" }, ["Read the Earth.", element("em", { text: "Follow its structure." })]),
-    paragraph("An open atlas for exploring minerals, formulas, crystal systems, and the places they are found.", "hero-intro"),
+    paragraph("PUBLIC MINERAL ATLAS", "kicker kicker-gold"),
+    element("h1", { id: "home-title" }, ["A public mineral", element("em", { text: "atlas." })]),
+    paragraph("Find published mineral records by name, formula, properties, locality, evidence, and provenance. Where available, records also describe natural specimens, laboratory-grown counterparts, minerals reported in meteorites, and published offers.", "hero-intro"),
     element("div", { className: "hero-actions" }, [
-      routeLink("/minerals", "EXPLORE THE CATALOG →", "button button-gold"),
-      routeLink("/map", "OPEN THE WORLD MAP ⌖", "button button-outline"),
+      routeLink("/minerals", "OPEN THE ATLAS →", "button button-gold"),
+      routeLink("/map", "VIEW THE MAP ⌖", "button button-outline"),
     ]),
   ]);
   const plate = element("figure", { className: "hero-plate" }, [
@@ -383,19 +393,19 @@ function renderHome() {
     element("div", { className: "hero-coordinate", attrs: { "aria-hidden": "true" } }, [
       element("span", { text: "SiO₂ / QUARTZ" }),
       element("span", { text: "TRIGONAL SYSTEM" }),
-      element("span", { text: "EARTH / OPEN RECORD" }),
+      element("span", { text: "EARTH / LABORATORY / METEORITE RECORDS" }),
     ]),
   );
 
-  const pathways = element("section", { className: "classification-grid", attrs: { "aria-label": "Explore the atlas" } }, [
-    classificationCard({ path: "/minerals?view=systems", index: "01", title: "CRYSTAL SYSTEM", copy: "Seven geometric families describe how a crystal is ordered.", src: "./assets/atlas-crystal-system-v2.png", alt: "The seven crystal systems drawn as gold scientific diagrams", className: "classification-crystal" }),
-    classificationCard({ path: "/minerals?view=families", index: "02", title: "CHEMICAL FAMILY", copy: "Composition connects minerals through shared elemental structures.", src: "./assets/atlas-chemical-family-v2.png", alt: "Chemical family diagram with molecular structure and diffraction graph", className: "classification-chemical" }),
-    classificationCard({ path: "/map", index: "03", title: "PLACE OF ORIGIN", copy: "Locality keeps every specimen attached to a real landscape.", src: "./assets/atlas-place-origin-v2.png", alt: "World map and locality diagram for exploring mineral origins", className: "classification-origin" }),
+  const pathways = element("section", { className: "classification-grid", attrs: { "aria-label": "Atlas entry points" } }, [
+    classificationCard({ path: "/minerals?view=systems", title: "View minerals by crystal system", src: "./assets/atlas-crystal-system-v2.png", alt: "The seven crystal systems drawn as gold scientific diagrams", width: "1942", height: "809", className: "classification-crystal" }),
+    classificationCard({ path: "/minerals?view=families", title: "View minerals by chemical family", src: "./assets/atlas-chemical-family-v2.png", alt: "Chemical family diagram with molecular structure and diffraction graph", width: "1944", height: "809", className: "classification-chemical" }),
+    classificationCard({ path: "/map", title: "View the locality map", src: "./assets/atlas-place-origin-v2.png", alt: "World map and locality diagram", width: "2048", height: "768", className: "classification-origin" }),
   ]);
 
   const method = element("section", { className: "paper-section method-section", attrs: { "aria-labelledby": "method-title" } }, [
     image("./assets/atlas-mountain-v2.png", "", "mountain-watermark", "2173", "724"),
-    sectionHeading("01 / FROM SPECIMEN TO KNOWLEDGE", ["Every stone", "carries a record."], "Careful observation, classification, locality documentation, and evidence review turn specimens into knowledge that anyone can inspect."),
+    sectionHeading("01 / MINERAL RECORDS", ["What the atlas", "records."], "A mineral record may include accepted names, formula, crystal system, chemical family, physical and optical properties, formation, locality, discovery, identifiers, safety, rarity, references, evidence, provenance, and published offers. Missing or uncertain information remains visible."),
     element("figure", { className: "method-plate" }, [
       image("./assets/atlas-method-v2.png", "Observe a mineral specimen, classify its composition and crystal structure, then verify the record with trusted sources", "method-art", "2128", "739"),
     ]),
@@ -404,58 +414,68 @@ function renderHome() {
   const projectCatalog = element("a", { className: "project-card project-card-dark", attrs: { href: routeHref("/minerals"), "data-route-link": "", "aria-labelledby": "catalog-project-title" } }, [
     element("span", { className: "project-arrow", text: "↗", attrs: { "aria-hidden": "true" } }),
     paragraph("SEARCH / CLASSIFY / VERIFY", "kicker kicker-gold"),
-    element("h3", { id: "catalog-project-title", text: "THE PUBLIC MINERAL CATALOG" }),
+    element("h3", { id: "catalog-project-title", text: "THE PUBLIC MINERAL ATLAS" }),
     paragraph("Search formulas, families, descriptions, identifiers, and evidence across the published collection."),
     image("./assets/atlas-crystal-system-v2.png", "Seven crystallographic systems", "project-art", "1942", "809"),
     element("div", { className: "project-meta" }, [
       element("strong", { text: "6,226", attrs: { "data-mineral-count": "" } }),
       element("span", { text: "PUBLISHED RECORDS" }),
     ]),
-    element("span", { className: "project-action", text: "BROWSE MINERALS →" }),
+    element("span", { className: "project-action", text: "OPEN ATLAS →" }),
   ]);
 
   const projectMap = element("a", { className: "project-card project-card-paper", attrs: { href: routeHref("/map"), "data-route-link": "", "aria-labelledby": "map-project-title" } }, [
     element("span", { className: "project-arrow", text: "↗", attrs: { "aria-hidden": "true" } }),
-    paragraph("PLANETARY CONTEXT / INTERACTIVE VIEW", "kicker kicker-paper"),
-    element("h3", { id: "map-project-title", text: "THE GEOLOGICAL WORLD MAP" }),
-    paragraph("Open the existing environmental context map, preserved as a separate interactive instrument."),
+    paragraph("ENVIRONMENTAL CONTEXT / INTERACTIVE VIEW", "kicker kicker-paper"),
+    element("h3", { id: "map-project-title", text: "THE CONTEXT MAP" }),
+    paragraph("View the existing forest, land, and water context map. Mineral occurrence points are not part of this release yet."),
     image("./assets/atlas-place-origin-v2.png", "World map and locality annotations", "project-art map-project-art", "2048", "768"),
     element("div", { className: "map-scope-note" }, [
       element("span", { text: "CURRENT LAYER" }),
       element("strong", { text: "FOREST / LAND / WATER CONTEXT" }),
     ]),
-    element("span", { className: "project-action", text: "EXPLORE THE MAP →" }),
+    element("span", { className: "project-action", text: "VIEW MAP →" }),
   ]);
 
   const projects = element("section", { className: "paper-section projects-section", attrs: { "aria-labelledby": "projects-title" } }, [
-    sectionHeading("02 / EXPLORE THE COLLECTION", ["One mineral world.", "Many paths through it."], "Move from names and formulas to crystal families, evidence, and planetary context without leaving the public release."),
+    sectionHeading("02 / ATLAS AND MAP", ["The atlas", "and map."], "Use the atlas to search published mineral records. Use the map to view the environmental context available in the current release."),
     element("div", { className: "project-grid" }, [projectCatalog, projectMap]),
   ]);
 
   const evidenceBand = element("section", { className: "evidence-band", attrs: { "aria-labelledby": "evidence-band-title" } }, [
-    element("h2", { id: "evidence-band-title", text: "Claims should never outrun evidence." }),
+    element("h2", { id: "evidence-band-title", text: "Precious stones and rare-earth minerals." }),
     element("div", { className: "principle-grid" }, [
-      element("article", {}, [element("span", { className: "principle-icon", text: "◎", attrs: { "aria-hidden": "true" } }), element("h3", { text: "PROVENANCE" }), paragraph("Every observation remains attached to its source, timestamp, and origin.")]),
-      element("article", {}, [element("span", { className: "principle-icon", text: "◇", attrs: { "aria-hidden": "true" } }), element("h3", { text: "UNCERTAINTY" }), paragraph("The record says what is known, what is inferred, and why it matters.")]),
-      element("article", {}, [element("span", { className: "principle-icon", text: "⌬", attrs: { "aria-hidden": "true" } }), element("h3", { text: "REPRODUCIBILITY" }), paragraph("Open methods and data let others verify and build on the work.")]),
+      element("a", { className: "principle-path", attrs: { href: routeHref("/minerals"), "data-route-link": "" } }, [element("span", { className: "principle-icon", text: "◎", attrs: { "aria-hidden": "true" } }), element("h3", { text: "IDENTITY" }), paragraph("Search a name, formula, accepted synonym, or record identifier."), element("span", { className: "principle-action", text: "OPEN THE ATLAS →" })]),
+      element("a", { className: "principle-path", attrs: { href: routeHref("/minerals"), "data-route-link": "" } }, [element("span", { className: "principle-icon", text: "◇", attrs: { "aria-hidden": "true" } }), element("h3", { text: "COMMERCE" }), paragraph("Published offers appear with mineral records when available. Provider pages remain authoritative for specimen claims, availability, and price."), element("span", { className: "principle-action", text: "OPEN THE ATLAS →" })]),
+      element("a", { className: "principle-path", attrs: { href: routeHref("/map"), "data-route-link": "" } }, [element("span", { className: "principle-icon", text: "⌖", attrs: { "aria-hidden": "true" } }), element("h3", { text: "PLACE" }), paragraph("Read documented localities in mineral records; use the map for the environmental layers currently available."), element("span", { className: "principle-action", text: "OPEN THE MAP →" })]),
     ]),
   ]);
 
+  const protocolLink = element("a", {
+    className: "button button-ink protocol-button",
+    attrs: {
+      href: "https://github.com/savethebeesandseeds/minerals",
+      target: "_blank",
+      rel: "noopener noreferrer",
+      "aria-label": "View the open source protocol on GitHub (opens in a new tab)",
+    },
+  }, [githubIcon(), element("span", { text: "VIEW THE OPEN SOURCE PROTOCOL" }), element("span", { text: "→", attrs: { "aria-hidden": "true" } })]);
+
   const source = element("section", { className: "source-section", attrs: { "aria-labelledby": "source-home-title" } }, [
     element("div", { className: "source-copy" }, [
-      paragraph("03 / OPEN INFRASTRUCTURE", "kicker kicker-paper"),
-      element("h2", { id: "source-home-title" }, ["Open by design.", element("em", { text: "Grounded in evidence." })]),
-      paragraph("The catalog is a self-contained, read-only public release. Its database is checked locally before any record is searched."),
-      routeLink("/about", "VIEW THE PUBLIC SOURCE →", "button button-ink"),
+      paragraph("03 / PROTOCOL IN DESIGN", "kicker kicker-paper"),
+      element("h2", { id: "source-home-title" }, ["Proposed safeguards", element("em", { text: "for mineral transactions." })]),
+      paragraph("A future protocol is being designed to support selective disclosure, signed provenance claims, and checks for conflict-related sourcing risk. The current release contains the public atlas and published offer records only; it does not yet provide private transactions, cryptographic verification, or sourcing guarantees."),
+      protocolLink,
       element("dl", { className: "release-ledger" }, [
-        element("div", {}, [element("dt", { text: "RECORDS" }), element("dd", { text: "6,226", attrs: { "data-mineral-count": "" } })]),
-        element("div", {}, [element("dt", { text: "SCHEMA" }), element("dd", { text: "v1", attrs: { "data-schema-version": "" } })]),
-        element("div", {}, [element("dt", { text: "MODE" }), element("dd", { text: "READ ONLY" })]),
+        element("div", {}, [element("dt", { text: "PROTOCOL" }), element("dd", { text: "IN DESIGN" })]),
+        element("div", {}, [element("dt", { text: "TRANSACTIONS" }), element("dd", { text: "NOT IMPLEMENTED" })]),
+        element("div", {}, [element("dt", { text: "SOURCING" }), element("dd", { text: "NO GUARANTEE" })]),
       ]),
     ]),
     element("div", { className: "source-visual", attrs: { "aria-hidden": "true" } }, [
       image("./assets/atlas-source-v2.png", "", "source-art", "1920", "819"),
-      element("pre", { text: "// verify\nsha256(database)\n  == manifest.digest\n\n// open\nmode: read_only\nsource: public_release" }),
+      element("pre", { text: "// proposal — not implemented\nprovenance := signed_claim\nprivacy := selective_disclosure\nsourcing := risk_attestation" }),
     ]),
   ]);
 
@@ -466,7 +486,7 @@ function renderHome() {
 
 function loadingView(label = t("opening")) {
   return element("section", { className: "route-loading catalog-loading", attrs: { "aria-busy": "true" } }, [
-    paragraph("PUBLIC CATALOG / LOCAL VERIFICATION", "kicker kicker-gold"),
+    paragraph("PUBLIC ATLAS / LOCAL VERIFICATION", "kicker kicker-gold"),
     element("h1", { text: label }),
     paragraph("The database is authenticated locally before its records become searchable.", "loading-copy"),
     element("span", { className: "loading-rule", attrs: { "aria-hidden": "true" } }),
@@ -475,7 +495,7 @@ function loadingView(label = t("opening")) {
 
 function errorView(error, retry) {
   const section = element("section", { className: "route-error" }, [
-    paragraph("CATALOG UNAVAILABLE", "kicker kicker-paper"),
+    paragraph("ATLAS UNAVAILABLE", "kicker kicker-paper"),
     element("h1", { text: t("failed") }),
     paragraph(error instanceof Error ? error.message : "An unknown error occurred."),
   ]);
@@ -531,7 +551,7 @@ function searchForm(search) {
 function pager(search, result) {
   if (result.total_pages <= 1) return null;
   const params = (page) => new URLSearchParams({ q: search.query, page: String(page), page_size: String(search.pageSize) });
-  const nav = element("nav", { className: "catalog-pager", attrs: { "aria-label": "Catalog pages" } });
+  const nav = element("nav", { className: "catalog-pager", attrs: { "aria-label": "Atlas pages" } });
   if (search.page > 1) nav.append(routeLink(`/minerals?${params(search.page - 1)}`, `← ${t("previous")}`, "pager-link"));
   nav.append(element("span", { className: "pager-position", text: `${Math.min(search.page, result.total_pages)} / ${result.total_pages}` }));
   if (search.page < result.total_pages) nav.append(routeLink(`/minerals?${params(search.page + 1)}`, `${t("next")} →`, "pager-link"));
@@ -543,8 +563,8 @@ async function renderCatalog(route, signal) {
   const view = element("section", { className: "catalog-view" });
   const hero = element("header", { className: "catalog-hero", attrs: { "aria-labelledby": "catalog-title" } }, [
     element("div", { className: "catalog-hero-copy" }, [
-      paragraph("PUBLIC CATALOG / VERIFIED RECORDS", "kicker kicker-gold"),
-      element("h1", { id: "catalog-title", text: "Read structure through evidence." }),
+      paragraph("PUBLIC ATLAS / READ-ONLY RELEASE", "kicker kicker-gold"),
+      element("h1", { id: "catalog-title", text: "Public mineral records." }),
       paragraph("Search names, formulas, mineral families, descriptions, and identifiers in the self-contained public release.", "route-intro"),
       element("dl", { className: "catalog-ledger" }, [
         element("div", {}, [element("dt", { text: "RECORDS" }), element("dd", { text: manifest ? formatNumber(manifest.mineral_count) : formatNumber(result.total), attrs: { "data-mineral-count": "" } })]),
@@ -554,7 +574,7 @@ async function renderCatalog(route, signal) {
     ]),
     image("./assets/atlas-chemical-family-v2.png", "Chemical family and diffraction illustration", "catalog-hero-art", "1944", "809", "eager"),
   ]);
-  const searchPanel = element("section", { className: "search-panel", attrs: { "aria-label": "Catalog search" } }, [
+  const searchPanel = element("section", { className: "search-panel", attrs: { "aria-label": "Atlas search" } }, [
     searchForm(route.search),
     paragraph(route.search.query ? `${formatNumber(result.total)} records for “${route.search.query}”` : `${formatNumber(result.total)} published mineral records`, "search-summary"),
   ]);
@@ -715,8 +735,8 @@ function renderMapShell() {
   const node = element("section", { className: "map-view", attrs: { "aria-labelledby": "map-title" } }, [
     element("header", { className: "map-hero" }, [
       element("div", { className: "map-hero-copy" }, [
-        paragraph("MAP / PLANETARY CONTEXT", "kicker kicker-gold"),
-        element("h1", { id: "map-title", text: "Place every record in a wider world." }),
+        paragraph("MAP / CURRENT DATA", "kicker kicker-gold"),
+        element("h1", { id: "map-title", text: "Environmental context map." }),
         paragraph("The preserved map currently shows forest, land, and water context. Verified mineral occurrence points are not part of this release yet.", "route-intro"),
         element("div", { className: "scope-badge" }, [element("span", { text: "CURRENT SCOPE" }), element("strong", { text: "ENVIRONMENTAL CONTEXT / JRC 2020" })]),
       ]),
@@ -765,8 +785,8 @@ async function mountMap(container, sequence) {
       container.removeAttribute("aria-busy");
       container.replaceChildren(element("div", { className: "map-unavailable" }, [
         element("h3", { text: "The optional map is unavailable." }),
-        paragraph("The mineral catalog remains fully usable without the map package."),
-        routeLink("/minerals", "OPEN THE CATALOG →", "button button-ink"),
+        paragraph("The mineral atlas remains fully usable without the map package."),
+        routeLink("/minerals", "OPEN THE ATLAS →", "button button-ink"),
       ]));
       console.info("Optional map module unavailable:", error);
     }
@@ -785,16 +805,16 @@ function renderAbout() {
   const node = element("section", { className: "about-view", attrs: { "aria-labelledby": "about-title" } }, [
     element("header", { className: "about-hero" }, [
       element("div", { className: "about-hero-copy" }, [
-        paragraph("SOURCE / OPEN INFRASTRUCTURE", "kicker kicker-gold"),
-        element("h1", { id: "about-title" }, ["Open by design.", element("em", { text: "Grounded in evidence." })]),
-        paragraph("Waajacu’s public catalog is a read-only projection of published mineral facts, evidence attribution, and public market offers.", "route-intro"),
+        paragraph("SOURCE / RELEASE INFORMATION", "kicker kicker-gold"),
+        element("h1", { id: "about-title" }, ["How the public", element("em", { text: "release works." })]),
+        paragraph("Waajacu’s public atlas is a read-only projection of published mineral facts, evidence attribution, and public market offers.", "route-intro"),
       ]),
       image("./assets/atlas-source-v2.png", "", "about-source-art", "1920", "819", "eager"),
     ]),
     element("div", { className: "about-grid" }, [
       element("section", { className: "about-panel about-panel-dark" }, [
         paragraph("01 / LOCAL VERIFICATION", "kicker kicker-gold"),
-        element("h2", { text: "Verified in your browser" }),
+        element("h2", { text: "Local release verification" }),
         paragraph("Every release names a content-addressed SQLite database. Its exact length and SHA-256 digest are checked before the database opens read-only with official SQLite WebAssembly."),
         paragraph("Operational accounts, review queues, and unpublished registry data never enter this standalone public application."),
         element("pre", { text: "fetch(manifest)\nverify(bytes, sha256)\nopen(read_only)\nquery(fixed_protocol)" }),
@@ -807,7 +827,7 @@ function renderAbout() {
     ]),
     element("section", { className: "about-principles" }, [
       paragraph("PROVENANCE / UNCERTAINTY / REPRODUCIBILITY", "kicker kicker-paper"),
-      element("h2", { text: "Claims should never outrun evidence." }),
+      element("h2", { text: "Evidence and provenance." }),
       paragraph("Source licenses, attribution, review status, and retrieval history stay attached to their records. Follow each evidence link for the authoritative source and its complete terms."),
     ]),
   ]);
@@ -859,7 +879,7 @@ async function renderCurrentRoute({ focus = true } = {}) {
 
   try {
     if (route.name === "home") {
-      finishRoute(renderHome(), "Waajacu’s Minerals — Read the Earth", { focus });
+      finishRoute(renderHome(), "Waajacu’s Minerals — Public Mineral Atlas", { focus });
       void loadManifestSummary().catch(() => { /* The visual homepage remains independent of catalog startup. */ });
       announce("Mineral atlas ready");
       return;
@@ -890,8 +910,8 @@ async function renderCurrentRoute({ focus = true } = {}) {
     if (route.name === "minerals") {
       const node = await renderCatalog(route, routeController.signal);
       if (sequence !== renderSequence || routeController.signal.aborted) return;
-      finishRoute(node, "Catalog · Waajacu’s Minerals", { focus });
-      announce("Catalog ready");
+      finishRoute(node, "Atlas · Waajacu’s Minerals", { focus });
+      announce("Atlas ready");
       return;
     }
     if (route.name === "mineral") {
@@ -905,7 +925,7 @@ async function renderCurrentRoute({ focus = true } = {}) {
     finishRoute(renderNotFound(), "Page not found · Waajacu’s Minerals", { focus });
   } catch (error) {
     if (error?.name === "AbortError" || sequence !== renderSequence) return;
-    finishRoute(errorView(error, () => renderCurrentRoute({ focus: false })), "Catalog unavailable · Waajacu’s Minerals", { focus });
+    finishRoute(errorView(error, () => renderCurrentRoute({ focus: false })), "Atlas unavailable · Waajacu’s Minerals", { focus });
     announce(t("failed"));
   }
 }

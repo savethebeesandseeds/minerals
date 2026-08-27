@@ -33,8 +33,10 @@ verified scientific fact.
 
 The local Compose stack is Dockerfile-free and has two independent services:
 
-- `web` serves the selector-safe public review site on
-  `http://127.0.0.1:18965/`;
+- `web` serves the single development atlas on
+  `http://127.0.0.1:18965/`. This canonical page is also the page used for
+  selector-assisted annotation; there is no alternate review document,
+  session URL, or rendering path;
 - `admin` serves the private control plane on `http://127.0.0.1:7979/`.
 
 Both ports bind to host loopback by default. The services use separate bridge
@@ -82,7 +84,7 @@ The command prints a secret: do not paste its output into chat, tickets, logs,
 or shell scripts. The file is present only when the generated fallback is in
 use. Open:
 
-- `http://127.0.0.1:18965/` - selector-safe public design review;
+- `http://127.0.0.1:18965/` - public atlas and selector-assisted design review;
 - `http://127.0.0.1:7979/admin` - authenticated mineral management;
 - `http://127.0.0.1:7979/admin/reviews` - individual mineral review queue;
 - `http://127.0.0.1:7979/admin/ingestion` - dataset release review queue.
@@ -96,9 +98,15 @@ containers and networks but retains those volumes and `./data`;
 generated password and caches, while leaving `./data` on the host. Inspect the
 stack with `docker compose ps` and `docker compose logs --tail=200 web admin`.
 
-The local `web` service deliberately uses the narrow selector-review CSP. It is
-not the production origin. Production exports continue to use the strict CSP
-and immutable Nginx deployment described in [the deployment guide](deploy/README.md).
+During active visual development, the one canonical `web` entry at `/` uses a
+narrow selector-compatible CSP: `style-src-elem` permits inline style elements
+so Codex can render its annotation overlay. `script-src` remains strict and
+`style-src-attr 'none'` continues to prohibit style attributes. The same narrow
+exception is present in the current `index.html`, because CSP headers and meta
+policies are cumulative. Strict CSP hardening is deliberately deferred until
+visual development is complete; the production Nginx deployment remains the
+strict reference described in [the deployment guide](deploy/README.md). Do not
+reintroduce a second review page or a selector-session URL as a workaround.
 
 ## Native development
 
@@ -329,8 +337,8 @@ The admin SQL endpoint is disabled by default. If explicitly enabled with
 | `TRUSTED_PROXY_IPS` | unset | Exact TCP-peer IPs allowed to supply `X-Forwarded-For`, separated by commas |
 | `ADMIN_SQL_ENABLED` | `false` | Enable read-only emergency SQL diagnostics |
 | `PUBLIC_CATALOG_BASE_URL` | unset natively; `http://127.0.0.1:18965` in the tracked Compose `.env` | Static-catalog base URL used for admin navigation; use HTTPS outside literal-loopback development |
-| `PUBLIC_CATALOG_HOST_PORT` | `18965` | Host loopback port for the local Compose review site |
-| `PUBLIC_CATALOG_BIND_ADDRESS` | `127.0.0.1` | Host bind address for the local Compose review site |
+| `PUBLIC_CATALOG_HOST_PORT` | `18965` | Host loopback port for the local Compose atlas service |
+| `PUBLIC_CATALOG_BIND_ADDRESS` | `127.0.0.1` | Host bind address for the local Compose atlas service |
 | `OPENAI_API_KEY` | unset | AI-assisted image drafting and translation |
 | `OPENAI_MODEL` | `gpt-4o-mini` | Drafting model |
 | `OPENAI_TRANSLATION_MODEL` | same as `OPENAI_MODEL` | Translation model |

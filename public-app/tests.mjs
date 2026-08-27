@@ -446,12 +446,45 @@ test("the fresh atlas shell uses every concept artwork and a nonblocking locale 
   const socialAsset = await readFile(new URL("./assets/waajacu-minerals-social.png", import.meta.url));
   assert.equal(socialAsset.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
   assert.match(index, /https:\/\/minerals\.waajacu\.com\/assets\/waajacu-minerals-social\.png/);
+  assert.match(index, /Waajacu’s Minerals — Public Mineral Atlas/);
+  assert.match(index, /Search mineral identity, properties, provenance, locality, evidence, and published offers in a static public atlas\./);
 
   const locales = [...index.matchAll(/<option value="([a-z]{2})">/gu)].map((match) => match[1]);
   assert.deepEqual(locales, ["en", "es", "cs", "de", "fr", "zh", "ar", "pt", "hi", "ja"]);
+  const headerMarkup = index.slice(index.indexOf('<header class="site-header"'), index.indexOf("</header>") + 9);
+  const footerMarkup = index.slice(index.indexOf('<footer class="site-footer"'), index.indexOf("</footer>") + 9);
+  assert.match(headerMarkup, />ATLAS<[^]*>MAP</);
+  assert.doesNotMatch(headerMarkup, />SOURCE</);
+  assert.match(headerMarkup, /id="locale-select"/);
+  assert.doesNotMatch(headerMarkup, /data-locale-label|>\s*LANGUAGE\s*</);
+  assert.match(footerMarkup, />Source</);
+  assert.doesNotMatch(footerMarkup, /id="locale-select"/);
   assert.match(app, /locale: preferredLocale\(\)/);
   assert.match(app, /storeValue\("waajacu\.locale", preferences\.locale\)/);
+  assert.match(app, /catalog: "Atlas"/);
   assert.doesNotMatch(app, /language-orbit|orbit-stage|home-macaw/);
+
+  const homeRenderer = app.slice(app.indexOf("function renderHome"), app.indexOf("function loadingView"));
+  assert.match(homeRenderer, /"A public mineral", element\("em", \{ text: "atlas\." \}\)/);
+  assert.match(homeRenderer, /Find published mineral records by name/);
+  assert.match(homeRenderer, /\["What the atlas", "records\."\]/);
+  assert.match(homeRenderer, /\["The atlas", "and map\."\]/);
+  assert.match(homeRenderer, /"Proposed safeguards", element\("em", \{ text: "for mineral transactions\." \}\)/);
+  assert.match(homeRenderer, /Precious stones and rare-earth minerals\./);
+  assert.match(homeRenderer, /text: "COMMERCE"/);
+  assert.match(homeRenderer, /does not yet provide private transactions, cryptographic verification, or sourcing guarantees\./);
+  assert.match(homeRenderer, /VIEW THE OPEN SOURCE PROTOCOL/);
+  assert.match(app, /github-mark/);
+  assert.match(app, /https:\/\/github\.com\/savethebeesandseeds\/minerals/);
+  assert.doesNotMatch(homeRenderer, /verified offers|trusted sellers|CONFLICT SCREENED|SIGNED RECORDS|conflict_source: rejected/i);
+  assert.doesNotMatch(homeRenderer, /Find the mineral you need|On Earth and beyond|A record for every mineral in the world|One mineral world|Many paths through it|Secure by design|Grounded in exploration|\bExplore\b/i);
+  assert.doesNotMatch(app, /Open by design|Claims should never outrun evidence|Place every record in a wider world|Read structure through evidence/i);
+  const classificationRenderer = app.slice(app.indexOf("function classificationCard"), app.indexOf("function sectionHeading"));
+  assert.doesNotMatch(classificationRenderer, /classification-(?:number|copy|arrow)/);
+  assert.match(classificationRenderer, /image\(src, alt, "classification-art", width, height\)/);
+  assert.doesNotMatch(homeRenderer, /Claims should never outrun evidence|text: "MODE"/);
+  assert.doesNotMatch(css, /repeating-radial-gradient\(ellipse/);
+  assert.match(css, /\.locale-control-header/);
 
   for (const selector of [
     ".atlas-hero", ".classification-grid", ".method-section", ".project-grid",
@@ -476,6 +509,61 @@ test("self-hosted cache rules prevent stale boot code and MIME fallbacks", async
   assert.match(nginx, /Permissions-Policy "[^"]*tools=\(self\)[^"]*" always;/);
   assert.match(nginx, /location ~ \\.css\$[\s\S]*try_files \$uri =404;/);
   assert.match(nginx, /location ~ \\\.[(]\?:png\|ico[)]\$[\s\S]*try_files \$uri =404;/);
+});
+
+test("the local development container has one clean annotatable entry", async () => {
+  const [index, nginx, setup, compose] = await Promise.all([
+    readFile(new URL("./index.html", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/nginx/minerals-local.conf", import.meta.url), "utf8"),
+    readFile(new URL("../setup.sh", import.meta.url), "utf8"),
+    readFile(new URL("../compose.yaml", import.meta.url), "utf8"),
+  ]);
+
+  const indexPolicy = index.match(
+    /http-equiv="Content-Security-Policy"\s+content="([^"]+)"/,
+  )?.[1] ?? "";
+  const indexScriptPolicy = indexPolicy.match(/(?:^|;\s*)script-src ([^;]+)/)?.[1] ?? "";
+  assert.match(indexPolicy, /style-src 'self'/);
+  assert.match(indexPolicy, /style-src-elem 'self' 'unsafe-inline'/);
+  assert.match(indexPolicy, /style-src-attr 'none'/);
+  assert.match(indexScriptPolicy, /'self'/);
+  assert.doesNotMatch(indexScriptPolicy, /'unsafe-inline'/);
+
+  assert.match(nginx, /index index\.html;/);
+  assert.match(nginx, /map \$args \$waajacu_drop_legacy_selector_query \{[\s\S]*selector\[_-\]review\[_-\]session=[\s\S]*\}/);
+  assert.match(nginx, /location = \/ \{[\s\S]*if \(\$waajacu_drop_legacy_selector_query\)[\s\S]*return 302 \/;[\s\S]*try_files \/index\.html =404;/);
+  assert.doesNotMatch(nginx, /if \(\$args != ""\)/);
+  assert.match(nginx, /location ~ \\\.html\$ \{[\s\S]*?try_files \$uri =404;[\s\S]*?\}/);
+  assert.match(nginx, /location \/ \{[\s\S]*try_files \$uri \$uri\/ \/index\.html;/);
+  assert.doesNotMatch(nginx, /location\s*=\s*\/selector-review|index selector-review\.html|@REVIEW_SESSION@/i);
+  assert.doesNotMatch(nginx, /map\s+\$uri\s+\$waajacu_local_csp|\$waajacu_local_csp/);
+
+  const nginxPolicyHeaders = nginx.match(
+    /add_header Content-Security-Policy "[^"]+" always;/g,
+  ) ?? [];
+  assert.equal(nginxPolicyHeaders.length, 1);
+  const nginxPolicy = nginxPolicyHeaders[0];
+  const nginxScriptPolicy = nginxPolicy.match(/(?:^|;\s*)script-src ([^;]+)/)?.[1] ?? "";
+  assert.match(nginxPolicy, /style-src 'self'/);
+  assert.match(nginxPolicy, /style-src-elem 'self' 'unsafe-inline'/);
+  assert.match(nginxPolicy, /style-src-attr 'none'/);
+  assert.match(nginxScriptPolicy, /'self'/);
+  assert.doesNotMatch(nginxScriptPolicy, /'unsafe-inline'/);
+
+  assert.match(setup, /NGINX_TEMPLATE='\/bootstrap\/minerals-local\.conf'/);
+  assert.doesNotMatch(setup, /selector[-_ ]review|review_session|@REVIEW_SESSION@/i);
+  assert.match(compose, /minerals-local\.conf:\/bootstrap\/minerals-local\.conf:ro/);
+  assert.doesNotMatch(compose, /selector[-_ ]review|review_session|@REVIEW_SESSION@/i);
+
+  for (const removedArtifact of [
+    new URL("./selector-review.html", import.meta.url),
+    new URL("../tools/serve-selector-review.py", import.meta.url),
+  ]) {
+    await assert.rejects(
+      readFile(removedArtifact, "utf8"),
+      (error) => error?.code === "ENOENT",
+    );
+  }
 });
 
 test("worker validates the complete FTS slug set without a quadratic virtual-table join", async () => {

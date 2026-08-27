@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dockerfile-free bootstrap for the Minerals admin and selector-review services.
+# Dockerfile-free bootstrap for the Minerals admin and static web services.
 #
 # Compose mounts this script read-only into a pinned Rust base image. Package
 # installation and builds happen only inside that container; host execution is
@@ -14,7 +14,7 @@ readonly EXPECTED_CONTEXT='waajacu-minerals-runtime-v1'
 readonly EXPECTED_BASE='rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663'
 readonly BOOTSTRAP_SCRIPT='/bootstrap/setup.sh'
 readonly BOOTSTRAP_COMPOSE='/bootstrap/compose.yaml'
-readonly NGINX_TEMPLATE='/bootstrap/minerals-selector-review.conf'
+readonly NGINX_TEMPLATE='/bootstrap/minerals-local.conf'
 readonly SOURCE_ROOT='/workspace'
 readonly RUNTIME_ROOT='/runtime'
 readonly DATA_ROOT_EXPECTED='/app/data'
@@ -328,13 +328,13 @@ build_web() {
   chown "$MINERALS_BUILD_UID:$MINERALS_BUILD_GID" "$RUNTIME_ROOT"
   chmod 0755 "$RUNTIME_ROOT"
 
-  local review_session release_name release_path current_tmp
-  review_session=$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')
-  [[ "$review_session" =~ ^[0-9a-f]{24}$ ]] ||
-    die 'failed to create a safe selector review session'
-  release_name="release-$review_session"
+  local release_nonce release_name release_path current_tmp
+  release_nonce=$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')
+  [[ "$release_nonce" =~ ^[0-9a-f]{24}$ ]] ||
+    die 'failed to create a safe static release nonce'
+  release_name="release-$release_nonce"
   release_path="$RUNTIME_ROOT/$release_name"
-  current_tmp="$RUNTIME_ROOT/.current-$review_session"
+  current_tmp="$RUNTIME_ROOT/.current-$release_nonce"
   [[ ! -e "$release_path" && ! -e "$current_tmp" ]] ||
     die 'fresh web runtime paths unexpectedly already exist'
   if [[ -e "$RUNTIME_ROOT/current" && ! -L "$RUNTIME_ROOT/current" ]]; then
@@ -353,19 +353,7 @@ build_web() {
       --app-root "$SOURCE_ROOT/public-app"
   )
 
-  # This entry is deliberately added only after strict release validation.
-  # It therefore remains absent from production exports and their allowlist.
-  install -m 0444 \
-    "$SOURCE_ROOT/public-app/selector-review.html" \
-    "$release_path/selector-review.html"
-
-  sed "s/@REVIEW_SESSION@/$review_session/g" \
-    "$NGINX_TEMPLATE" > "$RUNTIME_ROOT/nginx.conf.next"
-  if grep -Fq '@REVIEW_SESSION@' "$RUNTIME_ROOT/nginx.conf.next"; then
-    die 'the rendered nginx configuration contains an unresolved review-session placeholder'
-  fi
-  grep -Fq "$review_session" "$RUNTIME_ROOT/nginx.conf.next" ||
-    die 'the rendered nginx configuration does not contain the fresh review session'
+  install -m 0444 "$NGINX_TEMPLATE" "$RUNTIME_ROOT/nginx.conf.next"
 
   chown -R root:root "$release_path"
   find "$release_path" -type d -exec chmod 0555 {} +

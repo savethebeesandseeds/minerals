@@ -38,11 +38,9 @@ body {
   margin: 0;
   color: var(--ink);
   background:
-    radial-gradient(circle at 16% 27%, rgba(107, 78, 35, 0.05) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 72% 62%, rgba(107, 78, 35, 0.04) 0 1px, transparent 1.5px),
-    linear-gradient(100deg, rgba(255, 255, 255, 0.08), transparent 34%, rgba(118, 82, 34, 0.04) 71%, transparent),
+    linear-gradient(100deg, rgba(255, 255, 255, 0.1), transparent 34%, rgba(118, 82, 34, 0.045) 71%, transparent),
+    linear-gradient(174deg, rgba(126, 88, 41, 0.025), transparent 18%, rgba(255, 255, 255, 0.045) 64%, transparent),
     var(--paper);
-  background-size: 17px 19px, 23px 29px, 100% 100%, auto;
 }
 
 body::before {
@@ -51,9 +49,13 @@ body::before {
   inset: 0;
   pointer-events: none;
   content: "";
-  opacity: 0.18;
-  mix-blend-mode: multiply;
-  background-image: repeating-linear-gradient(5deg, transparent 0 3px, rgba(61, 42, 20, 0.025) 4px, transparent 5px 10px);
+  opacity: 0.14;
+  mix-blend-mode: soft-light;
+  background-image:
+    radial-gradient(circle at 22% 31%, rgba(57, 39, 17, 0.56) 0 0.45px, transparent 0.8px),
+    radial-gradient(circle at 71% 64%, rgba(255, 247, 224, 0.52) 0 0.4px, transparent 0.75px),
+    repeating-linear-gradient(11deg, transparent 0 5px, rgba(75, 49, 20, 0.11) 6px, transparent 7px 17px);
+  background-size: 23px 29px, 31px 37px, 113px 97px;
 }
 
 img { display: block; max-width: 100%; }
@@ -102,6 +104,12 @@ button { color: inherit; }
   padding: 0 var(--gutter);
   color: var(--cream);
   background: var(--deep);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: clamp(1rem, 2.3vw, 2.4rem);
 }
 
 .site-header::after {
@@ -212,19 +220,6 @@ button { color: inherit; }
     radial-gradient(ellipse at 71% 44%, rgba(36, 90, 72, 0.24), transparent 39%),
     radial-gradient(circle at 11% 17%, rgba(207, 160, 70, 0.06), transparent 22%),
     linear-gradient(118deg, #031512 0%, #06211c 55%, #031411 100%);
-}
-
-.atlas-hero::before {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  content: "";
-  opacity: 0.23;
-  background:
-    repeating-radial-gradient(ellipse at 87% 34%, transparent 0 17px, rgba(213, 171, 84, 0.2) 18px 19px, transparent 20px 31px),
-    linear-gradient(90deg, transparent 0 49.85%, rgba(213, 171, 84, 0.06) 50%, transparent 50.15%),
-    linear-gradient(0deg, transparent 0 49.85%, rgba(213, 171, 84, 0.05) 50%, transparent 50.15%);
-  background-size: 100% 100%, 8rem 8rem, 8rem 8rem;
 }
 
 .atlas-hero::after {
@@ -372,12 +367,10 @@ button { color: inherit; }
 
 .classification-card {
   position: relative;
-  min-height: 25rem;
+  min-height: clamp(13rem, 18vw, 17rem);
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-rows: auto 1fr;
-  gap: 1rem;
-  padding: clamp(2rem, 3.6vw, 4.2rem);
+  place-items: center;
+  padding: clamp(1.25rem, 2.5vw, 2.5rem);
   overflow: hidden;
   border-top: 1px solid rgba(205, 157, 70, 0.28);
   border-right: 1px solid rgba(205, 157, 70, 0.28);
@@ -399,43 +392,14 @@ button { color: inherit; }
 
 .classification-card:hover::before { opacity: 1; }
 
-.classification-number {
-  color: var(--gold-bright);
-  font: 500 0.68rem/1 var(--mono);
-}
-
-.classification-copy { position: relative; z-index: 2; }
-
-.classification-copy h2 {
-  margin: 0 0 0.6rem;
-  color: var(--cream);
-  font: 500 clamp(0.9rem, 1.45vw, 1.2rem)/1.1 var(--mono);
-  letter-spacing: 0.035em;
-}
-
-.classification-copy p {
-  max-width: 27rem;
-  margin: 0;
-  color: rgba(244, 235, 218, 0.62);
-  font-size: 0.86rem;
-  line-height: 1.55;
-}
-
-.classification-arrow {
-  color: var(--gold-bright);
-  font-size: 1.2rem;
-}
-
 .classification-art {
   position: relative;
   z-index: 1;
-  grid-column: 1 / -1;
-  align-self: end;
   width: 100%;
-  height: 12rem;
-  margin-top: 1.5rem;
+  height: auto;
+  max-height: 15rem;
   object-fit: contain;
-  object-position: center bottom;
+  object-position: center;
   filter: drop-shadow(0 1.1rem 1.4rem rgba(0, 0, 0, 0.24));
   transition: transform 260ms ease;
 }
@@ -480,6 +444,16 @@ button { color: inherit; }
   font: 0.68rem/1 var(--mono);
 }
 
+.locale-control-header {
+  display: block;
+  white-space: nowrap;
+}
+
+.locale-control-header select {
+  min-width: 7.5rem;
+  padding-block: 0.5rem;
+}
+
 .paper-section {
   position: relative;
   isolation: isolate;
@@ -487,11 +461,8 @@ button { color: inherit; }
   overflow: hidden;
   color: var(--ink);
   background:
-    radial-gradient(circle at 10% 15%, rgba(104, 75, 37, 0.05) 0 1px, transparent 1.6px),
-    radial-gradient(circle at 76% 73%, rgba(104, 75, 37, 0.04) 0 1px, transparent 1.6px),
     linear-gradient(108deg, rgba(255, 255, 255, 0.18), transparent 42%, rgba(102, 72, 29, 0.04)),
     var(--paper);
-  background-size: 19px 23px, 29px 31px, auto, auto;
 }
 
 .section-heading-block {
@@ -597,7 +568,7 @@ button { color: inherit; }
 .project-card-paper {
   color: var(--ink);
   background:
-    repeating-radial-gradient(ellipse at 79% 58%, transparent 0 15px, rgba(150, 108, 43, 0.08) 16px 17px, transparent 18px 27px),
+    linear-gradient(125deg, rgba(255, 255, 255, 0.18), transparent 42%, rgba(111, 77, 31, 0.04)),
     var(--paper-light);
 }
 
@@ -674,9 +645,7 @@ button { color: inherit; }
   padding: clamp(4.5rem, 7vw, 7rem) var(--gutter);
   overflow: hidden;
   color: var(--cream);
-  background:
-    repeating-radial-gradient(ellipse at 8% 92%, transparent 0 18px, rgba(205, 157, 70, 0.14) 19px 20px, transparent 21px 34px),
-    linear-gradient(105deg, var(--deep), var(--deep-2));
+  background: linear-gradient(105deg, var(--deep), var(--deep-2));
 }
 
 .evidence-band h2 {
@@ -688,15 +657,23 @@ button { color: inherit; }
 
 .principle-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
-.principle-grid article {
-  min-height: 13rem;
+.principle-path {
+  min-height: 15rem;
+  display: flex;
+  flex-direction: column;
   padding: 1rem clamp(1rem, 2.4vw, 2.2rem);
   border-left: 1px solid var(--line-dark);
+  color: inherit;
+  text-decoration: none;
+  transition: background 180ms ease, transform 180ms ease;
 }
+
+.principle-path:hover { background: rgba(226, 182, 90, 0.06); transform: translateY(-0.2rem); }
 
 .principle-icon { color: var(--gold-bright); font-size: 2rem; }
 .principle-grid h3 { margin: 1rem 0 0.55rem; font: 500 0.82rem/1.1 var(--mono); }
 .principle-grid p { margin: 0; color: rgba(244, 235, 218, 0.68); font-size: 0.83rem; line-height: 1.6; }
+.principle-action { margin-top: auto; padding-top: 1.5rem; color: var(--gold-bright); font: 600 0.62rem/1.2 var(--mono); letter-spacing: 0.035em; }
 
 .source-section {
   min-height: 48rem;
@@ -706,7 +683,9 @@ button { color: inherit; }
   gap: clamp(2rem, 6vw, 6rem);
   padding: clamp(5rem, 9vw, 9rem) var(--gutter);
   overflow: hidden;
-  background: var(--paper-light);
+  background:
+    linear-gradient(112deg, rgba(255, 255, 255, 0.15), transparent 38%, rgba(111, 77, 31, 0.035)),
+    var(--paper-light);
 }
 
 .source-copy { width: min(100%, 36rem); justify-self: end; }
@@ -726,6 +705,19 @@ button { color: inherit; }
 
 .source-copy > p:not(.kicker) { max-width: 31rem; line-height: 1.7; }
 .source-copy .button { margin-top: 1.2rem; width: auto; }
+
+.protocol-button {
+  gap: 0.65rem;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.github-mark {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  fill: currentColor;
+}
 
 .release-ledger {
   display: grid;
@@ -786,18 +778,6 @@ button { color: inherit; }
   background:
     radial-gradient(ellipse at 78% 50%, rgba(31, 90, 69, 0.28), transparent 43%),
     var(--deep);
-}
-
-.catalog-hero::before,
-.record-hero::before,
-.map-hero::before,
-.about-hero::before {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  content: "";
-  opacity: 0.22;
-  background: repeating-radial-gradient(ellipse at 81% 42%, transparent 0 17px, rgba(204, 155, 64, 0.22) 18px 19px, transparent 20px 31px);
 }
 
 .catalog-hero-copy,
@@ -1132,7 +1112,6 @@ button { color: inherit; }
   .hero-grid { grid-template-columns: minmax(20rem, 0.86fr) minmax(25rem, 1.14fr); }
   .hero-copy h1 { font-size: clamp(3.6rem, 7.8vw, 6.2rem); }
   .hero-plate { width: 129%; margin-left: -13%; }
-  .classification-card { min-height: 23rem; padding: 2.4rem 2rem; }
   .section-heading-block { gap: 4rem; }
   .project-card { min-height: 43rem; }
   .project-art { height: 18rem; }
@@ -1143,7 +1122,9 @@ button { color: inherit; }
 }
 
 @media (max-width: 54rem) {
-  .site-header { min-height: 4.6rem; }
+  .site-header { min-height: 4.6rem; gap: 1rem; }
+  .header-actions { gap: 0.8rem; }
+  .locale-control-header select { min-width: 6.5rem; }
   .nav-toggle {
     display: inline-flex;
     align-items: center;
@@ -1173,8 +1154,8 @@ button { color: inherit; }
   .hero-plate { width: 112%; max-width: 55rem; margin: -6rem -8% -2rem auto; }
   .hero-coordinate { display: none; }
   .classification-grid { grid-template-columns: 1fr; }
-  .classification-card { min-height: 19rem; border-right: 0; }
-  .classification-art { height: 11rem; }
+  .classification-card { min-height: 15rem; border-right: 0; }
+  .classification-art { width: min(100%, 42rem); max-height: 15rem; }
   .site-footer { grid-template-columns: 1fr; align-items: start; }
   #release-summary { justify-self: start; text-align: left; }
   .section-heading-block { grid-template-columns: 1fr; align-items: start; gap: 1.5rem; }
@@ -1186,7 +1167,8 @@ button { color: inherit; }
   .evidence-band { grid-template-columns: 1fr; }
   .evidence-band h2 { max-width: 18ch; }
   .principle-grid { grid-template-columns: 1fr; }
-  .principle-grid article { min-height: auto; padding: 1.4rem 0; border-left: 0; border-top: 1px solid var(--line-dark); }
+  .principle-path { min-height: auto; padding: 1.4rem 0; border-left: 0; border-top: 1px solid var(--line-dark); }
+  .principle-action { margin-top: 0; }
   .source-section { grid-template-columns: 1fr; }
   .source-copy { justify-self: start; }
   .source-visual { min-height: 24rem; }
@@ -1225,7 +1207,10 @@ button { color: inherit; }
 
 @media (max-width: 34rem) {
   :root { --gutter: 1.1rem; }
-  .wordmark { font-size: 0.72rem; letter-spacing: 0.22em; }
+  .site-header { gap: 0.45rem; }
+  .wordmark { font-size: 0.64rem; letter-spacing: 0.16em; }
+  .header-actions { gap: 0.45rem; }
+  .locale-control-header select { min-width: 6rem; max-width: 6rem; padding-inline: 0.45rem 1.25rem; }
   .atlas-hero { min-height: 43rem; padding-top: 3rem; }
   .hero-copy h1 { font-size: clamp(3.15rem, 16vw, 4.75rem); }
   .hero-intro { font-size: 0.98rem; }
@@ -1233,7 +1218,6 @@ button { color: inherit; }
   .button { width: 100%; }
   .hero-plate { width: 140%; margin: -2rem -22% -1rem -18%; }
   .classification-card { padding: 2rem 1.25rem; }
-  .classification-copy p { font-size: 0.8rem; }
   .site-footer { gap: 2rem; }
   .footer-nav { flex-wrap: wrap; }
   .section-heading-block h2 { font-size: clamp(2.5rem, 12vw, 3.7rem); }

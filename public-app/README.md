@@ -29,7 +29,14 @@ The deployment must:
 - when the host supports transparent precompressed-file negotiation, it may also select the generated `.sqlite3.br` or `.sqlite3.gz` representation for the canonical `.sqlite3` URL, preferring Brotli, then gzip, then the uncompressed file; `fetch()` supplies the decoded bytes that the same manifest checks verify;
 - preserve same-origin URLs for the manifest, database, worker, SQLite runtime, optional map module, and WebMCP tool module;
 - keep the document in an origin-keyed agent cluster (the nginx example sends `Origin-Agent-Cluster: ?1`) and allow the WebMCP `tools` Permissions Policy only for the same origin; and
-- reproduce the CSP in `index.html` as an HTTP response header in production, adding `frame-ancestors 'none'` (which a CSP meta element cannot enforce) and `X-Content-Type-Options: nosniff`.
+- enforce the strict production CSP as an HTTP response header, adding `frame-ancestors 'none'` (which a CSP meta element cannot enforce) and `X-Content-Type-Options: nosniff`; before final deployment, remove or harden the temporary development CSP meta policy described below.
+
+During active visual development, the canonical `index.html` temporarily
+includes `style-src-elem 'self' 'unsafe-inline'` so Codex can annotate the real
+page at `/`. This is not the production policy. Before final deployment,
+remove that development exception (or remove the CSP meta element once the
+strict response header is guaranteed) and verify the deployed response against
+the strict policy. There is no alternate review document or rendering path.
 
 For a local smoke test, run any static HTTP server in this directory and use the hash route form described below. The dependency-free unit suite is `node tests.mjs`.
 

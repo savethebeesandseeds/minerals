@@ -144,7 +144,7 @@ services:
       - ./static:/workspace/static:ro
       - ./public-app:/workspace/public-app:ro
       - ./public-catalog:/workspace/public-catalog:ro
-      - ./deploy/nginx/minerals-selector-review.conf:/bootstrap/minerals-selector-review.conf:ro
+      - ./deploy/nginx/minerals-local.conf:/bootstrap/minerals-local.conf:ro
       - web-runtime:/runtime
       - cargo-registry:/usr/local/cargo/registry
       - cargo-git:/usr/local/cargo/git
@@ -166,7 +166,7 @@ networks:
   web-egress:
     driver: bridge
     labels:
-      io.waajacu.minerals.role: public-review-egress
+      io.waajacu.minerals.role: public-web-egress
 
 volumes:
   admin-runtime:

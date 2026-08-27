@@ -25,7 +25,7 @@ Static catalog releases use a separate immutable deployment root. Follow
 and atomically switch `/srv/waajacu/current`. The included nginx configuration
 listens on port 8080 and supplies the required SQLite/WASM MIME types, cache
 policy, strict production CSP response header, and gzip transfer compression.
-This production origin is separate from the local Compose `web` review service.
+This production origin is separate from the local Compose `web` atlas service.
 When production nginx runs in a container, mount all of `/srv/waajacu`
 read-only so a host-side `current` symlink switch becomes visible without
 restarting the container.
@@ -37,8 +37,10 @@ responses must retain `Vary: Accept-Encoding`, while the manifest continues to
 describe and authenticate the decoded database bytes.
 
 The Dockerfile-free local Compose stack has two services. `web` publishes the
-selector-safe review site only on `127.0.0.1:18965`; `admin` publishes the
-private control plane only on `127.0.0.1:7979`. Each service has its own bridge
+single development atlas on `http://127.0.0.1:18965/`; that canonical page is
+also the selector-annotatable design surface, with no alternate review file,
+session URL, or rendering path. `admin` publishes the private control plane
+only on `127.0.0.1:7979`. Each service has its own bridge
 network, so neither receives a route to the other. Both start from the same
 digest-pinned Rust image and run the read-only mounted `setup.sh`. Package
 installation and locked builds happen inside the containers, never on the host.
@@ -71,7 +73,7 @@ development secrets in the gitignored `.env.local` and use the platform secret
 store in production. The files are injected as environment values and are not
 source-mounted into either container. This loading is performed by Docker
 Compose: the Rust binary itself reads only its process environment and never
-opens `.env` files. The public `web` review service receives no admin env file.
+opens `.env` files. The public `web` atlas service receives no admin env file.
 
 Compose `${MINERALS_*}` and `${PUBLIC_CATALOG_*}` interpolation for ports and
 resource limits is a separate phase: it reads the invoking shell and the
@@ -101,7 +103,7 @@ Application settings:
 | `COOKIE_SECURE` | Set `true` behind HTTPS. |
 | `TRUSTED_PROXY_IPS` | Comma-separated exact IP allowlist for direct reverse-proxy TCP peers. `X-Forwarded-For` is ignored when the peer is not listed. Keep empty without a proxy; a same-host TLS proxy commonly uses `127.0.0.1,::1`. |
 | `ADMIN_SQL_ENABLED` | Keep `false`; enable only for short, supervised, read-only diagnostics. |
-| `PUBLIC_CATALOG_BASE_URL` | HTTPS base URL for links to the deployed static catalog. The tracked Compose `.env` points at the local review service on `http://127.0.0.1:18965`; native runs default to unset, and literal-loopback HTTP is accepted only for development. |
+| `PUBLIC_CATALOG_BASE_URL` | HTTPS base URL for links to the deployed static catalog. The tracked Compose `.env` points at the local atlas service on `http://127.0.0.1:18965`; native runs default to unset, and literal-loopback HTTP is accepted only for development. |
 | `DEFAULT_LANG` | Default UI language; `en` when unset. |
 | `OPENAI_API_KEY` | Optional for drafting/translation; not required to serve or ingest an image-free catalog. |
 | `RUST_LOG` | Structured log filter. Never log credentials, bearer tokens, raw payloads, source URLs with secrets, or full review notes. |
@@ -182,7 +184,7 @@ then compiles the required locked Cargo target from read-only source mounts.
 The shared `minerals-cargo-registry`, `minerals-cargo-git`, and
 `minerals-cargo-target` named volumes serialize and retain build work;
 `minerals-admin-runtime` retains the executable and generated local password,
-while `minerals-web-runtime` retains the validated selector-review release. The
+while `minerals-web-runtime` retains the validated static atlas release. The
 services use `restart: on-failure:3`, so setup or runtime failures stop after
 three automatic retries rather than entering an unbounded install/build loop.
 
@@ -191,8 +193,15 @@ in both `compose.yaml` and `setup.sh`, then validate and rehearse the stack. The
 host ports bind only to loopback by default. If a controlled environment must
 bind directly, set the corresponding `MINERALS_BIND_ADDRESS` or
 `PUBLIC_CATALOG_BIND_ADDRESS` and enforce network access outside the container.
-The selector-safe Nginx configuration mounted by `web` is for local review only;
-production continues to use the strict `deploy/nginx/minerals-static.conf`.
+The local Nginx configuration mounted by `web` serves only the canonical `/`
+entry. During visual development, both its response header and the current
+`public-app/index.html` policy allow inline style elements through
+`style-src-elem 'self' 'unsafe-inline'`, which the Codex annotation overlay
+requires. Scripts remain governed by the strict `script-src` policy and style
+attributes remain disabled by `style-src-attr 'none'`. Strict CSP hardening is
+deferred until visual development is complete; production continues to use the
+strict `deploy/nginx/minerals-static.conf`. Do not restore a duplicate review
+document, query-session redirect, or alternate rendering path.
 
 ## Release-ingestion runbook
 
