@@ -1,6 +1,6 @@
 # COD crystallography adapter pilot v1
 
-Status: **private technical contract; metadata retrieval in progress**
+Status: **private pilot; metadata retrieval complete and verified; mineral matching pending**
 
 Source decision: **`pilot_only`**
 
@@ -13,6 +13,55 @@ Questionnaire:
 
 Source admission decision:
 [`docs/MINERAL_SOURCE_ADMISSION_V1.md`](MINERAL_SOURCE_ADMISSION_V1.md)
+
+## Session handoff — 5 October 2026
+
+The metadata retrieval has already run successfully. **Do not restart the
+1,000-request scrape for the next stage.** Continue offline from the preserved
+snapshot. Work is left here for the user's next session; no automatic
+continuation or scheduled monitor remains.
+
+Completed:
+
+- All **1,000 / 1,000** planned COD namespace requests have successful receipts.
+- The responses contain **535,005 metadata rows** and total **808,925,630 bytes**
+  (about 809 MB). These are COD entries, not 535,005 mineral species or reviewed
+  matches to our catalog.
+- Retrieval completed at **17:18:18 CEST**; final offline verification passed
+  at **17:23:03 CEST**, 5 October 2026 (Europe/Budapest).
+- The recovery-and-fetch runner exited with **code 0**, including its final
+  `verify-execution` step. Four documented, bounded transport recoveries remain
+  in the preserved history.
+- Snapshot identity:
+  `sha256:26a44255de2b37696480608a0b3419fcd5083bc1d46119d7dc6643e40c0002dd`.
+
+Private evidence, ignored by Git:
+
+- `data/pilots/cod-crystallography-v1/metadata-discovery-execution-index.json`
+  records `status: complete`, the receipts, counts, and snapshot identity.
+- `data/pilots/cod-crystallography-v1/objects/sha256/` preserves raw responses
+  and recovery evidence by content hash.
+- `data/pilots/cod-crystallography-v1/runs/metadata-20261005T150849Z/` contains
+  the completed run log, code commit, timestamps, and `exit-code.txt`.
+
+Pending, in order:
+
+1. Implement an **offline Rust candidate matcher** against the frozen
+   **6,226-record** mineral population. Preserve COD IDs, revisions, source
+   locators, and candidate signals; produce coverage and review reports for
+   candidates, ambiguous cases, and records without candidates. Formula alone
+   must not establish mineral identity.
+2. Review and freeze crosswalk decisions. A candidate is not an accepted match.
+3. Follow the staged sequence below: freeze challenge eligibility and the
+   96-record split, retrieve selected revision-pinned CIFs, and validate the
+   adapter on development and holdout records.
+4. Only after a passing pilot, implement the reviewed claim-only ingestion
+   path and make the separate source-admission and publication decisions.
+
+**No COD crystallographic values have been normalized, ingested, or published
+by this retrieval.** The public catalog remains unchanged and COD remains
+`pilot_only`. The image dispatcher and black-background image instructions are
+ready for a separate continuation; image generation does not block matching.
 
 ## Purpose and decision boundary
 

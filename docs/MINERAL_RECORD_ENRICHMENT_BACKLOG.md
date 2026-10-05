@@ -15,6 +15,22 @@ tracks the whole fixed population and preserves source-linked private drafts.
 Codex owns this research and draft-writing effort while source pilots proceed.
 Research progress is reported separately from reviewed and published content.
 
+## Handoff — 5 October 2026
+
+**Completed:** the COD metadata scrape and final integrity verification:
+1,000 successful requests, 535,005 metadata rows, about 809 MB. The completed
+snapshot and exact run evidence are recorded in the
+[COD session handoff](COD_CRYSTALLOGRAPHY_PILOT_V1.md#session-handoff--5-october-2026).
+
+**Next session:** implement the offline Rust mineral candidate matcher and
+coverage report, then review crosswalks and run the 96-record crystallography
+pilot. Reuse the downloaded snapshot; do not repeat the scrape. Public COD
+enrichment and ingestion are still pending. The image dispatcher and common
+black-background prompt can be resumed separately.
+
+The user ended this session and will return later. The requested scheduled
+monitor was deleted; no automatic continuation is scheduled.
+
 ## Why this is coordinated
 
 The current public records are strongest on identity, nomenclature, authority
