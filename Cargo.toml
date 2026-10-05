@@ -1,6 +1,7 @@
 [workspace]
 members = [
     ".",
+    "crates/cod-pilot",
     "crates/registry-core",
     "crates/public-catalog",
     "crates/ima-release",

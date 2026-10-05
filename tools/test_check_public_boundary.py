@@ -18,6 +18,18 @@ SPEC.loader.exec_module(BOUNDARY)
 
 
 class PublicBoundaryTests(unittest.TestCase):
+    def test_private_pilot_artifacts_cannot_enter_the_public_repository(self) -> None:
+        for relative in (
+            "data/pilots/cod-crystallography-v1/metadata-discovery-execution-index.json",
+            "data/pilots/cod-crystallography-v1/objects/sha256/ab/raw-cif",
+            "data/pilots/another-source/review.json",
+        ):
+            with self.subTest(relative=relative):
+                self.assertIsNotNone(BOUNDARY.forbidden_path_reason(relative))
+        self.assertIsNone(
+            BOUNDARY.forbidden_path_reason("schemas/pilots/cod-evidence-v1.schema.json")
+        )
+
     def test_public_catalog_snapshot_is_tied_to_one_manifest_named_triplet(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repo = Path(temporary)

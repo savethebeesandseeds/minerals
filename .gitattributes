@@ -2,6 +2,8 @@
 *.sh text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+schemas/**/*.json text eol=lf
+tools/*.mjs text eol=lf
 
 # Public releases are built on Windows and validated/deployed on Linux. Keep
 # text assets byte-identical on every checkout so release validation is truly

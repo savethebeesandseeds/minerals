@@ -1,0 +1,5371 @@
+{
+  "format": "waajacu-mineral-record-questionnaire-registry",
+  "schema_version": 1,
+  "questionnaire_version": 1,
+  "registry_revision": 2,
+  "registry_id": "waajacu-mineral-record-questionnaire-v1",
+  "status": "draft_for_pilot_validation",
+  "human_contract": "docs/MINERAL_RECORD_QUESTIONNAIRE_V1.md",
+  "population": {
+    "kind": "fixed_public_catalog_release",
+    "release_id": "sha256:684c2830a145bfa0f0b0ecaf4f80bac64ddb51ffcb4a75035304840a868bccc4",
+    "mineral_count": 6226,
+    "identity_policy": "fixed"
+  },
+  "canonicalization": {
+    "algorithm": "waajacu-canonical-json-v1",
+    "object_keys": "utf8_lexicographic",
+    "arrays": "preserve",
+    "unicode": "must_be_nfc",
+    "digest": "sha256",
+    "self_digest": "forbidden"
+  },
+  "axes": {
+    "subject_scope": [
+      "species",
+      "occurrence",
+      "specimen",
+      "relationship"
+    ],
+    "value_kind": [
+      "text",
+      "controlled_term",
+      "boolean",
+      "integer",
+      "year_or_date",
+      "decimal",
+      "range",
+      "measurement",
+      "formula",
+      "identifier",
+      "structured",
+      "material_relation",
+      "occurrence_relation"
+    ],
+    "production_kind": [
+      "sourced",
+      "derived",
+      "editorial"
+    ],
+    "priority_tier": [
+      "core",
+      "conditional",
+      "extended",
+      "deferred"
+    ],
+    "module_lifecycle": [
+      "not_launched",
+      "pilot",
+      "active",
+      "complete",
+      "superseded"
+    ],
+    "question_lifecycle": [
+      "active",
+      "deprecated",
+      "superseded"
+    ],
+    "coverage_state": [
+      "value_present",
+      "not_yet_researched",
+      "not_reported_by_reviewed_sources",
+      "not_applicable",
+      "withheld"
+    ],
+    "claim_review_state": [
+      "unreviewed",
+      "reviewed",
+      "verified",
+      "disputed"
+    ],
+    "record_verification_state": [
+      "draft",
+      "generated",
+      "sourced",
+      "reviewed",
+      "verified",
+      "disputed"
+    ],
+    "resolution_state": [
+      "unresolved",
+      "single_supported",
+      "multiple_consistent",
+      "conflicting",
+      "preferred_with_conflict"
+    ],
+    "source_decision": [
+      "admitted",
+      "pilot_only",
+      "private_only",
+      "deferred",
+      "rejected"
+    ]
+  },
+  "tier_policies": {
+    "core": {
+      "applicability_evaluation": "required",
+      "coverage_required_when_module": [
+        "pilot",
+        "active",
+        "complete"
+      ]
+    },
+    "conditional": {
+      "applicability_evaluation": "required",
+      "coverage_required_when_module": [
+        "pilot",
+        "active",
+        "complete"
+      ]
+    },
+    "extended": {
+      "applicability_evaluation": "when_researched",
+      "coverage_required_when_module": [
+        "complete"
+      ]
+    },
+    "deferred": {
+      "applicability_evaluation": "not_required",
+      "coverage_required_when_module": []
+    }
+  },
+  "source_requirements": {
+    "AUTH1": {
+      "kind": "external",
+      "minimum_distinct_sources": 1,
+      "minimum_review_state": "reviewed",
+      "allowed_source_classes": [
+        "official_authority",
+        "primary_nomenclature"
+      ],
+      "locator": "required"
+    },
+    "SCI1": {
+      "kind": "external",
+      "minimum_distinct_sources": 1,
+      "minimum_review_state": "reviewed",
+      "allowed_source_classes": [
+        "scholarly_publication",
+        "authoritative_handbook",
+        "curated_scientific_database"
+      ],
+      "locator": "required"
+    },
+    "SCI2": {
+      "kind": "external",
+      "minimum_distinct_sources": 2,
+      "minimum_verified_claims": 1,
+      "minimum_review_state": "reviewed",
+      "requires_independence": true,
+      "allowed_source_classes": [
+        "scholarly_publication",
+        "authoritative_handbook",
+        "curated_scientific_database"
+      ],
+      "locator": "required"
+    },
+    "SYN2": {
+      "kind": "editorial",
+      "minimum_supporting_claims": 2,
+      "minimum_review_state": "reviewed",
+      "new_scientific_assertions": "forbidden"
+    },
+    "SAFE1": {
+      "kind": "external",
+      "minimum_distinct_sources": 1,
+      "minimum_review_state": "reviewed",
+      "allowed_source_classes": [
+        "regulator",
+        "government_occupational_health_authority",
+        "authoritative_radiological_source",
+        "responsible_producer_sds",
+        "peer_reviewed_toxicology"
+      ],
+      "locator": "required"
+    },
+    "LOC1": {
+      "kind": "external",
+      "minimum_distinct_sources": 1,
+      "minimum_review_state": "reviewed",
+      "allowed_source_classes": [
+        "source_owned_locality_record",
+        "source_owned_specimen_record",
+        "source_owned_deposit_record",
+        "scholarly_locality_publication"
+      ],
+      "locator": "required",
+      "coordinate_provenance": "required_when_geometry_present"
+    },
+    "DER1": {
+      "kind": "derivation",
+      "minimum_supporting_claims": 1,
+      "minimum_review_state": "reviewed",
+      "method_and_inputs": "required"
+    },
+    "INT1": {
+      "kind": "editorial",
+      "minimum_supporting_states": 1,
+      "minimum_review_state": "reviewed",
+      "new_scientific_assertions": "forbidden"
+    }
+  },
+  "applicability_rules": {
+    "default_question_applicability_v1": {
+      "version": 1,
+      "status": "draft",
+      "kind": "question_specific_review",
+      "description": "Evaluate applicability using the question definition and reviewed evidence; record not_applicable only with a versioned reason."
+    },
+    "conditional_by_reviewed_evidence_v1": {
+      "version": 1,
+      "status": "draft",
+      "kind": "conditional",
+      "description": "Evaluate whether the concept applies before assigning a coverage state; question-specific scientific rules remain a contract-phase review item."
+    }
+  },
+  "normalization_policies": {
+    "preserve_raw_and_normalize_v1": {
+      "version": 1,
+      "status": "draft",
+      "preserve_raw_value": true,
+      "preserve_conditions": true,
+      "preserve_uncertainty": true,
+      "transformations_versioned": true,
+      "empty_placeholder_values_forbidden": true
+    }
+  },
+  "consumer_contract": {
+    "version": 1,
+    "resolution_rule": "Sparse question overrides inherit the named defaults. Runtime behavior must use the fully resolved contract and may not infer behavior from question-key prefixes.",
+    "defaults": {
+      "worker": "public_answer",
+      "detail": "section_fact",
+      "card": "off",
+      "search": "off",
+      "facet": "off",
+      "comparison": "off",
+      "map": "off",
+      "safety_banner": "off",
+      "site_tool": "on_demand"
+    },
+    "occurrence_defaults": {
+      "worker": "off",
+      "detail": "off",
+      "card": "off",
+      "search": "off",
+      "facet": "off",
+      "comparison": "off",
+      "map": "off",
+      "safety_banner": "off",
+      "site_tool": "omit"
+    },
+    "public_projection_gate": {
+      "allowed_module_lifecycle": [
+        "active",
+        "complete"
+      ],
+      "surface_target_scopes": {
+        "worker": "species",
+        "detail": "species",
+        "card": "species",
+        "search": "species",
+        "facet": "species",
+        "comparison": "species",
+        "map": "occurrence",
+        "safety_banner": "species",
+        "site_tool": "species"
+      },
+      "required_question_visibility": "when_resolved",
+      "withheld_value_projection": "forbidden",
+      "withheld_state_projection": "public_safe_reason_only",
+      "public_redaction_before_every_surface": true,
+      "unresolved_conflict_projection": "state_and_public_claims_without_silent_preference",
+      "specimen_to_species_projection": "requires_reviewed_species_resolution",
+      "relationship_to_species_projection": "requires_reviewed_species_endpoint_resolution",
+      "occurrence": {
+        "required_collection_definition_status": "approved",
+        "required_lifecycle_state": "active",
+        "minimum_review_state": "reviewed",
+        "excluded_sensitivity_policies": [
+          "withheld"
+        ],
+        "publication_transform_before_every_surface": true,
+        "untransformed_geometry_projection": "forbidden"
+      }
+    },
+    "profiles": {
+      "worker": {
+        "off": {
+          "enabled": false
+        },
+        "public_answer": {
+          "answer_source": "public_resolution",
+          "include_state": true,
+          "include_conflict": true,
+          "evidence": "summary",
+          "public_redaction": "required"
+        }
+      },
+      "detail": {
+        "off": {
+          "enabled": false
+        },
+        "section_fact": {
+          "answer_source": "public_resolution",
+          "missing_state": "explicit",
+          "evidence": "expandable"
+        },
+        "hero_title": {
+          "answer_source": "public_resolution",
+          "renderer": "title",
+          "missing_state": "error"
+        },
+        "hero_formula": {
+          "answer_source": "public_resolution",
+          "renderer": "formula",
+          "missing_state": "explicit"
+        },
+        "hero_badge": {
+          "answer_source": "public_resolution",
+          "renderer": "badge",
+          "missing_state": "omit"
+        },
+        "hero_summary": {
+          "answer_source": "public_resolution",
+          "renderer": "summary",
+          "missing_state": "explicit"
+        },
+        "authority_context": {
+          "answer_source": "public_resolution",
+          "renderer": "provenance_context",
+          "missing_state": "explicit"
+        },
+        "relation_list": {
+          "answer_source": "public_resolution",
+          "renderer": "relation_list",
+          "missing_state": "explicit"
+        },
+        "measurement": {
+          "answer_source": "public_resolution",
+          "renderer": "measurement_with_conditions",
+          "missing_state": "explicit"
+        },
+        "narrative": {
+          "answer_source": "public_resolution",
+          "renderer": "narrative",
+          "missing_state": "explicit"
+        },
+        "occurrence_collection": {
+          "answer_source": "public_resolution",
+          "renderer": "occurrence_collection",
+          "missing_state": "explicit"
+        },
+        "safety_fact": {
+          "answer_source": "public_resolution",
+          "renderer": "safety_fact",
+          "missing_state": "explicit"
+        }
+      },
+      "card": {
+        "off": {
+          "enabled": false
+        },
+        "title": {
+          "enabled": true,
+          "slot": "title",
+          "maximum_items": 1,
+          "missing_state": "error"
+        },
+        "formula": {
+          "enabled": true,
+          "slot": "formula",
+          "maximum_items": 1,
+          "missing_state": "omit"
+        },
+        "summary": {
+          "enabled": true,
+          "slot": "summary",
+          "maximum_items": 1,
+          "maximum_lines": 3,
+          "missing_state": "omit"
+        },
+        "taxonomy": {
+          "enabled": true,
+          "slot": "taxonomy",
+          "maximum_items": 1,
+          "missing_state": "omit"
+        },
+        "badge": {
+          "enabled": true,
+          "slot": "badge_primary",
+          "maximum_items": 1,
+          "missing_state": "omit"
+        },
+        "badge_secondary": {
+          "enabled": true,
+          "slot": "badge_secondary",
+          "maximum_items": 1,
+          "missing_state": "omit"
+        }
+      },
+      "search": {
+        "off": {
+          "enabled": false
+        },
+        "name_primary": {
+          "enabled": true,
+          "modes": [
+            "exact",
+            "prefix"
+          ],
+          "boost": 100,
+          "answer_source": "public_resolution"
+        },
+        "name_alias": {
+          "enabled": true,
+          "modes": [
+            "exact",
+            "prefix",
+            "normalized_fulltext"
+          ],
+          "boost": 80,
+          "answer_source": "reviewed_public_claims"
+        },
+        "formula": {
+          "enabled": true,
+          "modes": [
+            "formula_exact",
+            "formula_prefix"
+          ],
+          "boost": 70,
+          "answer_source": "reviewed_public_claims"
+        },
+        "identifier": {
+          "enabled": true,
+          "modes": [
+            "exact",
+            "normalized_prefix"
+          ],
+          "boost": 90,
+          "answer_source": "reviewed_public_claims"
+        },
+        "term_medium": {
+          "enabled": true,
+          "modes": [
+            "exact",
+            "normalized_fulltext"
+          ],
+          "boost": 40,
+          "answer_source": "reviewed_public_claims"
+        },
+        "term_low": {
+          "enabled": true,
+          "modes": [
+            "exact",
+            "normalized_fulltext"
+          ],
+          "boost": 20,
+          "answer_source": "reviewed_public_claims"
+        },
+        "fulltext_low": {
+          "enabled": true,
+          "modes": [
+            "normalized_fulltext"
+          ],
+          "boost": 10,
+          "answer_source": "public_resolution"
+        },
+        "occurrence_name": {
+          "enabled": true,
+          "modes": [
+            "exact",
+            "prefix",
+            "normalized_fulltext"
+          ],
+          "boost": 30,
+          "answer_source": "reviewed_public_occurrence"
+        }
+      },
+      "facet": {
+        "off": {
+          "enabled": false
+        },
+        "term_single": {
+          "enabled": true,
+          "kind": "term_single",
+          "count_basis": "mineral",
+          "resolved_only": true,
+          "coverage_denominator": "visible"
+        },
+        "term_multi": {
+          "enabled": true,
+          "kind": "term_multi",
+          "count_basis": "mineral",
+          "resolved_only": true,
+          "coverage_denominator": "visible"
+        },
+        "hierarchy": {
+          "enabled": true,
+          "kind": "hierarchy",
+          "count_basis": "mineral",
+          "resolved_only": true,
+          "coverage_denominator": "visible"
+        },
+        "numeric_range": {
+          "enabled": true,
+          "kind": "numeric_range",
+          "count_basis": "mineral",
+          "resolved_only": true,
+          "coverage_denominator": "visible"
+        },
+        "year_range": {
+          "enabled": true,
+          "kind": "year_range",
+          "count_basis": "mineral",
+          "resolved_only": true,
+          "coverage_denominator": "visible"
+        },
+        "reviewed_positive": {
+          "enabled": true,
+          "kind": "reviewed_positive",
+          "count_basis": "mineral",
+          "minimum_review_state": "reviewed",
+          "coverage_denominator": "visible",
+          "missing_is_negative": false
+        }
+      },
+      "comparison": {
+        "off": {
+          "enabled": false
+        },
+        "scalar": {
+          "enabled": true,
+          "include_state": true,
+          "include_conflict": true
+        },
+        "term": {
+          "enabled": true,
+          "include_state": true,
+          "include_conflict": true
+        },
+        "term_list": {
+          "enabled": true,
+          "include_state": true,
+          "include_conflict": true
+        },
+        "measurement": {
+          "enabled": true,
+          "include_state": true,
+          "include_conflict": true,
+          "preserve_ranges_and_conditions": true
+        },
+        "relation": {
+          "enabled": true,
+          "include_state": true,
+          "include_conflict": true
+        }
+      },
+      "map": {
+        "off": {
+          "enabled": false
+        },
+        "geometry": {
+          "enabled": true,
+          "reviewed_public_geometry_only": true
+        },
+        "geometry_kind": {
+          "enabled": true,
+          "role": "geometry_discriminator_only"
+        },
+        "popup_title": {
+          "enabled": true
+        },
+        "popup_fact": {
+          "enabled": true
+        },
+        "filter_term": {
+          "enabled": true,
+          "resolved_only": true
+        },
+        "precision_notice": {
+          "enabled": true
+        },
+        "sensitivity": {
+          "enabled": true,
+          "enforce_redaction": true
+        },
+        "evidence_link": {
+          "enabled": true
+        }
+      },
+      "safety_banner": {
+        "off": {
+          "enabled": false
+        },
+        "hazard_trigger": {
+          "enabled": true,
+          "namespace": "safety",
+          "minimum_review_state": "reviewed",
+          "affirmative_resolved_only": true,
+          "missing_is_safe": false
+        },
+        "restriction_trigger": {
+          "enabled": true,
+          "namespace": "safety",
+          "minimum_review_state": "reviewed",
+          "affirmative_resolved_only": true,
+          "missing_is_safe": false
+        },
+        "control_contributor": {
+          "enabled": true,
+          "trigger": false,
+          "minimum_review_state": "reviewed"
+        }
+      },
+      "site_tool": {
+        "omit": {
+          "enabled": false
+        },
+        "on_demand": {
+          "enabled": true,
+          "packing_priority": 10,
+          "include_state": true,
+          "evidence": "summary",
+          "maximum_items": 20,
+          "maximum_characters": 1500
+        },
+        "normal": {
+          "enabled": true,
+          "packing_priority": 30,
+          "include_state": true,
+          "evidence": "summary",
+          "maximum_items": 20,
+          "maximum_characters": 1500
+        },
+        "high": {
+          "enabled": true,
+          "packing_priority": 60,
+          "include_state": true,
+          "evidence": "summary",
+          "maximum_items": 20,
+          "maximum_characters": 1500
+        },
+        "critical": {
+          "enabled": true,
+          "packing_priority": 100,
+          "include_state": true,
+          "evidence": "summary",
+          "maximum_items": 20,
+          "maximum_characters": 1500
+        },
+        "critical_when_affirmative": {
+          "enabled": true,
+          "packing_priority": 100,
+          "include_state": true,
+          "evidence": "summary",
+          "maximum_items": 20,
+          "maximum_characters": 1500,
+          "activation": "affirmative_resolved_only"
+        }
+      }
+    }
+  },
+  "modules": {
+    "protected_identity": {
+      "order": 10,
+      "label": "Protected identity baseline",
+      "lifecycle": "not_launched",
+      "questions": {
+        "identity.canonical_name": {
+          "order": 10,
+          "label": "Canonical name",
+          "question": "What is the authority-accepted name?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "String"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "AUTH1"
+              ]
+            }
+          },
+          "conflict_policy": "authority_owned_no_profile_overwrite",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "card": "title",
+            "detail": "hero_title",
+            "search": "name_primary",
+            "site_tool": "critical"
+          }
+        },
+        "identity.formula": {
+          "order": 20,
+          "label": "Authority formula",
+          "question": "What formula does the nomenclature authority publish?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "formula",
+            "cardinality": "single",
+            "shape": "Formula string with source uncertainty preserved"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "AUTH1"
+              ]
+            }
+          },
+          "conflict_policy": "authority_owned_no_profile_overwrite",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "card": "formula",
+            "detail": "hero_formula",
+            "search": "formula",
+            "comparison": "scalar",
+            "site_tool": "critical"
+          }
+        },
+        "identity.nomenclature_status": {
+          "order": 30,
+          "label": "Nomenclature status",
+          "question": "What is the normalized nomenclature state?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Controlled status",
+            "vocabulary": {
+              "id": "identity_nomenclature_status_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "AUTH1"
+              ]
+            }
+          },
+          "conflict_policy": "authority_owned_no_profile_overwrite",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "card": "badge",
+            "detail": "hero_badge",
+            "facet": "term_single",
+            "comparison": "term",
+            "site_tool": "critical"
+          }
+        },
+        "identity.current_valid": {
+          "order": 40,
+          "label": "Current valid species",
+          "question": "Is this currently a valid species in the baseline release?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "boolean",
+            "cardinality": "single",
+            "shape": "Boolean"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "AUTH1"
+              ]
+            }
+          },
+          "conflict_policy": "authority_owned_no_profile_overwrite",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "hero_badge",
+            "comparison": "scalar",
+            "site_tool": "high"
+          }
+        },
+        "identifiers.ima_number": {
+          "order": 50,
+          "label": "IMA number",
+          "question": "What IMA number is assigned, if any?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "identifier",
+            "cardinality": "single",
+            "shape": "Zero or one identifier"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "AUTH1"
+              ]
+            }
+          },
+          "conflict_policy": "authority_owned_no_profile_overwrite",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "identifier",
+            "comparison": "scalar",
+            "site_tool": "high"
+          }
+        },
+        "identifiers.ima_symbol": {
+          "order": 60,
+          "label": "IMA symbol",
+          "question": "What official IMA symbol is assigned, if any?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "identifier",
+            "cardinality": "single",
+            "shape": "Zero or one identifier"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "AUTH1"
+              ]
+            }
+          },
+          "conflict_policy": "authority_owned_no_profile_overwrite",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "identifier",
+            "comparison": "scalar",
+            "site_tool": "high"
+          }
+        },
+        "authority.discovery_country": {
+          "order": 70,
+          "label": "Discovery country",
+          "question": "What country text does the authority provide as discovery context?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "Zero or one source-preserved string"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "AUTH1"
+              ]
+            }
+          },
+          "conflict_policy": "authority_owned_no_profile_overwrite",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "authority_context",
+            "site_tool": "on_demand"
+          }
+        },
+        "authority.first_reference": {
+          "order": 80,
+          "label": "First reference",
+          "question": "What first reference text does the authority provide?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "Zero or one bibliographic string"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "AUTH1"
+              ]
+            }
+          },
+          "conflict_policy": "authority_owned_no_profile_overwrite",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "authority_context",
+            "site_tool": "on_demand"
+          }
+        },
+        "authority.second_reference": {
+          "order": 90,
+          "label": "Second reference",
+          "question": "What second reference text does the authority provide?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "Zero or one bibliographic string"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "AUTH1"
+              ]
+            }
+          },
+          "conflict_policy": "authority_owned_no_profile_overwrite",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "authority_context",
+            "site_tool": "on_demand"
+          }
+        },
+        "authority.source_status": {
+          "order": 100,
+          "label": "Source status",
+          "question": "What raw authority status code was supplied?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Controlled source code",
+            "vocabulary": {
+              "id": "authority_source_status_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "AUTH1"
+              ]
+            }
+          },
+          "conflict_policy": "authority_owned_no_profile_overwrite",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "authority_context",
+            "site_tool": "on_demand"
+          }
+        }
+      }
+    },
+    "names_classification": {
+      "order": 20,
+      "label": "Names and classification",
+      "lifecycle": "not_launched",
+      "questions": {
+        "names.aliases": {
+          "order": 10,
+          "label": "Aliases",
+          "question": "Which accepted alternate names or spellings are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable `{name, type, language?, origin}`",
+            "projection_selectors": {
+              "search": {
+                "paths": [
+                  "/*/name"
+                ],
+                "index_key": "names.aliases.name"
+              }
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "any",
+              "codes": [
+                "AUTH1",
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "search": "name_alias",
+            "site_tool": "high"
+          }
+        },
+        "names.former_names": {
+          "order": 20,
+          "label": "Former names",
+          "question": "Which former names are reported, and why did they change?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable name plus nomenclatural relationship and note",
+            "projection_selectors": {
+              "search": {
+                "paths": [
+                  "/*/name"
+                ],
+                "index_key": "names.former_names.name"
+              }
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "any",
+              "codes": [
+                "AUTH1",
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "search": "name_alias",
+            "site_tool": "high"
+          }
+        },
+        "names.multilingual_names": {
+          "order": 30,
+          "label": "Multilingual names",
+          "question": "Which sourced language-specific names exist?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable localized name with language and source",
+            "projection_selectors": {
+              "search": {
+                "paths": [
+                  "/*/name"
+                ],
+                "index_key": "names.multilingual_names.name"
+              }
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "search": "name_alias",
+            "site_tool": "high"
+          }
+        },
+        "identifiers.cas_number": {
+          "order": 40,
+          "label": "CAS Registry Number",
+          "question": "Does an authoritative source assign a CAS Registry Number to this mineral species?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "identifier",
+            "cardinality": "single",
+            "shape": "Zero or one checksum-valid identifier; never inferred from formula or a similarly named compound"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "identifier",
+            "comparison": "scalar",
+            "site_tool": "high"
+          }
+        },
+        "classification.chemical_class": {
+          "order": 50,
+          "label": "Chemical class",
+          "question": "What broad chemical class is assigned?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Controlled term with vocabulary version",
+            "vocabulary": {
+              "id": "classification_chemical_class_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_medium",
+            "facet": "term_single",
+            "comparison": "term",
+            "site_tool": "high"
+          }
+        },
+        "classification.mineral_group": {
+          "order": 60,
+          "label": "Mineral group",
+          "question": "What preferred group or family is assigned?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Controlled hierarchical term",
+            "vocabulary": {
+              "id": "classification_mineral_group_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "card": "taxonomy",
+            "detail": "hero_badge",
+            "search": "term_medium",
+            "facet": "hierarchy",
+            "comparison": "term",
+            "site_tool": "critical"
+          }
+        },
+        "classification.scheme_assignments": {
+          "order": 70,
+          "label": "Scheme assignments",
+          "question": "How is the mineral classified under named, versioned schemes?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable `{scheme, version, code?, label, parent_path}`",
+            "projection_selectors": {
+              "search": {
+                "paths": [
+                  "/*/scheme",
+                  "/*/code",
+                  "/*/label"
+                ],
+                "index_key": "classification.scheme_assignments.terms"
+              },
+              "comparison": {
+                "paths": [
+                  "/*"
+                ],
+                "index_key": "classification.scheme_assignments.items"
+              }
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "identifier",
+            "comparison": "relation",
+            "site_tool": "on_demand"
+          }
+        }
+      }
+    },
+    "history_type": {
+      "order": 30,
+      "label": "History and type information",
+      "lifecycle": "not_launched",
+      "questions": {
+        "history.discovery_year": {
+          "order": 10,
+          "label": "Discovery year",
+          "question": "When was the mineral first discovered or recognized, if that event is documented?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "year_or_date",
+            "cardinality": "single",
+            "shape": "`{year?, qualifier}` with exact/circa/before/after/ancient vocabulary"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "any",
+              "codes": [
+                "AUTH1",
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "facet": "year_range",
+            "comparison": "scalar",
+            "site_tool": "normal"
+          }
+        },
+        "history.first_description_year": {
+          "order": 20,
+          "label": "First description year",
+          "question": "In what year was the first formal description published?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "year_or_date",
+            "cardinality": "single",
+            "shape": "`{year?, qualifier}` with exact/circa/before/after vocabulary"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "any",
+              "codes": [
+                "AUTH1",
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "facet": "year_range",
+            "comparison": "scalar",
+            "site_tool": "normal"
+          }
+        },
+        "history.discovery_people": {
+          "order": 30,
+          "label": "Discovery people",
+          "question": "Who discovered, described, or approved it, and in which role?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable `{name, role}`"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "history.name_etymology": {
+          "order": 40,
+          "label": "Name etymology",
+          "question": "What is the sourced origin and meaning of the name?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Structured summary with named-for entities and language where known",
+            "projection_selectors": {
+              "search": {
+                "paths": [
+                  "/summary"
+                ],
+                "index_key": "history.name_etymology.summary"
+              }
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "narrative",
+            "search": "fulltext_low",
+            "site_tool": "normal"
+          }
+        },
+        "history.first_description": {
+          "order": 50,
+          "label": "First description",
+          "question": "What is the primary description or approval publication?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable structured citation/DOI relation"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "any",
+              "codes": [
+                "AUTH1",
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "site_tool": "normal"
+          }
+        },
+        "history.type_localities": {
+          "order": 60,
+          "label": "Type localities",
+          "question": "Which reviewed occurrences are designated type localities?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "occurrence_relation",
+            "cardinality": "repeatable",
+            "shape": "Repeatable relation to occurrence IDs"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "LOC1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "occurrence_collection",
+            "site_tool": "high"
+          }
+        },
+        "history.type_material": {
+          "order": 70,
+          "label": "Type material",
+          "question": "Is type material preserved, and in which repository or specimen record?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable repository/specimen relation"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "site_tool": "normal"
+          }
+        },
+        "history.nomenclatural_notes": {
+          "order": 80,
+          "label": "Nomenclatural notes",
+          "question": "What sourced history is needed to explain renaming, redefinition, or dispute?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "Sourced text"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "narrative",
+            "search": "fulltext_low",
+            "site_tool": "normal"
+          }
+        }
+      }
+    },
+    "chemistry_relationships": {
+      "order": 40,
+      "label": "Chemistry and relationships",
+      "lifecycle": "not_launched",
+      "questions": {
+        "chemistry.formula_variants": {
+          "order": 10,
+          "label": "Formula variants",
+          "question": "What ideal, structural, simplified, or observed formula variants are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable `{formula, kind, qualifier?}`",
+            "projection_selectors": {
+              "search": {
+                "paths": [
+                  "/*/formula"
+                ],
+                "index_key": "chemistry.formula_variants.formula"
+              }
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "formula"
+          }
+        },
+        "chemistry.compositional_variation": {
+          "order": 20,
+          "label": "Compositional variation",
+          "question": "What non-stoichiometry or compositional variability is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Structured sourced text/ranges"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "chemistry.substitutions": {
+          "order": 30,
+          "label": "Substitutions",
+          "question": "Which substitutions are supported, and over what ranges or sites?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable structured substitution"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "chemistry.end_members": {
+          "order": 40,
+          "label": "End members",
+          "question": "Is the mineral an end member or related to named endpoints?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "relationship"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "material_relation",
+            "cardinality": "repeatable",
+            "shape": "Typed material relations"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "search": "term_low",
+            "comparison": "relation",
+            "site_tool": "normal"
+          }
+        },
+        "chemistry.solid_solution_series": {
+          "order": 50,
+          "label": "Solid solution series",
+          "question": "Which solid-solution relationships and ranges are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "relationship"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "material_relation",
+            "cardinality": "repeatable",
+            "shape": "Typed relation with endpoints/range"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "search": "term_low",
+            "comparison": "relation",
+            "site_tool": "normal"
+          }
+        },
+        "chemistry.polymorphs": {
+          "order": 60,
+          "label": "Polymorphs",
+          "question": "Which polymorph relationships are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "relationship"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "material_relation",
+            "cardinality": "repeatable",
+            "shape": "Typed material relations"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "search": "term_low",
+            "comparison": "relation",
+            "site_tool": "normal"
+          }
+        },
+        "chemistry.polytypes": {
+          "order": 70,
+          "label": "Polytypes",
+          "question": "Which polytypes or polytype designations are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "relationship"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "material_relation",
+            "cardinality": "repeatable",
+            "shape": "Typed material/designation relations"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "search": "term_low",
+            "comparison": "relation",
+            "site_tool": "normal"
+          }
+        },
+        "chemistry.related_species": {
+          "order": 80,
+          "label": "Related species",
+          "question": "Which other scientifically meaningful mineral relationships are supported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "relationship"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "material_relation",
+            "cardinality": "repeatable",
+            "shape": "Typed relation with controlled relationship kind"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "search": "term_low",
+            "comparison": "relation",
+            "site_tool": "normal"
+          }
+        },
+        "chemistry.essential_elements": {
+          "order": 90,
+          "label": "Essential elements",
+          "question": "Which elements are deterministically essential in the applicable approved formula?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "derived"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Derived ordered element-symbol list with input formula claim",
+            "vocabulary": {
+              "id": "chemistry_essential_elements_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "derived": {
+              "mode": "all",
+              "codes": [
+                "DER1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_medium",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "normal"
+          }
+        },
+        "chemistry.molar_mass_g_mol": {
+          "order": 100,
+          "label": "Molar mass (g/mol)",
+          "question": "Can molar mass be safely calculated from the approved formula?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "derived"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "measurement",
+            "cardinality": "single",
+            "shape": "Derived decimal measurement in `g/mol`",
+            "canonical_unit": "g/mol",
+            "accepted_units": [
+              "g/mol"
+            ]
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "derived": {
+              "mode": "all",
+              "codes": [
+                "DER1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "comparison": "measurement",
+            "site_tool": "normal"
+          }
+        },
+        "chemistry.major_elements_pct": {
+          "order": 110,
+          "label": "Major elements (% mass)",
+          "question": "Can ideal mass percentages be safely calculated?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "derived"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Derived element-to-percent object, unit `% mass`",
+            "canonical_unit": "% mass",
+            "accepted_units": [
+              "% mass"
+            ]
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "derived": {
+              "mode": "all",
+              "codes": [
+                "DER1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "site_tool": "normal"
+          }
+        }
+      }
+    },
+    "crystallography": {
+      "order": 50,
+      "label": "Crystallography",
+      "lifecycle": "not_launched",
+      "technical_pilot": {
+        "pilot_id": "cod-crystallography-v1",
+        "kind": "adapter_contract_without_record_coverage",
+        "status": "contract_ready_candidate_discovery_not_run",
+        "question_keys": [
+          "crystallography.space_group",
+          "crystallography.unit_cell",
+          "crystallography.structure_references"
+        ],
+        "source_matrix_entry": "cod_crystal_observations",
+        "contract": "schemas/pilots/cod-crystallography-pilot-v1.json",
+        "coverage_rows": "forbidden",
+        "public_projection": "forbidden"
+      },
+      "questions": {
+        "crystallography.crystal_system": {
+          "order": 10,
+          "label": "Crystal system",
+          "question": "What crystal system is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Seven-system controlled term; `not_applicable` only for genuinely noncrystalline material",
+            "vocabulary": {
+              "id": "crystallography_crystal_system_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "card": "badge_secondary",
+            "search": "term_medium",
+            "facet": "term_single",
+            "comparison": "term",
+            "site_tool": "critical"
+          }
+        },
+        "crystallography.point_group": {
+          "order": 20,
+          "label": "Point group",
+          "question": "What crystal class or point group is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Controlled Hermann–Mauguin term",
+            "vocabulary": {
+              "id": "crystallography_point_group_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_medium",
+            "comparison": "term",
+            "site_tool": "normal"
+          }
+        },
+        "crystallography.space_group": {
+          "order": 30,
+          "label": "Space group",
+          "question": "What space group is reported?",
+          "definition_version": 1,
+          "definition_status": "approved",
+          "scientific_definition": "Repeatable source-attributed observations of an explicitly reported ordinary three-dimensional space-group designation. Preserve independently reported Hermann–Mauguin, Hall, International Tables number and coordinate-system context, including contradictions and provenance layers; do not infer symmetry from unit-cell metrics or silently select a universal species setting. Superspace and magnetic groups are outside version 1 and require review.",
+          "allowed_coverage_states": [
+            "value_present",
+            "not_yet_researched",
+            "not_reported_by_reviewed_sources",
+            "withheld"
+          ],
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "approved",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable space-group observations with H–M/Hall/IT identifiers, setting context, consistency, and provenance",
+            "maximum_items": 32,
+            "json_schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "$ref": "schemas/values/crystallography-space-group-v1.schema.json"
+            },
+            "projection_selectors": {
+              "search": {
+                "paths": [
+                  "/*/hm_symbol/normalized",
+                  "/*/hall_symbol/normalized",
+                  "/*/it_number/value"
+                ],
+                "index_key": "crystallography.space_group.symbols"
+              },
+              "comparison": {
+                "paths": [
+                  "/*/hm_symbol/normalized",
+                  "/*/hall_symbol/normalized",
+                  "/*/it_number/value",
+                  "/*/it_coordinate_system_code/raw",
+                  "/*/consistency"
+                ],
+                "index_key": "crystallography.space_group.value"
+              }
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_medium",
+            "comparison": "term",
+            "site_tool": "normal"
+          }
+        },
+        "crystallography.unit_cell": {
+          "order": 40,
+          "label": "Unit cell",
+          "question": "What unit-cell parameters and `Z` are reported, under what conditions?",
+          "definition_version": 1,
+          "definition_status": "approved",
+          "scientific_definition": "A repeatable complete six-parameter unit cell explicitly reported for one source determination, retaining source precision and uncertainty, any reported volume, Z with formula context, method, radiation, and distinct temperature or pressure conditions. Missing symmetry-constrained parameters are not inferred; separate determinations are never averaged or silently reduced to one species-wide value.",
+          "allowed_coverage_states": [
+            "value_present",
+            "not_yet_researched",
+            "not_reported_by_reviewed_sources",
+            "withheld"
+          ],
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "approved",
+            "value_kind": "measurement",
+            "cardinality": "repeatable",
+            "shape": "Repeatable complete six-parameter cells in angstrom/degree with uncertainty, reported volume, Z/formula context, method, and temperature/pressure conditions",
+            "canonical_unit": "compound:angstrom,degree,angstrom^3,K,kPa",
+            "accepted_units": [
+              "compound:angstrom,degree,angstrom^3,K,kPa"
+            ],
+            "maximum_items": 32,
+            "json_schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "$ref": "schemas/values/crystallography-unit-cell-v1.schema.json"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "comparison": "off",
+            "site_tool": "on_demand"
+          }
+        },
+        "crystallography.structure_references": {
+          "order": 50,
+          "label": "Structure references",
+          "question": "Which structural determinations support the profile?",
+          "definition_version": 1,
+          "definition_status": "approved",
+          "scientific_definition": "Repeatable structured bibliographic citations carried by a reviewed structure record and judged to concern the mapped mineral species. Preserve author order, publication status, identifiers and source citation roles; a generic source-record citation is not upgraded to a primary determination, refinement, or reanalysis without explicit evidence.",
+          "allowed_coverage_states": [
+            "value_present",
+            "not_yet_researched",
+            "not_reported_by_reviewed_sources",
+            "withheld"
+          ],
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "approved",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable structure-record citations with explicit roles, publication status, ordered authors, DOI or bibliography, and source linkage",
+            "maximum_items": 128,
+            "json_schema": {
+              "$schema": "https://json-schema.org/draft/2020-12/schema",
+              "$ref": "schemas/values/crystallography-structure-reference-v1.schema.json"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "crystallography.twinning": {
+          "order": 60,
+          "label": "Twinning",
+          "question": "What twinning laws or habits are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable structured term plus source text"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        }
+      }
+    },
+    "physical_diagnostic": {
+      "order": 60,
+      "label": "Physical and diagnostic properties",
+      "lifecycle": "not_launched",
+      "questions": {
+        "physical.color": {
+          "order": 10,
+          "label": "Color",
+          "question": "Which natural colors and qualifiers are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "repeatable",
+            "shape": "Repeatable controlled colors plus source text",
+            "vocabulary": {
+              "id": "physical_color_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "high"
+          }
+        },
+        "physical.streak": {
+          "order": 20,
+          "label": "Streak",
+          "question": "What streak colors are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "repeatable",
+            "shape": "Repeatable controlled colors plus source text",
+            "vocabulary": {
+              "id": "physical_streak_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "high"
+          }
+        },
+        "physical.luster": {
+          "order": 30,
+          "label": "Luster",
+          "question": "Which luster terms are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "repeatable",
+            "shape": "Repeatable controlled terms",
+            "vocabulary": {
+              "id": "physical_luster_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "high"
+          }
+        },
+        "physical.transparency": {
+          "order": 40,
+          "label": "Transparency",
+          "question": "What transparency states are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Controlled list: transparent, translucent, opaque, with qualifiers",
+            "vocabulary": {
+              "id": "physical_transparency_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "high"
+          }
+        },
+        "physical.crystal_habit": {
+          "order": 50,
+          "label": "Crystal habit",
+          "question": "Which crystal habits or aggregate forms are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "repeatable",
+            "shape": "Repeatable controlled terms plus source text",
+            "vocabulary": {
+              "id": "physical_crystal_habit_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "high"
+          }
+        },
+        "physical.tenacity": {
+          "order": 60,
+          "label": "Tenacity",
+          "question": "What tenacity is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "repeatable",
+            "shape": "Repeatable controlled terms",
+            "vocabulary": {
+              "id": "physical_tenacity_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "high"
+          }
+        },
+        "physical.cleavage": {
+          "order": 70,
+          "label": "Cleavage",
+          "question": "What cleavage quality and directions are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable `{quality, direction?, count?, angle_deg?}`"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "physical.parting": {
+          "order": 80,
+          "label": "Parting",
+          "question": "What parting is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Same structured shape as cleavage"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "physical.fracture": {
+          "order": 90,
+          "label": "Fracture",
+          "question": "What fracture types are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "repeatable",
+            "shape": "Repeatable controlled terms plus source text",
+            "vocabulary": {
+              "id": "physical_fracture_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "high"
+          }
+        },
+        "physical.hardness_mohs": {
+          "order": 100,
+          "label": "Mohs hardness",
+          "question": "What Mohs hardness or range is reported, under what conditions?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "range",
+            "cardinality": "single",
+            "shape": "Exact decimal or `{min,max}`, canonical unit `Mohs`",
+            "canonical_unit": "Mohs",
+            "accepted_units": [
+              "Mohs"
+            ],
+            "bounds": {
+              "minimum": 0,
+              "maximum": 10
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "facet": "numeric_range",
+            "comparison": "measurement",
+            "site_tool": "high"
+          }
+        },
+        "physical.density_measured_g_cm3": {
+          "order": 110,
+          "label": "Measured density (g/cm3)",
+          "question": "What measured mass density values are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "measurement",
+            "cardinality": "repeatable",
+            "shape": "Repeatable measurement/range in `g/cm3`, with method, temperature, and conditions",
+            "canonical_unit": "g/cm3",
+            "accepted_units": [
+              "g/cm3",
+              "kg/m3"
+            ]
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "facet": "numeric_range",
+            "comparison": "measurement",
+            "site_tool": "high"
+          }
+        },
+        "physical.specific_gravity": {
+          "order": 120,
+          "label": "Specific gravity",
+          "question": "What relative density or specific gravity is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "measurement",
+            "cardinality": "repeatable",
+            "shape": "Repeatable unitless measurement/range with reference medium and temperature where supplied",
+            "canonical_unit": "1",
+            "accepted_units": [
+              "1"
+            ]
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "facet": "numeric_range",
+            "comparison": "measurement",
+            "site_tool": "high"
+          }
+        },
+        "physical.density_calculated_g_cm3": {
+          "order": 130,
+          "label": "Calculated density (g/cm3)",
+          "question": "What calculated density is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced",
+            "derived"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "measurement",
+            "cardinality": "repeatable",
+            "shape": "Repeatable measurement/range in `g/cm3`, labelled calculated",
+            "canonical_unit": "g/cm3",
+            "accepted_units": [
+              "g/cm3",
+              "kg/m3"
+            ]
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "any",
+              "codes": [
+                "SCI1"
+              ]
+            },
+            "derived": {
+              "mode": "any",
+              "codes": [
+                "DER1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "comparison": "measurement",
+            "site_tool": "normal"
+          }
+        },
+        "physical.magnetism": {
+          "order": 140,
+          "label": "Magnetism",
+          "question": "What magnetic response is reported, under what conditions?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Structured response and optional measurement"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "physical.fluorescence": {
+          "order": 150,
+          "label": "Fluorescence",
+          "question": "What fluorescence is reported for which excitation?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable excitation band/wavelength, color, intensity, and conditions"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "physical.phosphorescence": {
+          "order": 160,
+          "label": "Phosphorescence",
+          "question": "What phosphorescence is reported, including duration and excitation?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable structured response"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "physical.radioactivity": {
+          "order": 170,
+          "label": "Radioactivity",
+          "question": "What radiological activity measurement is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Physical measurement with canonical unit, method, specimen/material form, and conditions; no hazard interpretation"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "any",
+              "codes": [
+                "SCI1",
+                "SAFE1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "site_tool": "normal"
+          }
+        },
+        "physical.other_diagnostic_behavior": {
+          "order": 180,
+          "label": "Other diagnostic behavior",
+          "question": "What other source-supported diagnostic behavior is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Typed uncommon property or sourced text"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "diagnostic.distinguishing_features": {
+          "order": 190,
+          "label": "Distinguishing features",
+          "question": "Which features distinguish this species from commonly confused minerals?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "editorial"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Editorial short statements linked to supporting resolved claims"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "editorial": {
+              "mode": "all",
+              "codes": [
+                "SYN2"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "diagnostic.common_confusions": {
+          "order": 200,
+          "label": "Common confusions",
+          "question": "Which minerals can reasonably be confused with it, and why?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "relationship"
+          ],
+          "production_kinds": [
+            "editorial"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "material_relation",
+            "cardinality": "repeatable",
+            "shape": "Editorial typed mineral relations plus reviewed explanation"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "editorial": {
+              "mode": "all",
+              "codes": [
+                "SYN2"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "search": "term_low",
+            "comparison": "relation",
+            "site_tool": "normal"
+          }
+        }
+      }
+    },
+    "optical": {
+      "order": 70,
+      "label": "Optical properties",
+      "lifecycle": "not_launched",
+      "questions": {
+        "optical.character": {
+          "order": 10,
+          "label": "Character",
+          "question": "Is the material isotropic, uniaxial, biaxial, or characterized only in reflected light?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Controlled term",
+            "vocabulary": {
+              "id": "optical_character_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_single",
+            "comparison": "term",
+            "site_tool": "normal"
+          }
+        },
+        "optical.sign": {
+          "order": 20,
+          "label": "Sign",
+          "question": "What optical sign is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Controlled positive/negative/indeterminate term",
+            "vocabulary": {
+              "id": "optical_sign_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_single",
+            "comparison": "term",
+            "site_tool": "normal"
+          }
+        },
+        "optical.refractive_indices": {
+          "order": 30,
+          "label": "Refractive indices",
+          "question": "Which named refractive indices are reported, at which wavelength and temperature?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "measurement",
+            "cardinality": "repeatable",
+            "shape": "Named exact/range measurements with conditions",
+            "canonical_unit": "1",
+            "accepted_units": [
+              "1"
+            ]
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "comparison": "measurement",
+            "site_tool": "normal"
+          }
+        },
+        "optical.birefringence": {
+          "order": 40,
+          "label": "Birefringence",
+          "question": "What birefringence is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "measurement",
+            "cardinality": "single",
+            "shape": "Unitless exact/range with conditions",
+            "canonical_unit": "1",
+            "accepted_units": [
+              "1"
+            ]
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "comparison": "measurement",
+            "site_tool": "normal"
+          }
+        },
+        "optical.optic_axis_angle_2v": {
+          "order": 50,
+          "label": "Optic-axis angle (2V)",
+          "question": "What measured or calculated `2V` is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "measurement",
+            "cardinality": "single",
+            "shape": "Exact/range in degree, with basis and conditions",
+            "canonical_unit": "degree",
+            "accepted_units": [
+              "degree"
+            ]
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "measurement",
+            "comparison": "measurement",
+            "site_tool": "normal"
+          }
+        },
+        "optical.dispersion": {
+          "order": 60,
+          "label": "Dispersion",
+          "question": "What dispersion value or qualified observation is reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Numeric or controlled qualified value with method"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "optical.pleochroism": {
+          "order": 70,
+          "label": "Pleochroism",
+          "question": "What pleochroic colors and directions are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable `{direction?, color, intensity?}`"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "optical.reflected_light": {
+          "order": 80,
+          "label": "Reflected light",
+          "question": "Which reflected-light properties are reported for opaque minerals?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Schema-validated specialist measurement/narrative"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        }
+      }
+    },
+    "geology": {
+      "order": 80,
+      "label": "Geological context",
+      "lifecycle": "not_launched",
+      "questions": {
+        "geology.formation_environments": {
+          "order": 10,
+          "label": "Formation environments",
+          "question": "In which formation environments is the species reported to form?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "repeatable",
+            "shape": "Repeatable controlled terms plus sourced explanation",
+            "vocabulary": {
+              "id": "geology_formation_environments_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "high"
+          }
+        },
+        "geology.deposit_types": {
+          "order": 20,
+          "label": "Deposit types",
+          "question": "With which deposit or ore types is it associated?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "repeatable",
+            "shape": "Repeatable controlled terms",
+            "vocabulary": {
+              "id": "geology_deposit_types_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "high"
+          }
+        },
+        "geology.host_rocks": {
+          "order": 30,
+          "label": "Host rocks",
+          "question": "Which host rocks are supported at species level?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "repeatable",
+            "shape": "Repeatable controlled rock terms/references",
+            "vocabulary": {
+              "id": "geology_host_rocks_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "facet": "term_multi",
+            "comparison": "term_list",
+            "site_tool": "high"
+          }
+        },
+        "geology.alteration": {
+          "order": 40,
+          "label": "Alteration",
+          "question": "Which alteration processes or products are reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Controlled terms plus sourced explanation",
+            "vocabulary": {
+              "id": "geology_alteration_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "comparison": "term_list",
+            "site_tool": "normal"
+          }
+        },
+        "geology.paragenesis": {
+          "order": 50,
+          "label": "Paragenesis",
+          "question": "What paragenetic sequence or context is supported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Structured sequence/association or sourced text"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {}
+        },
+        "geology.associated_minerals": {
+          "order": 60,
+          "label": "Associated minerals",
+          "question": "Which species-level mineral associations are supported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "relationship"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "material_relation",
+            "cardinality": "repeatable",
+            "shape": "Typed material relations"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "relation_list",
+            "search": "term_low",
+            "comparison": "relation",
+            "site_tool": "normal"
+          }
+        },
+        "geology.extraterrestrial_context": {
+          "order": 70,
+          "label": "Extraterrestrial context",
+          "question": "Is a meteorite or other extraterrestrial context reported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "controlled_term",
+            "cardinality": "single",
+            "shape": "Controlled context plus occurrences/citations",
+            "vocabulary": {
+              "id": "geology_extraterrestrial_context_v1",
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "search": "term_low",
+            "comparison": "term_list",
+            "site_tool": "normal"
+          }
+        }
+      }
+    },
+    "occurrence": {
+      "order": 90,
+      "label": "Occurrence and locality collection",
+      "lifecycle": "not_launched",
+      "questions": {
+        "occurrence.reviewed_reports": {
+          "order": 10,
+          "label": "Reviewed reports",
+          "question": "Which reviewed, non-exhaustive occurrence reports are published?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "occurrence_relation",
+            "cardinality": "repeatable",
+            "shape": "Repeatable occurrence relations"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "LOC1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "occurrence_collection",
+            "site_tool": "high"
+          }
+        },
+        "occurrence.geographic_summary": {
+          "order": 20,
+          "label": "Geographic summary",
+          "question": "What geographic summary follows from the currently reviewed occurrence set?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "derived"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Derived coverage-limited summary with input occurrence IDs"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "derived": {
+              "mode": "all",
+              "codes": [
+                "DER1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "narrative",
+            "site_tool": "normal"
+          }
+        }
+      }
+    },
+    "safety": {
+      "order": 100,
+      "label": "Safety",
+      "lifecycle": "not_launched",
+      "questions": {
+        "safety.radioactivity": {
+          "order": 10,
+          "label": "Radioactivity",
+          "question": "Is there authoritative radiological hazard guidance for this mineral or its relevant material form?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Hazard interpretation, exposure conditions, and controls linked to supporting physical measurements when available",
+            "affirmative_discriminator": {
+              "path": "/hazard_state",
+              "value_kind": "controlled_term",
+              "vocabulary_id": "safety_hazard_state_v1",
+              "affirmative_values": [
+                "hazard_present"
+              ],
+              "negative_values": [
+                "reviewed_no_hazard_for_stated_conditions"
+              ],
+              "indeterminate_values": [
+                "indeterminate"
+              ],
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SAFE1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "safety_fact",
+            "facet": "reviewed_positive",
+            "safety_banner": "hazard_trigger",
+            "site_tool": "critical_when_affirmative"
+          }
+        },
+        "safety.toxicity": {
+          "order": 20,
+          "label": "Toxicity",
+          "question": "Is toxicity supported for a relevant form and exposure route?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Classification, routes, affected material forms, conditions, and note",
+            "affirmative_discriminator": {
+              "path": "/hazard_state",
+              "value_kind": "controlled_term",
+              "vocabulary_id": "safety_hazard_state_v1",
+              "affirmative_values": [
+                "hazard_present"
+              ],
+              "negative_values": [
+                "reviewed_no_hazard_for_stated_conditions"
+              ],
+              "indeterminate_values": [
+                "indeterminate"
+              ],
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SAFE1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "safety_fact",
+            "facet": "reviewed_positive",
+            "safety_banner": "hazard_trigger",
+            "site_tool": "critical_when_affirmative"
+          }
+        },
+        "safety.asbestiform_or_fibrous": {
+          "order": 30,
+          "label": "Asbestiform or fibrous",
+          "question": "Is a hazardous fibrous/asbestiform habit supported, and under what conditions?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Structured habit, exposure context, and controls",
+            "affirmative_discriminator": {
+              "path": "/hazard_state",
+              "value_kind": "controlled_term",
+              "vocabulary_id": "safety_hazard_state_v1",
+              "affirmative_values": [
+                "hazard_present"
+              ],
+              "negative_values": [
+                "reviewed_no_hazard_for_stated_conditions"
+              ],
+              "indeterminate_values": [
+                "indeterminate"
+              ],
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SAFE1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "safety_fact",
+            "facet": "reviewed_positive",
+            "safety_banner": "hazard_trigger",
+            "site_tool": "critical_when_affirmative"
+          }
+        },
+        "safety.dust_hazard": {
+          "order": 40,
+          "label": "Dust hazard",
+          "question": "Are cutting, grinding, powder, or inhalation hazards supported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "conditional",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "conditional_by_reviewed_evidence_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Particle/material conditions and controls",
+            "affirmative_discriminator": {
+              "path": "/hazard_state",
+              "value_kind": "controlled_term",
+              "vocabulary_id": "safety_hazard_state_v1",
+              "affirmative_values": [
+                "hazard_present"
+              ],
+              "negative_values": [
+                "reviewed_no_hazard_for_stated_conditions"
+              ],
+              "indeterminate_values": [
+                "indeterminate"
+              ],
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SAFE1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "safety_fact",
+            "facet": "reviewed_positive",
+            "safety_banner": "hazard_trigger",
+            "site_tool": "critical_when_affirmative"
+          }
+        },
+        "safety.handling": {
+          "order": 50,
+          "label": "Handling",
+          "question": "What handling controls are supported for collectors, laboratories, or industry?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "core",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "repeatable",
+            "shape": "Repeatable `{hazard, control, audience?, conditions?}`"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SAFE1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "safety_fact",
+            "safety_banner": "control_contributor",
+            "site_tool": "high"
+          }
+        },
+        "safety.storage_or_restrictions": {
+          "order": 60,
+          "label": "Storage or restrictions",
+          "question": "Are special storage, transport, disposal, or legal restrictions supported?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "structured",
+            "cardinality": "single",
+            "shape": "Jurisdiction- and condition-specific structured guidance",
+            "affirmative_discriminator": {
+              "path": "/restriction_state",
+              "value_kind": "controlled_term",
+              "vocabulary_id": "safety_restriction_state_v1",
+              "affirmative_values": [
+                "restriction_present"
+              ],
+              "negative_values": [
+                "reviewed_no_restriction_for_stated_jurisdiction"
+              ],
+              "indeterminate_values": [
+                "indeterminate"
+              ],
+              "status": "draft"
+            }
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SAFE1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "safety_fact",
+            "safety_banner": "restriction_trigger",
+            "site_tool": "high"
+          }
+        }
+      }
+    },
+    "significance_editorial": {
+      "order": 110,
+      "label": "Significance and editorial content",
+      "lifecycle": "not_launched",
+      "questions": {
+        "significance.scientific": {
+          "order": 10,
+          "label": "Scientific",
+          "question": "What documented scientific significance does the species have?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "Sourced statements"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "narrative",
+            "search": "fulltext_low",
+            "site_tool": "on_demand"
+          }
+        },
+        "significance.industrial": {
+          "order": 20,
+          "label": "Industrial",
+          "question": "What documented industrial uses or research applications exist?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "Sourced, time-bounded statements"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "narrative",
+            "search": "fulltext_low",
+            "site_tool": "on_demand"
+          }
+        },
+        "significance.gemological": {
+          "order": 30,
+          "label": "Gemological",
+          "question": "What documented gemological relevance exists?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species",
+            "specimen"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "Sourced statements with material/specimen scope"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "narrative",
+            "search": "fulltext_low",
+            "site_tool": "on_demand"
+          }
+        },
+        "significance.historical_cultural": {
+          "order": 40,
+          "label": "Historical cultural",
+          "question": "What documented historical or cultural significance exists?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "sourced"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "Sourced statements clearly separated from scientific claims"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "sourced": {
+              "mode": "all",
+              "codes": [
+                "SCI1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "narrative",
+            "search": "fulltext_low",
+            "site_tool": "on_demand"
+          }
+        },
+        "editorial.summary": {
+          "order": 50,
+          "label": "Summary",
+          "question": "What concise description can be written from the resolved reviewed profile?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "editorial"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "Editorial source-language text with supporting claim IDs"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "editorial": {
+              "mode": "all",
+              "codes": [
+                "SYN2"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "card": "summary",
+            "detail": "hero_summary",
+            "search": "fulltext_low",
+            "site_tool": "critical"
+          }
+        },
+        "editorial.limitations": {
+          "order": 60,
+          "label": "Limitations",
+          "question": "What important gaps, disputes, or coverage limits should readers see?",
+          "definition_status": "draft",
+          "lifecycle": "active",
+          "replaced_by": null,
+          "priority_tier": "extended",
+          "subject_scopes": [
+            "species"
+          ],
+          "production_kinds": [
+            "editorial"
+          ],
+          "applicability_rule": "default_question_applicability_v1",
+          "value_schema": {
+            "version": 1,
+            "status": "draft",
+            "value_kind": "text",
+            "cardinality": "single",
+            "shape": "Editorial source-language text derived from states/conflicts"
+          },
+          "normalization_policy": "preserve_raw_and_normalize_v1",
+          "requirements": {
+            "editorial": {
+              "mode": "all",
+              "codes": [
+                "INT1"
+              ]
+            }
+          },
+          "conflict_policy": "preserve_all_no_automatic_preference",
+          "visibility": {
+            "public": "when_resolved",
+            "sensitivity": "none"
+          },
+          "consumer": {
+            "detail": "narrative",
+            "site_tool": "critical"
+          }
+        }
+      }
+    }
+  },
+  "collections": {
+    "material_occurrences": {
+      "module": "occurrence",
+      "subject_scope": "occurrence",
+      "source_requirement": "LOC1",
+      "identity": "public_occurrence_id",
+      "cardinality": "repeatable",
+      "definition_version": 1,
+      "definition_status": "draft",
+      "fields": {
+        "public_occurrence_id": {
+          "order": 10,
+          "value_kind": "identifier",
+          "requirement": "required",
+          "description": "Stable unique public identifier.",
+          "consumer": {
+            "worker": "public_answer",
+            "site_tool": "normal"
+          }
+        },
+        "source_external_id": {
+          "order": 20,
+          "value_kind": "identifier",
+          "requirement": "optional",
+          "description": "Source-owned occurrence, locality, specimen, or deposit identifier when available.",
+          "consumer": {
+            "detail": "authority_context",
+            "site_tool": "on_demand"
+          }
+        },
+        "locality_name": {
+          "order": 30,
+          "value_kind": "text",
+          "requirement": "required",
+          "description": "Source-preserved locality text.",
+          "consumer": {
+            "detail": "section_fact",
+            "search": "occurrence_name",
+            "map": "popup_title",
+            "site_tool": "high"
+          }
+        },
+        "locality_type": {
+          "order": 40,
+          "value_kind": "controlled_term",
+          "requirement": "optional",
+          "description": "Controlled physical type such as mine, quarry, outcrop, deposit, district, or region.",
+          "consumer": {
+            "map": "filter_term",
+            "site_tool": "normal"
+          }
+        },
+        "country_code": {
+          "order": 50,
+          "value_kind": "controlled_term",
+          "requirement": "conditional",
+          "description": "ISO 3166-1 alpha-2 only when source resolution supports it.",
+          "consumer": {
+            "map": "filter_term",
+            "site_tool": "normal"
+          }
+        },
+        "admin_areas": {
+          "order": 60,
+          "value_kind": "structured",
+          "requirement": "optional",
+          "description": "Ordered optional administrative hierarchy with vocabulary and source context.",
+          "consumer": {
+            "map": "popup_fact",
+            "site_tool": "normal"
+          }
+        },
+        "basis": {
+          "order": 70,
+          "value_kind": "controlled_term",
+          "requirement": "optional",
+          "description": "Type locality, collected specimen, observed in place, mine/deposit record, literature report, or historical report.",
+          "consumer": {
+            "map": "filter_term",
+            "site_tool": "normal"
+          }
+        },
+        "temporal_status": {
+          "order": 80,
+          "value_kind": "controlled_term",
+          "requirement": "optional",
+          "description": "Current, historical, or unknown state, distinct from missingness.",
+          "consumer": {
+            "map": "filter_term",
+            "site_tool": "normal"
+          }
+        },
+        "event_date": {
+          "order": 90,
+          "value_kind": "year_or_date",
+          "requirement": "optional",
+          "description": "Partial date with stated precision and event kind.",
+          "consumer": {
+            "map": "popup_fact",
+            "site_tool": "normal"
+          }
+        },
+        "geometry_kind": {
+          "order": 100,
+          "value_kind": "controlled_term",
+          "requirement": "optional",
+          "description": "Point, area, or none.",
+          "consumer": {
+            "map": "geometry_kind",
+            "site_tool": "normal"
+          }
+        },
+        "geometry": {
+          "order": 110,
+          "value_kind": "structured",
+          "requirement": "conditional",
+          "description": "WGS84 point or reviewed area geometry; never silently geocoded from text.",
+          "consumer": {
+            "map": "geometry",
+            "site_tool": "normal"
+          }
+        },
+        "coordinate_precision_m": {
+          "order": 120,
+          "value_kind": "measurement",
+          "requirement": "conditional",
+          "canonical_unit": "m",
+          "description": "Source-supported coordinate precision in metres.",
+          "consumer": {
+            "map": "precision_notice",
+            "site_tool": "normal"
+          }
+        },
+        "uncertainty_radius_m": {
+          "order": 130,
+          "value_kind": "measurement",
+          "requirement": "conditional",
+          "canonical_unit": "m",
+          "description": "Nonnegative uncertainty for a point when known.",
+          "consumer": {
+            "map": "precision_notice",
+            "site_tool": "normal"
+          }
+        },
+        "coordinate_origin": {
+          "order": 140,
+          "value_kind": "structured",
+          "requirement": "conditional",
+          "description": "Source-supplied, calculated, or geocoded, with method and version where applicable.",
+          "consumer": {
+            "map": "precision_notice",
+            "site_tool": "normal"
+          }
+        },
+        "publication_transform": {
+          "order": 150,
+          "value_kind": "structured",
+          "requirement": "required",
+          "description": "Unchanged, coarsened, or withheld, with transformation/version and reason.",
+          "consumer": {
+            "map": "sensitivity",
+            "site_tool": "normal"
+          }
+        },
+        "sensitivity_policy": {
+          "order": 160,
+          "value_kind": "controlled_term",
+          "requirement": "required",
+          "description": "Public, coarsened, or withheld.",
+          "consumer": {
+            "map": "sensitivity",
+            "site_tool": "normal"
+          }
+        },
+        "lifecycle_state": {
+          "order": 170,
+          "value_kind": "controlled_term",
+          "requirement": "required",
+          "description": "Active, superseded, or withdrawn; temporal and evidence-review states remain separate.",
+          "consumer": {
+            "map": "filter_term",
+            "site_tool": "normal"
+          }
+        },
+        "geological_context": {
+          "order": 180,
+          "value_kind": "structured",
+          "requirement": "optional",
+          "description": "Optional occurrence-specific host rock, deposit type, formation, alteration, and paragenesis.",
+          "consumer": {
+            "map": "popup_fact",
+            "site_tool": "on_demand"
+          }
+        },
+        "associated_minerals": {
+          "order": 190,
+          "value_kind": "material_relation",
+          "requirement": "optional",
+          "description": "Optional typed material relations specific to this occurrence.",
+          "consumer": {
+            "map": "popup_fact",
+            "site_tool": "on_demand"
+          }
+        },
+        "evidence": {
+          "order": 200,
+          "value_kind": "structured",
+          "requirement": "required",
+          "description": "LOC1 source, exact locator, retrieval/hash/license snapshot, confidence, and review state.",
+          "consumer": {
+            "map": "evidence_link",
+            "site_tool": "normal"
+          }
+        },
+        "conflict_note": {
+          "order": 210,
+          "value_kind": "text",
+          "requirement": "conditional",
+          "description": "Required when source locality or coordinate claims conflict.",
+          "consumer": {
+            "map": "popup_fact",
+            "site_tool": "on_demand"
+          }
+        }
+      }
+    }
+  },
+  "legacy_mappings": {
+    "protected_identity_columns": {
+      "sources": [
+        "canonical_name",
+        "formula",
+        "nomenclature_status",
+        "is_valid_species"
+      ],
+      "action": "direct_projection",
+      "targets": [
+        "identity.canonical_name",
+        "identity.formula",
+        "identity.nomenclature_status",
+        "identity.current_valid"
+      ],
+      "guard": "retain_ima_ownership",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "protected_authority_columns": {
+      "sources": [
+        "discovery_country",
+        "first_reference",
+        "second_reference",
+        "source_status"
+      ],
+      "action": "direct_projection",
+      "targets": [
+        "authority.discovery_country",
+        "authority.first_reference",
+        "authority.second_reference",
+        "authority.source_status"
+      ],
+      "guard": "never_create_occurrence",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "description": {
+      "sources": [
+        "description"
+      ],
+      "action": "reviewed_migration",
+      "targets": [
+        "editorial.summary"
+      ],
+      "guard": "synthesis_meets_SYN2",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "mineral_family": {
+      "sources": [
+        "mineral_family"
+      ],
+      "action": "reviewed_migration",
+      "targets": [
+        "classification.mineral_group"
+      ],
+      "guard": "retain_scheme_version_and_all_assignments",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "cas_number": {
+      "sources": [
+        "cas_number"
+      ],
+      "action": "reviewed_migration",
+      "targets": [
+        "identifiers.cas_number"
+      ],
+      "guard": "source_assigns_identifier_to_species",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "aliases": {
+      "sources": [
+        "synonyms_json",
+        "aliases"
+      ],
+      "action": "split_reviewed_migration",
+      "targets": [
+        "names.aliases",
+        "names.former_names",
+        "names.multilingual_names"
+      ],
+      "guard": "typed_origin_language_and_provenance_required",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "identifiers_json": {
+      "sources": [
+        "identifiers_json"
+      ],
+      "action": "split_reviewed_migration",
+      "targets": [
+        "identifiers.ima_number",
+        "identifiers.ima_symbol"
+      ],
+      "guard": "recognized_ima_number_or_symbol_requires_its_own_admitted_authority_source_and_unmatched_keys_remain_legacy",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "properties_hardness_mohs": {
+      "sources": [
+        "properties.hardness_mohs"
+      ],
+      "action": "reviewed_migration",
+      "targets": [
+        "physical.hardness_mohs"
+      ],
+      "guard": "source_establishes_mohs",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "properties_density_g_cm3": {
+      "sources": [
+        "properties.density_g_cm3"
+      ],
+      "action": "reviewed_migration",
+      "targets": [
+        "physical.density_measured_g_cm3"
+      ],
+      "guard": "source_establishes_mass_density_never_specific_gravity",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "properties_crystal_system": {
+      "sources": [
+        "properties.crystal_system"
+      ],
+      "action": "reviewed_migration",
+      "targets": [
+        "crystallography.crystal_system"
+      ],
+      "guard": "controlled_vocabulary_normalization",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "properties_visual": {
+      "sources": [
+        "properties.color",
+        "properties.streak",
+        "properties.luster"
+      ],
+      "action": "split_reviewed_migration",
+      "targets": [
+        "physical.color",
+        "physical.streak",
+        "physical.luster"
+      ],
+      "guard": "controlled_vocabulary_normalization",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "properties_major_elements_pct": {
+      "sources": [
+        "properties.major_elements_pct"
+      ],
+      "action": "reviewed_migration",
+      "targets": [
+        "chemistry.major_elements_pct"
+      ],
+      "guard": "DER1_from_approved_formula_only_observed_specimen_analysis_requires_separate_question",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "properties_other": {
+      "sources": [
+        "properties_json:*"
+      ],
+      "action": "retain_legacy",
+      "targets": [],
+      "guard": "explicit_question_and_value_schema_mapping_required",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "safety_json": {
+      "sources": [
+        "safety_json"
+      ],
+      "action": "split_reviewed_migration",
+      "targets": [
+        "safety.radioactivity",
+        "safety.toxicity",
+        "safety.asbestiform_or_fibrous",
+        "safety.dust_hazard",
+        "safety.handling",
+        "safety.storage_or_restrictions"
+      ],
+      "guard": "no_prose_parsing_or_automatic_hazard_promotion",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "material_evidence_scopes": {
+      "sources": [
+        "material_evidence.scope"
+      ],
+      "action": "retain_legacy",
+      "targets": [],
+      "guard": "new_v1_claim_only_by_reviewed_adapter",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    },
+    "data_quality_score": {
+      "sources": [
+        "data_quality_score"
+      ],
+      "action": "deprecate",
+      "targets": [],
+      "guard": "omit_from_public_v2_quality_trust_display_and_ranking",
+      "preserve_legacy": true,
+      "scientific_status_effect": "preserve"
+    }
+  },
+  "validation_invariants": [
+    "human_registry_question_parity_v1",
+    "closed_objects_and_enums_v1",
+    "nfc_strings_v1",
+    "global_question_key_uniqueness_v1",
+    "unique_module_and_question_order_v1",
+    "all_policy_requirement_profile_and_legacy_targets_resolve_v1",
+    "production_requirement_kind_compatibility_v1",
+    "controlled_terms_declare_versioned_vocabularies_v1",
+    "measurements_and_ranges_declare_canonical_units_v1",
+    "public_facets_use_controlled_or_canonical_values_v1",
+    "protected_identity_requires_AUTH1_v1",
+    "discovery_country_map_forbidden_v1",
+    "physical_radioactivity_banner_forbidden_v1",
+    "safety_banner_requires_reviewed_affirmative_resolution_v1",
+    "not_launched_creates_no_per_record_missing_rows_v1",
+    "withheld_never_enters_public_projection_v1",
+    "legacy_migration_never_upgrades_scientific_status_v1",
+    "public_module_lifecycle_gate_v1",
+    "consumer_profile_security_constants_v1",
+    "occurrence_public_projection_gate_v1",
+    "structured_consumer_selectors_v1",
+    "specimen_species_projection_requires_review_v1",
+    "source_claim_contract_matches_ownership_v1",
+    "source_requirement_class_compatibility_v1",
+    "source_matrix_registry_digest_binding_v1",
+    "pilot_adapter_prerequisite_gates_v1",
+    "technical_adapter_contract_scope_v1"
+  ]
+}

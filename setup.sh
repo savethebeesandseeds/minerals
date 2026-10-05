@@ -19,6 +19,8 @@ readonly SOURCE_ROOT='/workspace'
 readonly RUNTIME_ROOT='/runtime'
 readonly DATA_ROOT_EXPECTED='/app/data'
 readonly BUILD_HOME='/tmp/minerals-build-home'
+readonly NODE_VERSION='22.23.3'
+readonly NODE_LINUX_X64_SHA256='df450af89261115ef9f9e3830c3eeb2cc9213b63c720b1af623cb5dcbe2e02de'
 readonly TARGET_ROOT="${CARGO_TARGET_DIR:-/build/target}"
 
 die() {
@@ -72,11 +74,15 @@ install_dependencies() {
   local -a packages=(ca-certificates curl util-linux)
   if [[ "$MINERALS_MODE" == web ]]; then
     packages+=(nginx)
+  else
+    packages+=(python3 xz-utils)
   fi
 
   if command -v curl >/dev/null 2>&1 &&
      command -v setpriv >/dev/null 2>&1 &&
-     { [[ "$MINERALS_MODE" != web ]] || command -v nginx >/dev/null 2>&1; }; then
+     { [[ "$MINERALS_MODE" != web ]] || command -v nginx >/dev/null 2>&1; } &&
+     { [[ "$MINERALS_MODE" != admin ]] ||
+       { command -v python3 >/dev/null 2>&1 && command -v xz >/dev/null 2>&1; }; }; then
     return
   fi
 
@@ -114,6 +120,30 @@ install_dependencies() {
     die 'dpkg reports an incomplete package state'
 }
 
+install_validation_runtime() {
+  [[ "$MINERALS_MODE" == admin ]] || return 0
+  [[ "$(uname -m)" == x86_64 ]] || die 'the pinned validation runtime requires Linux x86_64'
+  # Add only CI's formatting/lint components to the image's pinned toolchain.
+  rustup component add rustfmt clippy
+  local destination="/opt/node-v$NODE_VERSION-linux-x64"
+  if [[ -x "$destination/bin/node" ]] &&
+     [[ "$("$destination/bin/node" --version)" == "v$NODE_VERSION" ]]; then
+    return
+  fi
+  local archive="/tmp/node-v$NODE_VERSION-linux-x64.tar.xz"
+  curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+    --connect-timeout 15 --max-time 180 \
+    "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-x64.tar.xz" \
+    --output "$archive"
+  printf '%s  %s\n' "$NODE_LINUX_X64_SHA256" "$archive" | sha256sum --check --status ||
+    die 'the Linux Node validation archive failed its pinned SHA-256 check'
+  install -d -m 0755 /opt
+  tar --extract --xz --file "$archive" --directory /opt --no-same-owner
+  [[ "$("$destination/bin/node" --version)" == "v$NODE_VERSION" ]] ||
+    die 'the installed validation runtime has an unexpected version'
+  unlink "$archive"
+}
+
 assert_read_only_mount() {
   local path=$1
   local options
@@ -138,6 +168,18 @@ validate_source_mounts() {
       "$SOURCE_ROOT/public-app"
       "$SOURCE_ROOT/public-catalog"
       "$NGINX_TEMPLATE"
+    )
+  else
+    inputs+=(
+      "$SOURCE_ROOT/docs"
+      "$SOURCE_ROOT/deploy"
+      "$SOURCE_ROOT/compose.yaml"
+      "$SOURCE_ROOT/setup.sh"
+      "$SOURCE_ROOT/schemas"
+      "$SOURCE_ROOT/tools"
+      "$SOURCE_ROOT/examples"
+      "$SOURCE_ROOT/public-app"
+      "$SOURCE_ROOT/public-catalog"
     )
   fi
 
@@ -302,20 +344,6 @@ prepare_private_data() {
   find "$DATA_ROOT_EXPECTED" -xdev -type f -exec chmod 0600 {} +
 }
 
-safe_remove_old_web_releases() {
-  local active_name=$1
-  local candidate
-  while IFS= read -r -d '' candidate; do
-    [[ "$candidate" == "$RUNTIME_ROOT"/release-* ]] ||
-      die "refusing to remove unexpected runtime path: $candidate"
-    [[ "${candidate##*/}" != "$active_name" ]] || continue
-    rm -rf -- "$candidate"
-  done < <(
-    find "$RUNTIME_ROOT" -mindepth 1 -maxdepth 1 \
-      -type d -name 'release-*' -print0
-  )
-}
-
 build_web() {
   note 'Building the locked public catalog assembler'
   (
@@ -398,7 +426,7 @@ build_web() {
   mv -f "$RUNTIME_ROOT/nginx.conf.next" "$RUNTIME_ROOT/nginx.conf"
   ln -s "$release_name" "$current_tmp"
   mv -Tf "$current_tmp" "$RUNTIME_ROOT/current"
-  safe_remove_old_web_releases "$release_name"
+  # Retain earlier releases for recovery; startup never authorizes deletion.
 }
 
 assert_unprivileged_runtime() {
@@ -462,6 +490,7 @@ main() {
   (( EUID == 0 )) || die 'the setup phase must begin as container root'
   install_dependencies
   validate_source_mounts
+  install_validation_runtime
   if [[ "$MINERALS_MODE" == web ]]; then
     [[ -r "$NGINX_TEMPLATE" ]] || die 'nginx review template is missing'
   fi

@@ -6,6 +6,10 @@ WebAssembly application over an exported SQLite snapshot. A smaller private
 Rust/Axum service owns administration, review, ingestion, and publication.
 
 Read [the product vision](docs/VISION.md), [architecture](docs/ARCHITECTURE.md),
+[mineral record questionnaire](docs/MINERAL_RECORD_QUESTIONNAIRE_V1.md),
+[source admission decisions](docs/MINERAL_SOURCE_ADMISSION_V1.md),
+[private COD crystallography pilot](docs/COD_CRYSTALLOGRAPHY_PILOT_V1.md),
+[enrichment backlog](docs/MINERAL_RECORD_ENRICHMENT_BACKLOG.md),
 [ingestion policy](docs/INGESTION.md), [operations guide](docs/OPERATIONS.md),
 and [one-branch GitHub Pages deployment guide](docs/GITHUB_PAGES.md).
 
@@ -308,14 +312,68 @@ preserves the candidate's scientific status. Withdrawal removes a mineral and
 its offers from public surfaces and supersedes any pending revision for that
 slug.
 
-Each individual mineral source entry supports one granular record path such as
-`identity.formula`, `identifiers.cas_number`,
+The current individual mineral importer supports granular legacy record paths
+such as `identity.formula`, `identifiers.cas_number`,
 `properties.hardness_mohs`, or `safety.handling`. Its claim contains a `value`
-and may include unit, conditions, source locator, and note. See
+and may include unit, conditions, source locator, and note. The
+[mineral record questionnaire](docs/MINERAL_RECORD_QUESTIONNAIRE_V1.md) defines
+the expanded v1 namespaces and the reviewed legacy-to-v1 disposition; old
+scopes are not silently reinterpreted. See
 [record and evidence validation](docs/INGESTION.md#record-and-evidence-validation).
 
 The admin SQL endpoint is disabled by default. If explicitly enabled with
 `ADMIN_SQL_ENABLED=true`, SQLite still enforces read-only statements.
+
+## Private COD pilot preparation
+
+The crystallography pilot uses a dedicated Rust runner instead of ad hoc
+per-record retrieval scripts. Its first command validates the fixed public
+population and writes the deterministic population snapshot, 60-mineral
+baseline, 1,000-shard COD metadata query plan, and their hash manifest; its
+second command reproduces and verifies all four files offline:
+
+```bash
+mkdir -p data/pilots/cod-crystallography-v1
+cargo run --locked -p minerals-cod-pilot --bin cod-pilot -- prepare \
+  --repo-root . \
+  --output data/pilots/cod-crystallography-v1/preparation-v1
+cargo run --locked -p minerals-cod-pilot --bin cod-pilot -- verify \
+  --repo-root . \
+  --input data/pilots/cod-crystallography-v1/preparation-v1
+```
+
+Those two commands do not retrieve content or mutate a catalog. Retrieval is
+separate, explicit, rate-limited, and resumable:
+
+```bash
+cargo run --locked -p minerals-cod-pilot --bin cod-pilot -- fetch \
+  --repo-root . \
+  --prepared data/pilots/cod-crystallography-v1/preparation-v1 \
+  --pilot-root data/pilots/cod-crystallography-v1 \
+  --max-new-requests 1
+```
+
+Remove the final bound only for the complete run; use `verify-execution` for a
+network-free audit. The private output is ignored by Git. See the
+[full pilot contract](docs/COD_CRYSTALLOGRAPHY_PILOT_V1.md#standard-discovery-workflow)
+for the retrieval, review, selection-freeze, and publication boundaries.
+
+On Windows, run development and pilot operations in the existing private admin
+container. Its source and public snapshot mounts are read-only; only the
+ignored pilot directory is writable at the runner's repository-relative path.
+The admin container provides SHA-256-pinned Linux Node 22.23.3, Python 3,
+and the shared named Cargo caches. The public web container has no pilot mount.
+
+```bash
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh validate
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh pilot-verify
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh pilot-fetch --max-new-requests 1
+```
+
+Omitting the fetch bound resumes the complete frozen metadata plan. The task
+runner serializes build-cache access, builds as the unprivileged builder,
+reseals caches after validation/builds, and retrieves as the private service
+identity without inheriting administrator secrets. It does not publish claims.
 
 ## Environment
 
@@ -360,8 +418,9 @@ bound private storage and memory exposure; they are not capacity guarantees.
 - State-changing browser requests reject cross-origin submissions; machine
   staging has separate, strictly smaller bearer-token authority.
 - Uploaded images are size-limited and checked by file signature.
-- Search rows are rendered by auto-escaping server templates; database/model
-  text is never treated as HTML.
+- Admin search and review rows use auto-escaping server templates; the public
+  catalog renders database text through DOM text APIs. Database/model text is
+  never treated as HTML.
 - AI calls have connection and overall timeouts. Translation cannot modify
   chemical formulas or numeric invariants.
 - Provider claims and synthetic images never become scientific evidence by
@@ -370,6 +429,10 @@ bound private storage and memory exposure; they are not capacity guarantees.
 ## Tests
 
 ```bash
+node tools/validate-mineral-content-contracts.mjs .
+node tools/validate-cod-crystallography-pilot.mjs .
+node --test tools/test_validate_mineral_content_contracts.mjs \
+  tools/test_validate_cod_crystallography_pilot.mjs
 python3 tools/check-public-boundary.py
 cargo fmt -- --check
 cargo test --locked --workspace

@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waajacu.org/schemas/pilots/cod-crystallography-pilot-item-v1.schema.json",
+  "title": "COD crystallography pilot result item v1",
+  "description": "Private result for one selected Waajacu mineral. Query and extraction outcomes are recorded without creating questionnaire coverage rows or public claims.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "material_public_id",
+    "query_outcome",
+    "source_records"
+  ],
+  "properties": {
+    "material_public_id": {
+      "type": "string",
+      "pattern": "^mat_[0-9a-f]{32}$"
+    },
+    "query_outcome": {
+      "enum": [
+        "matched",
+        "no_candidate",
+        "ambiguous",
+        "excluded"
+      ]
+    },
+    "source_records": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "$ref": "#/$defs/sourceRecord"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "query_outcome": {
+            "const": "no_candidate"
+          }
+        },
+        "required": [
+          "query_outcome"
+        ]
+      },
+      "then": {
+        "properties": {
+          "source_records": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "source_records": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sourceRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence",
+        "crosswalk",
+        "extraction_outcomes"
+      ],
+      "properties": {
+        "evidence": {
+          "$ref": "cod-evidence-v1.schema.json"
+        },
+        "crosswalk": {
+          "$ref": "cod-crosswalk-decision-v1.schema.json"
+        },
+        "extraction_outcomes": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "allOf": [
+            {
+              "contains": {
+                "properties": {
+                  "question_key": {
+                    "const": "crystallography.space_group"
+                  }
+                },
+                "required": [
+                  "question_key"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "question_key": {
+                    "const": "crystallography.unit_cell"
+                  }
+                },
+                "required": [
+                  "question_key"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            },
+            {
+              "contains": {
+                "properties": {
+                  "question_key": {
+                    "const": "crystallography.structure_references"
+                  }
+                },
+                "required": [
+                  "question_key"
+                ]
+              },
+              "minContains": 1,
+              "maxContains": 1
+            }
+          ],
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/spaceGroupOutcome"
+              },
+              {
+                "$ref": "#/$defs/unitCellOutcome"
+              },
+              {
+                "$ref": "#/$defs/structureReferenceOutcome"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "outcomeStatus": {
+      "enum": [
+        "value_present",
+        "not_present_in_source",
+        "source_unknown_placeholder",
+        "source_inapplicable_placeholder",
+        "unsupported_symmetry_kind",
+        "incomplete_required_fields",
+        "parse_error"
+      ]
+    },
+    "outcomeNote": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000
+    },
+    "spaceGroupOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question_key",
+        "outcome"
+      ],
+      "properties": {
+        "question_key": {
+          "const": "crystallography.space_group"
+        },
+        "outcome": {
+          "$ref": "#/$defs/outcomeStatus"
+        },
+        "value": {
+          "$ref": "../values/crystallography-space-group-v1.schema.json"
+        },
+        "note": {
+          "$ref": "#/$defs/outcomeNote"
+        }
+      },
+      "$ref": "#/$defs/valueOutcomeRule"
+    },
+    "unitCellOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question_key",
+        "outcome"
+      ],
+      "properties": {
+        "question_key": {
+          "const": "crystallography.unit_cell"
+        },
+        "outcome": {
+          "$ref": "#/$defs/outcomeStatus"
+        },
+        "value": {
+          "$ref": "../values/crystallography-unit-cell-v1.schema.json"
+        },
+        "note": {
+          "$ref": "#/$defs/outcomeNote"
+        }
+      },
+      "$ref": "#/$defs/valueOutcomeRule"
+    },
+    "structureReferenceOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "question_key",
+        "outcome"
+      ],
+      "properties": {
+        "question_key": {
+          "const": "crystallography.structure_references"
+        },
+        "outcome": {
+          "$ref": "#/$defs/outcomeStatus"
+        },
+        "value": {
+          "$ref": "../values/crystallography-structure-reference-v1.schema.json"
+        },
+        "note": {
+          "$ref": "#/$defs/outcomeNote"
+        }
+      },
+      "$ref": "#/$defs/valueOutcomeRule"
+    },
+    "valueOutcomeRule": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "value_present"
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "required": [
+              "value"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "value"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

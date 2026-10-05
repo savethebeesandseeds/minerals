@@ -1,19 +1,26 @@
 # Mineral record enrichment backlog
 
-> **Call for a later content effort:** enrich the mineral records as one
-> coordinated, source-reviewed release instead of adding isolated fields one at
-> a time. Occurrence/locality data should be the first map-aware addition.
-> Images remain a separate later project with their own provenance and asset
-> pipeline.
+> **Active content effort:** use the versioned
+> [mineral record questionnaire v1](MINERAL_RECORD_QUESTIONNAIRE_V1.md) to
+> enrich the fixed mineral population through coordinated, source-owned,
+> reviewed releases instead of adding isolated fields ad hoc.
+> The first rights-and-fit review is recorded in the
+> [source admission decisions](MINERAL_SOURCE_ADMISSION_V1.md); only its
+> admitted source may currently supply new questionnaire-v1 public claims.
+> Occurrence/locality data remains the first map-aware addition. Images remain
+> a separate later project with their own provenance and asset pipeline.
 
-## Why this is deferred
+## Why this is coordinated
 
-The current public records are strongest on identity, nomenclature, source
-context, evidence, and offers. Reliable localities, physical properties,
-crystallography, and media require additional sources, licensing review,
-normalization, conflict handling, and human review. Doing those together avoids
-repeated schema changes and prevents incomplete fields from looking
-authoritative.
+The current public records are strongest on identity, nomenclature, authority
+context, and one broad identity evidence association. Descriptions,
+classification, properties, safety, and occurrences are almost entirely
+absent. Reliable localities, physical properties, crystallography, and other
+profile facts require additional sources, licensing review, normalization,
+conflict handling, and human review. Designing their shared contract together
+avoids repeated schema changes and prevents incomplete fields from looking
+authoritative. The facts themselves can then arrive in several bounded,
+source-owned releases.
 
 The forest map is currently world context only. It must not imply that a
 mineral occurs wherever the map is green, and `discovery_country` must never be
@@ -81,7 +88,13 @@ An SQLite RTree index and bounding-box query can be added when the dataset is
 large enough to need them. They are implementation details, not substitutes for
 the provenance fields above.
 
-## Other record content to add in the same enrichment pass
+## Questionnaire-governed record modules
+
+The questionnaire defines stable keys, scopes, tiers, value shapes, units,
+applicability, missing states, evidence thresholds, conflict rules, and public
+consumer behavior for the following modules. This backlog remains the
+high-level scientific and map plan; the questionnaire is the normative content
+contract.
 
 ### Identity and history
 
@@ -123,7 +136,9 @@ the provenance fields above.
   an entire profile;
 - source locator, unit, conditions, uncertainty, and conflicting values;
 - source authority, license compatibility, retrieval date, and review state;
-- explicit “unknown” versus “not yet researched” states.
+- explicit `not_yet_researched`, `not_reported_by_reviewed_sources`,
+  `not_applicable`, and `withheld` states instead of a literal `unknown`
+  placeholder.
 
 ## Images are a separate later project
 
@@ -139,27 +154,41 @@ dedicated media effort covering:
 - no hot-linking and no assumption that a source page permits image reuse;
 - a clear distinction between sourced, user-uploaded, and synthetic media.
 
-## One-pass delivery checklist
+## Modular delivery checklist
 
-1. Choose reviewed sources and record their reuse terms.
-2. Finalize occurrence and expanded-fact schemas, including uncertainty and
-   sensitive-location policy.
-3. Build deterministic import adapters that preserve raw values and source
-   locators.
-4. Add duplicate/conflict checks and a curator review interface.
-5. Review a representative pilot across mineral families and countries.
-6. Import the full batch and freeze a reproducible source manifest.
-7. Extend the sanitized public snapshot and worker contract without exposing
-   private review data.
-8. Add record maps, geographic filters, and accessible non-map fallbacks.
-9. Publish coverage and limitations so missing localities are not interpreted
-   as absence.
-10. Treat the later image pipeline as its own reviewed release.
+1. Complete scientific review of questionnaire v1 and promote its
+   machine-readable registry from draft to approved.
+2. Review the initial source-admission matrix. Before any bounded private
+   adapter work, pass the publisher/work/release, rights, stable-identity, and
+   field-ownership gates; use the pilot to satisfy snapshot, reproducibility,
+   locator, semantics, crosswalk, yield, and review gates.
+3. Finalize claim, resolution, coverage, relationship, and occurrence schemas,
+   including uncertainty and sensitive-location policy.
+4. Build deterministic pilot adapters that preserve raw values, source
+   locators, transformations, and release manifests.
+5. Run the questionnaire's reproducible development/holdout pilot and meet its
+   provenance, accuracy, conflict, and reproducibility gates.
+6. Harden accepted adapters for catalog-scale execution and add
+   duplicate/conflict checks plus risk-based curator review.
+7. Import core and specialist modules as separate source-owned releases rather
+   than one all-or-nothing catalog rewrite.
+8. Extend the sanitized public snapshot, worker, UI, search/facets, and
+   site-tool contracts without exposing private review data.
+9. Publish reviewed occurrences before adding record maps, geographic filters,
+   or aggregate occurrence views; retain accessible non-map fallbacks.
+10. Publish per-module coverage and limitations so missing values or localities
+    are not interpreted as absence.
+11. Generate source-language descriptions from resolved reviewed facts only
+    after structured content stabilizes; require a separate translation
+    contract before translating editorial prose.
+12. Treat the later image pipeline as its own reviewed release.
 
 ## Completion criteria
 
-The enrichment effort is complete only when every published value can answer:
-“what does this mean, where did it come from, how precise is it, may we reuse
-it, and who reviewed it?” The public map must remain useful without color,
-pointer input, or exact coordinates, and mineral records must remain usable when
-the map or media package is unavailable.
+The enrichment effort is complete only when every eligible core question has
+an explicit coverage state and every published value can answer: “what does
+this mean, where did it come from, how precise is it, may we reuse it, and who
+reviewed it?” Missing, inapplicable, withheld, and conflicting states must
+remain visible rather than disappearing as empty fields. The public map must
+remain useful without color, pointer input, or exact coordinates, and mineral
+records must remain usable when the map or media package is unavailable.

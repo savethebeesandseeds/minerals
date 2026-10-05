@@ -67,6 +67,9 @@ services:
   admin:
     <<: *minerals-base
     container_name: minerals-admin
+    labels:
+      io.waajacu.minerals.managed: "true"
+      io.waajacu.minerals.role: private-admin
     command: [admin]
     env_file:
       - path: ./.env
@@ -101,6 +104,16 @@ services:
       - ./crates:/workspace/crates:ro
       - ./src:/workspace/src:ro
       - ./static:/workspace/static:ro
+      - ./docs:/workspace/docs:ro
+      - ./deploy:/workspace/deploy:ro
+      - ./compose.yaml:/workspace/compose.yaml:ro
+      - ./setup.sh:/workspace/setup.sh:ro
+      - ./schemas:/workspace/schemas:ro
+      - ./tools:/workspace/tools:ro
+      - ./examples:/workspace/examples:ro
+      - ./public-app:/workspace/public-app:ro
+      - ./public-catalog:/workspace/public-catalog:ro
+      - ./data/pilots:/workspace/data/pilots
       - ./data:/app/data
       - admin-runtime:/runtime
       - cargo-registry:/usr/local/cargo/registry
@@ -116,6 +129,9 @@ services:
   web:
     <<: *minerals-base
     container_name: minerals-web
+    labels:
+      io.waajacu.minerals.managed: "true"
+      io.waajacu.minerals.role: public-web
     command: [web]
     environment:
       MINERALS_BASE_IMAGE: rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663

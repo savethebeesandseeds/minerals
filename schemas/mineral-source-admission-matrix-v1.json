@@ -1,0 +1,1181 @@
+{
+  "format": "waajacu-mineral-source-admission-matrix",
+  "schema_version": 1,
+  "matrix_revision": 2,
+  "status": "draft_for_pilot_validation",
+  "reviewed_on": "2026-08-29",
+  "questionnaire_registry": "schemas/mineral-record-questionnaire-v1.json",
+  "questionnaire_id": "waajacu-mineral-record-questionnaire-v1",
+  "questionnaire_registry_revision": 2,
+  "questionnaire_registry_sha256": "sha256:3299eccef741f16e062801732af0e3ad0bdd998160524454401c70d1ffcbce83",
+  "population_release_id": "sha256:684c2830a145bfa0f0b0ecaf4f80bac64ddb51ffcb4a75035304840a868bccc4",
+  "decision_definitions": {
+    "admitted": "All hard gates pass for the declared field ownership and an ingestion-ready frozen release exists.",
+    "pilot_only": "The source may enter only a bounded private pilot after the named pilot-adapter prerequisite gates pass; every remaining gate must pass before admission or public claims.",
+    "private_only": "Curators may consult the source, but it may not populate public claims.",
+    "deferred": "No ingestion or adapter work until a named unresolved gate is satisfied.",
+    "rejected": "The source is outside the workflow under current terms or scientific fit."
+  },
+  "hard_gates": [
+    "publisher_work_release",
+    "rights",
+    "stable_identity",
+    "locators",
+    "units_and_semantics",
+    "update_behavior",
+    "reproducibility",
+    "field_ownership"
+  ],
+  "policy": {
+    "public_claim_source_decisions": [
+      "admitted"
+    ],
+    "private_pilot_source_decisions": [
+      "admitted",
+      "pilot_only"
+    ],
+    "adapter_work_forbidden_decisions": [
+      "private_only",
+      "deferred",
+      "rejected"
+    ],
+    "pilot_adapter_prerequisite_gates": [
+      "publisher_work_release",
+      "rights",
+      "stable_identity",
+      "field_ownership"
+    ],
+    "non_pass_gate_blocks_public_ingestion": true,
+    "weighted_scores_cannot_override_hard_gates": true,
+    "public_download_is_not_a_reuse_grant": true
+  },
+  "entries": {
+    "ima_cnmnc_2026_07_identity": {
+      "order": 10,
+      "source_id": "ima.cnmnc.master_list",
+      "question_group": "protected_identity_and_authority_context",
+      "publisher": {
+        "name": "International Mineralogical Association, Commission on New Minerals, Nomenclature and Classification (IMA-CNMNC)",
+        "canonical_url": "https://cnmnc.units.it/"
+      },
+      "work": {
+        "title": "The New IMA List of Minerals – A Work in Progress – Updated: July 2026",
+        "canonical_url": "https://cnmnc.units.it/files/editor/IMA_Master_List_%282026-07%29.pdf"
+      },
+      "release": {
+        "version": "2026-07",
+        "released_at": "2026-07",
+        "snapshot_kind": "complete"
+      },
+      "intended_ownership": {
+        "question_keys": [
+          "identity.canonical_name",
+          "identity.formula",
+          "identity.nomenclature_status",
+          "identity.current_valid",
+          "identifiers.ima_number",
+          "authority.discovery_country",
+          "authority.first_reference",
+          "authority.second_reference",
+          "authority.source_status"
+        ],
+        "collection_fields": [],
+        "excluded_uses": [
+          "classification.mineral_group",
+          "classification.scheme_assignments",
+          "history.discovery_year",
+          "history.type_localities",
+          "occurrence.reviewed_reports",
+          "editorial.summary",
+          "identifiers.ima_symbol_without_separate_authority_source"
+        ]
+      },
+      "authority_fit": [
+        "official_authority",
+        "primary_nomenclature"
+      ],
+      "claim_contract": {
+        "subject_scopes": [
+          "species"
+        ],
+        "value_kinds": [
+          "text",
+          "formula",
+          "controlled_term",
+          "boolean",
+          "identifier"
+        ],
+        "cardinality": "single"
+      },
+      "identity_crosswalk": {
+        "source_record_key": "IMA number when present; deterministic ima_species_* adapter identifier otherwise",
+        "method": "bound ima_identity_v1 authority policy; exact approved-release row mapping with reviewed fallback for records without an IMA number",
+        "status": "approved",
+        "fuzzy_matching": "forbidden"
+      },
+      "coverage_expectation": {
+        "denominator_rule": "the fixed 6,226 public valid-species population",
+        "useful_yield_gate": "No regression from the approved 2026-07 authority projection; canonical name, validity, nomenclature status, and source status cover all 6,226 records, while optional source fields retain explicit absence.",
+        "minimum_useful_yield_percent": 100
+      },
+      "format_access": {
+        "formats": [
+          "PDF"
+        ],
+        "access": "public_https_versioned_snapshot",
+        "machine_readable": false,
+        "extraction_risks": [
+          "complex_pdf_table_layout",
+          "source_glyph_normalization"
+        ]
+      },
+      "locator_quality": {
+        "level": "row",
+        "locators": [
+          "source_record_id",
+          "PDF page",
+          "table row",
+          "IMA number when present"
+        ]
+      },
+      "units_definitions": {
+        "status": "documented_for_owned_fields",
+        "policy": "Preserve authority formula and raw status text; no measurement units are owned."
+      },
+      "update_semantics": {
+        "cadence": "periodic_full_snapshot",
+        "correction_behavior": "Later complete lists can rename, redefine, correct, add, or discredit records.",
+        "deletion_behavior": "Absence from a later file is not interpreted outside the bound authority policy.",
+        "required_action": "Stage every new list as a separate reviewed identity release; profile enrichment cannot update these fields."
+      },
+      "rights": {
+        "status": "confirmed_public",
+        "license_expression": "CC-BY-SA-3.0",
+        "license_url": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "public_redistribution": "allowed_with_attribution_and_share_alike",
+        "attribution": "International Mineralogical Association, Commission on New Minerals, Nomenclature and Classification (IMA-CNMNC)",
+        "changes_notice": "Waajacu structurally extracted the PDF table, normalized reviewed layout and source glyphs, mapped IMA status codes, and added stable internal identifiers.",
+        "restrictions": [
+          "retain attribution",
+          "license qualifying adaptations under CC BY-SA 3.0 or a permitted compatible license",
+          "state adaptation",
+          "no endorsement implication"
+        ],
+        "checked_on": "2026-08-28",
+        "evidence_urls": [
+          "https://cnmnc.units.it/files/editor/IMA_Master_List_%282026-07%29.pdf",
+          "https://creativecommons.org/licenses/by-sa/3.0/"
+        ]
+      },
+      "reproducibility": {
+        "status": "captured_and_approved",
+        "retrieved_at": "2026-08-15T16:23:26Z",
+        "artifact_sha256": "sha256:60bcc403b0c23f06b8089edeed03785c4d042d4dc1a40e4da86af31e28210680",
+        "records_sha256": "sha256:c85baeb740974d196fadf8b736849503d860735a8f71ae8d6f1f0f6a43ba4026",
+        "parser": "waajacu_ima_release_adapter@2.1.0",
+        "parser_code_revision": "sha256:814810789114d46806d295b3b9a798defefe22dc28174ac295aa4f1d2d606936",
+        "parser_configuration_sha256": "sha256:15be9cdf2ec5bd07cf34bbc57d4265aaacc8c6832cd5992b22a766d9dc5ae5cb",
+        "approved_batch_id": "batch_ad6884ed2a12336881ce1926923764749c45bd7b5ed253a9ebfa7b2078aa352d",
+        "report_sha256": "sha256:65d795a764c558880064cd179252588e6cf830284b5e3296dfd34ee4b348fdfa"
+      },
+      "conflict_policy": "Authority-owned fields use the bound reviewed IMA release. Preserve earlier releases and disputes; profile sources cannot overwrite them.",
+      "review_burden": {
+        "extraction": "high",
+        "scientific": "high",
+        "required_review": "Existing release accepted through dual extraction, deterministic bundle validation, and attributed operator review; future releases repeat those gates."
+      },
+      "gate_status": {
+        "publisher_work_release": "pass",
+        "rights": "pass",
+        "stable_identity": "pass",
+        "locators": "pass",
+        "units_and_semantics": "pass",
+        "update_behavior": "pass",
+        "reproducibility": "pass",
+        "field_ownership": "pass"
+      },
+      "decision": "admitted",
+      "decision_reason": "Already captured, rights-compatible, reproducible, reviewed, and bound as the sole authority owner for the protected identity fields."
+    },
+    "cod_crystal_observations": {
+      "order": 20,
+      "source_id": "cod",
+      "question_group": "crystal_structure_observations",
+      "publisher": {
+        "name": "Crystallography Open Database project",
+        "canonical_url": "https://www.crystallography.net/cod/"
+      },
+      "work": {
+        "title": "Crystallography Open Database",
+        "canonical_url": "https://wiki.crystallography.net/RESTful_API/"
+      },
+      "release": {
+        "version": "revision_pinned_per_entry",
+        "released_at": "source_record_revision",
+        "snapshot_kind": "bounded_pilot_then_frozen_bulk_snapshot"
+      },
+      "intended_ownership": {
+        "question_keys": [
+          "crystallography.space_group",
+          "crystallography.unit_cell",
+          "crystallography.structure_references"
+        ],
+        "collection_fields": [],
+        "excluded_uses": [
+          "identity.formula",
+          "identity.canonical_name",
+          "classification.mineral_group",
+          "single_unqualified_species_wide_structure_value"
+        ]
+      },
+      "authority_fit": [
+        "curated_scientific_database",
+        "primary_measurement_index"
+      ],
+      "claim_contract": {
+        "subject_scopes": [
+          "specimen",
+          "species"
+        ],
+        "value_kinds": [
+          "structured",
+          "measurement"
+        ],
+        "cardinality": "repeatable"
+      },
+      "identity_crosswalk": {
+        "source_record_key": "COD ID plus repository revision plus CIF data-block code",
+        "method": "Versioned exact matching may generate candidates only from an authority-accepted name or admitted authority alias. Formula is diagnostic only, fuzzy matching is forbidden, and a reviewer must verify the COD identity fields and primary publication before accepting a link to an existing Waajacu public ID.",
+        "status": "pilot_required",
+        "fuzzy_matching": "forbidden"
+      },
+      "coverage_expectation": {
+        "denominator_rule": "pilot records with at least one reviewed exact COD-to-mineral crosswalk",
+        "useful_yield_gate": "At least 95% of eligible records retain a structure citation and all locatable space-group/unit-cell observations without flattening distinct conditions.",
+        "minimum_useful_yield_percent": 95
+      },
+      "format_access": {
+        "formats": [
+          "CSV",
+          "JSON",
+          "CIF",
+          "HKL",
+          "HTML",
+          "RDF",
+          "ZIP",
+          "SVN",
+          "rsync"
+        ],
+        "access": "public_rest_and_bulk",
+        "machine_readable": true,
+        "extraction_risks": [
+          "multiple_measurements_per_species",
+          "specimen_identity",
+          "temperature_pressure_and_revision_conditions"
+        ]
+      },
+      "locator_quality": {
+        "level": "record_revision_and_citation",
+        "locators": [
+          "COD ID",
+          "COD revision",
+          "CIF data block",
+          "DOI or bibliographic citation"
+        ]
+      },
+      "units_definitions": {
+        "status": "approved_private_pilot_contract",
+        "policy": "Use the bound Draft 2020-12 value schemas and official IUCr/COD definitions. Preserve original CIF lexemes and source tags, parse uncertainty without rounding, require all six unit-cell parameters, keep temperature and pressure condition kinds separate, and route CIF '?' or '.' to extraction outcomes rather than values."
+      },
+      "update_semantics": {
+        "cadence": "continuous_record_revisions",
+        "correction_behavior": "Records are revisioned; later revisions do not silently replace frozen claims.",
+        "deletion_behavior": "A missing, withdrawn, or error-marked live record triggers review and may withdraw or supersede its public claim while retaining the prior claim in audit history.",
+        "required_action": "Pin COD ID and revision or freeze a named bulk snapshot for each release."
+      },
+      "rights": {
+        "status": "confirmed_public",
+        "license_expression": "CC0-1.0",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "public_redistribution": "allowed",
+        "attribution": "Acknowledge the original structure authors and COD record even though the database is CC0.",
+        "changes_notice": "Record normalization and any derived symmetry labels must be identified as Waajacu changes.",
+        "restrictions": [
+          "retain original scholarly citations",
+          "do not imply one observation is universal"
+        ],
+        "checked_on": "2026-08-28",
+        "evidence_urls": [
+          "https://crystallography.net/cod/new.html",
+          "https://www.crystallography.net/cod/documents/topic/privacy/COD-privacy-GDPR.pdf",
+          "https://wiki.crystallography.net/RESTful_API/",
+          "https://wiki.crystallography.net/howtoobtaincod/"
+        ]
+      },
+      "reproducibility": {
+        "status": "required_before_pilot_ingestion",
+        "retrieved_at": "not_yet_captured",
+        "artifact_sha256": "not_yet_captured",
+        "parser": "cod_crystallography_v1_rust_adapter_not_yet_implemented",
+        "required_snapshot": "Freeze query/configuration, raw response bytes or bulk revision, per-record revision, and SHA-256 before staging."
+      },
+      "conflict_policy": "Store every qualified observation separately. Never average cells or silently choose a species-wide value; public preference requires review.",
+      "review_burden": {
+        "extraction": "medium",
+        "scientific": "high",
+        "required_review": "Review every crosswalk and all pilot observations; verify conditions, uncertainty, space-group notation, and citation locators."
+      },
+      "gate_status": {
+        "publisher_work_release": "pass",
+        "rights": "pass",
+        "stable_identity": "pass",
+        "locators": "pass",
+        "units_and_semantics": "pass",
+        "update_behavior": "pass",
+        "reproducibility": "not_yet_met",
+        "field_ownership": "pass"
+      },
+      "decision": "pilot_only",
+      "decision_reason": "Rights, access, identifiers, locators, and the three private-pilot value contracts are defined. Reproducibility, reviewed crosswalks, extraction results, claim-only ingestion, runtime lifecycle gates, and the frozen pilot must still pass before admission or public use."
+    },
+    "smithsonian_nmnh_type_and_specimen": {
+      "order": 30,
+      "source_id": "smithsonian.nmnh.mineral_sciences",
+      "question_group": "type_material_and_specimen_occurrences",
+      "publisher": {
+        "name": "Smithsonian Institution, National Museum of Natural History",
+        "canonical_url": "https://naturalhistory.si.edu/research/idsc/data-access"
+      },
+      "work": {
+        "title": "NMNH Department of Mineral Sciences Collections",
+        "canonical_url": "https://collections.nmnh.si.edu/search/ms/"
+      },
+      "release": {
+        "version": "record_snapshot_date",
+        "released_at": "source_record_modified_date_when_supplied",
+        "snapshot_kind": "bounded_api_or_weekly_dump_subset"
+      },
+      "intended_ownership": {
+        "question_keys": [
+          "history.type_material",
+          "history.type_localities",
+          "occurrence.reviewed_reports"
+        ],
+        "collection_fields": [
+          "source_external_id",
+          "locality_name",
+          "locality_type",
+          "country_code",
+          "admin_areas",
+          "basis",
+          "event_date",
+          "geometry_kind",
+          "geometry",
+          "coordinate_precision_m",
+          "uncertainty_radius_m",
+          "coordinate_origin",
+          "publication_transform",
+          "sensitivity_policy",
+          "evidence",
+          "conflict_note"
+        ],
+        "excluded_uses": [
+          "general_species_occurrence_without_specimen_basis",
+          "type_locality_without_explicit_type_designation",
+          "non_CC0_record_content",
+          "sensitive_exact_coordinates"
+        ]
+      },
+      "authority_fit": [
+        "curated_scientific_database",
+        "source_owned_specimen_record",
+        "source_owned_locality_record",
+        "type_material_repository",
+        "locality_record"
+      ],
+      "claim_contract": {
+        "subject_scopes": [
+          "occurrence",
+          "species"
+        ],
+        "value_kinds": [
+          "controlled_term",
+          "identifier",
+          "measurement",
+          "occurrence_relation",
+          "structured",
+          "text",
+          "year_or_date"
+        ],
+        "cardinality": "repeatable"
+      },
+      "identity_crosswalk": {
+        "source_record_key": "Smithsonian accession/catalog number and persistent collection record when supplied",
+        "method": "Review catalog identification and type status against an existing mineral; history.type_localities requires an explicit type-locality designation in the record or cited primary description, while type-specimen status plus collection locality alone supports only type material and a specimen-backed occurrence.",
+        "status": "pilot_required",
+        "fuzzy_matching": "forbidden"
+      },
+      "coverage_expectation": {
+        "denominator_rule": "pilot specimens whose records are explicitly CC0 and exactly crosswalked to one existing mineral",
+        "useful_yield_gate": "100% of eligible records retain catalog ID, specimen basis, locality text, record-specific rights, and an exact source locator.",
+        "minimum_useful_yield_percent": 100
+      },
+      "format_access": {
+        "formats": [
+          "JSON",
+          "CSV",
+          "HTML"
+        ],
+        "access": "public_api_github_weekly_dump_and_search_export",
+        "machine_readable": true,
+        "extraction_risks": [
+          "record_specific_rights",
+          "non_definitive_catalog_identification",
+          "sensitive_or_coarsened_locality"
+        ]
+      },
+      "locator_quality": {
+        "level": "catalog_record",
+        "locators": [
+          "accession number",
+          "catalog number",
+          "persistent collection record URL"
+        ]
+      },
+      "units_definitions": {
+        "status": "field_specific_review_required",
+        "policy": "Preserve museum field definitions and raw locality/coordinate precision; do not infer missing geometry."
+      },
+      "update_semantics": {
+        "cadence": "weekly_dump_and_live_record_updates",
+        "correction_behavior": "Museum records may be corrected; freeze each consumed record snapshot.",
+        "deletion_behavior": "Record removal or access restriction withdraws future publication but does not erase audit history.",
+        "required_action": "Persist modified date, exact record bytes, and record-specific CC0 designation."
+      },
+      "rights": {
+        "status": "record_specific_gate",
+        "license_expression": "CC0-1.0-when-explicitly-designated",
+        "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "public_redistribution": "conditional_per_record",
+        "attribution": "Smithsonian Institution and the source collection record",
+        "changes_notice": "State normalization, coordinate transformations, and any coarsening.",
+        "restrictions": [
+          "only records explicitly designated CC0",
+          "respect sensitive-data exclusions",
+          "verify third-party media separately"
+        ],
+        "checked_on": "2026-08-28",
+        "evidence_urls": [
+          "https://www.si.edu/openaccess/faq",
+          "https://naturalhistory.si.edu/research/idsc/data-access",
+          "https://naturalhistory.si.edu/research/nmnh-collections/museum-collections-policies"
+        ]
+      },
+      "reproducibility": {
+        "status": "required_before_pilot_ingestion",
+        "retrieved_at": "not_yet_captured",
+        "artifact_sha256": "not_yet_captured",
+        "parser": "not_yet_implemented",
+        "required_snapshot": "Freeze selected JSON/CSV records, record modification dates, CC0 flags, query/configuration, and SHA-256."
+      },
+      "conflict_policy": "Publish specimen-backed reports as occurrence evidence, preserve conflicting identifications/localities, and never generalize one specimen into complete species geography.",
+      "review_burden": {
+        "extraction": "medium",
+        "scientific": "high",
+        "required_review": "Review every identity/type designation, rights flag, locality, coordinate, precision, and sensitivity decision."
+      },
+      "gate_status": {
+        "publisher_work_release": "pass",
+        "rights": "conditional",
+        "stable_identity": "pass",
+        "locators": "pass",
+        "units_and_semantics": "conditional",
+        "update_behavior": "pass",
+        "reproducibility": "not_yet_met",
+        "field_ownership": "pass"
+      },
+      "decision": "pilot_only",
+      "decision_reason": "Strong official specimen identifiers and structured access, but reuse and scientific scope must be checked record by record."
+    },
+    "usgs_mrds_occurrence_context": {
+      "order": 40,
+      "source_id": "usgs.mrds",
+      "question_group": "deposit_occurrence_context",
+      "publisher": {
+        "name": "U.S. Geological Survey",
+        "canonical_url": "https://www.usgs.gov/"
+      },
+      "work": {
+        "title": "Mineral Resources Data System (MRDS)",
+        "canonical_url": "https://www.usgs.gov/publications/mineral-resources-data-system-mrds"
+      },
+      "release": {
+        "version": "frozen_arcgis_snapshot_and_doi",
+        "released_at": "snapshot_retrieval_date",
+        "snapshot_kind": "complete_or_bounded_query"
+      },
+      "intended_ownership": {
+        "question_keys": [
+          "occurrence.reviewed_reports"
+        ],
+        "collection_fields": [
+          "source_external_id",
+          "locality_name",
+          "locality_type",
+          "country_code",
+          "admin_areas",
+          "basis",
+          "temporal_status",
+          "geometry_kind",
+          "geometry",
+          "coordinate_precision_m",
+          "uncertainty_radius_m",
+          "coordinate_origin",
+          "publication_transform",
+          "sensitivity_policy",
+          "lifecycle_state",
+          "geological_context",
+          "associated_minerals",
+          "evidence",
+          "conflict_note"
+        ],
+        "excluded_uses": [
+          "commodity_code_as_mineral_species_identity",
+          "species_level_geology_from_one_deposit",
+          "global_completeness_or_abundance_claim",
+          "unreviewed_third_party_content"
+        ]
+      },
+      "authority_fit": [
+        "source_owned_deposit_record",
+        "locality_record",
+        "government_geoscience_database"
+      ],
+      "claim_contract": {
+        "subject_scopes": [
+          "occurrence",
+          "species"
+        ],
+        "value_kinds": [
+          "controlled_term",
+          "identifier",
+          "material_relation",
+          "measurement",
+          "occurrence_relation",
+          "structured",
+          "text"
+        ],
+        "cardinality": "repeatable"
+      },
+      "identity_crosswalk": {
+        "source_record_key": "dep_id",
+        "method": "Admit an occurrence-to-mineral relation only when the record or cited source explicitly identifies the existing mineral species; commodity-only matching is forbidden.",
+        "status": "pilot_required",
+        "fuzzy_matching": "forbidden"
+      },
+      "coverage_expectation": {
+        "denominator_rule": "pilot MRDS records with an explicit reviewable mineral-species assertion, not merely a commodity",
+        "useful_yield_gate": "100% of eligible relations retain dep_id, original references, occurrence basis, geometry provenance, and rights review.",
+        "minimum_useful_yield_percent": 100
+      },
+      "format_access": {
+        "formats": [
+          "JSON",
+          "GeoJSON",
+          "PBF",
+          "ArcGIS Feature Service"
+        ],
+        "access": "public_read_only_arcgis_api",
+        "machine_readable": true,
+        "extraction_risks": [
+          "legacy_incomplete_coverage",
+          "commodity_species_confusion",
+          "cooperative_or_third_party_sources",
+          "coordinate_precision"
+        ]
+      },
+      "locator_quality": {
+        "level": "deposit_record",
+        "locators": [
+          "dep_id",
+          "ArcGIS object/feature locator",
+          "original reference fields"
+        ]
+      },
+      "units_definitions": {
+        "status": "legacy_field_review_required",
+        "policy": "Retain raw MRDS definitions and source references; normalize occurrence fields only through explicit mappings."
+      },
+      "update_semantics": {
+        "cadence": "legacy_read_only_service",
+        "correction_behavior": "Treat the API as a mutable access surface unless a DOI/named snapshot is frozen.",
+        "deletion_behavior": "Missing API features do not delete published claims without a reviewed release diff.",
+        "required_action": "Freeze a DOI-linked or fully hashed snapshot and query definition."
+      },
+      "rights": {
+        "status": "public_domain_with_third_party_gate",
+        "license_expression": "LicenseRef-USGov-Public-Domain-with-third-party-review",
+        "license_url": "https://www.usgs.gov/data-management/data-licensing",
+        "public_redistribution": "conditional_after_release_level_review",
+        "attribution": "U.S. Geological Survey, MRDS, plus original/cooperative sources where required",
+        "changes_notice": "State filtering, mineral crosswalk, normalization, and coordinate transformations.",
+        "restrictions": [
+          "identify third-party or cooperative inputs",
+          "do not imply USGS endorsement"
+        ],
+        "checked_on": "2026-08-28",
+        "evidence_urls": [
+          "https://energy.usgs.gov/arcgis/rest/services/MRData/Mineral_Resource_Data_System/MapServer/3",
+          "https://www.usgs.gov/publications/mineral-resources-data-system-mrds",
+          "https://www.usgs.gov/faqs/are-usgs-reportspublications-copyrighted",
+          "https://www.usgs.gov/data-management/data-licensing"
+        ]
+      },
+      "reproducibility": {
+        "status": "required_before_pilot_ingestion",
+        "retrieved_at": "not_yet_captured",
+        "artifact_sha256": "not_yet_captured",
+        "parser": "not_yet_implemented",
+        "required_snapshot": "Freeze API metadata, complete query/configuration, response bytes, DOI/version context, and SHA-256."
+      },
+      "conflict_policy": "Keep deposit and cited-source claims separate; never average coordinates or infer a species occurrence from a commodity.",
+      "review_burden": {
+        "extraction": "medium",
+        "scientific": "high",
+        "required_review": "Review every mineral crosswalk, original citation, coordinate/precision, rights caveat, and occurrence basis."
+      },
+      "gate_status": {
+        "publisher_work_release": "pass",
+        "rights": "conditional",
+        "stable_identity": "pass",
+        "locators": "pass",
+        "units_and_semantics": "conditional",
+        "update_behavior": "conditional",
+        "reproducibility": "not_yet_met",
+        "field_ownership": "pass"
+      },
+      "decision": "pilot_only",
+      "decision_reason": "Useful official deposit context with stable dep_id, but legacy semantics, species crosswalks, third-party rights, and snapshot reproducibility require a bounded pilot."
+    },
+    "niosh_pocket_guide_safety": {
+      "order": 50,
+      "source_id": "cdc.niosh.pocket_guide",
+      "question_group": "form_specific_occupational_hazards",
+      "publisher": {
+        "name": "Centers for Disease Control and Prevention, National Institute for Occupational Safety and Health",
+        "canonical_url": "https://www.cdc.gov/niosh/"
+      },
+      "work": {
+        "title": "NIOSH Pocket Guide to Chemical Hazards",
+        "canonical_url": "https://www.cdc.gov/niosh/npg/default.html"
+      },
+      "release": {
+        "version": "page_snapshot_date",
+        "released_at": "page_last_reviewed_or_retrieval_date",
+        "snapshot_kind": "bounded_record_set"
+      },
+      "intended_ownership": {
+        "question_keys": [
+          "safety.toxicity",
+          "safety.dust_hazard",
+          "safety.handling"
+        ],
+        "collection_fields": [],
+        "excluded_uses": [
+          "generic_hand_specimen_danger_label",
+          "CAS_only_automatic_mineral_crosswalk",
+          "hazard_outside_stated_material_form_or_exposure_route",
+          "affirmative_no_hazard_inference_from_missing_record"
+        ]
+      },
+      "authority_fit": [
+        "government_occupational_health_authority",
+        "authoritative_occupational_safety_source"
+      ],
+      "claim_contract": {
+        "subject_scopes": [
+          "species"
+        ],
+        "value_kinds": [
+          "structured"
+        ],
+        "cardinality": "repeatable"
+      },
+      "identity_crosswalk": {
+        "source_record_key": "NIOSH Pocket Guide page ID plus CAS/RTECS identifiers",
+        "method": "Human-reviewed mapping of the named substance, polymorph/group coverage, particle form, and exposure route to an existing mineral.",
+        "status": "pilot_required",
+        "fuzzy_matching": "forbidden"
+      },
+      "coverage_expectation": {
+        "denominator_rule": "pilot minerals with an explicit NIOSH record that matches the relevant substance and exposure form",
+        "useful_yield_gate": "100% of eligible claims retain page ID, material form, exposure route, conditions, control text, and source locator.",
+        "minimum_useful_yield_percent": 100
+      },
+      "format_access": {
+        "formats": [
+          "HTML",
+          "PDF"
+        ],
+        "access": "public_web_records_without_documented_bulk_api",
+        "machine_readable": false,
+        "extraction_risks": [
+          "substance_grouping",
+          "polymorph_mapping",
+          "exposure_form_scope",
+          "marked_third_party_material"
+        ]
+      },
+      "locator_quality": {
+        "level": "stable_web_record",
+        "locators": [
+          "NPG page ID",
+          "section heading",
+          "CAS number",
+          "RTECS number"
+        ]
+      },
+      "units_definitions": {
+        "status": "record_specific",
+        "policy": "Preserve exposure units, routes, particle/material form, limits, methods, and jurisdiction/date context exactly."
+      },
+      "update_semantics": {
+        "cadence": "web_page_updates",
+        "correction_behavior": "Freeze every used record; later revisions create a new source release.",
+        "deletion_behavior": "A removed or materially changed page triggers review and may withdraw or supersede current public guidance while retaining prior claims in audit history.",
+        "required_action": "Capture last-reviewed metadata when available, retrieval time, and exact HTML/PDF bytes."
+      },
+      "rights": {
+        "status": "public_domain_with_third_party_gate",
+        "license_expression": "LicenseRef-USGov-Public-Domain-with-marked-exceptions",
+        "license_url": "https://www.cdc.gov/other/agencymaterials.html",
+        "public_redistribution": "conditional_after_page_level_review",
+        "attribution": "Centers for Disease Control and Prevention, NIOSH Pocket Guide",
+        "changes_notice": "State normalization, mineral/form crosswalk, and excerpting or summarization.",
+        "restrictions": [
+          "exclude marked third-party material",
+          "retain source and date",
+          "do not imply CDC endorsement"
+        ],
+        "checked_on": "2026-08-28",
+        "evidence_urls": [
+          "https://www.cdc.gov/niosh/npg/default.html",
+          "https://www.cdc.gov/niosh/npg/npgd0684.html",
+          "https://www.cdc.gov/other/agencymaterials.html"
+        ]
+      },
+      "reproducibility": {
+        "status": "required_before_pilot_ingestion",
+        "retrieved_at": "not_yet_captured",
+        "artifact_sha256": "not_yet_captured",
+        "parser": "not_yet_implemented",
+        "required_snapshot": "Freeze exact record pages/PDF, page IDs, retrieval metadata, mapping decisions, and SHA-256."
+      },
+      "conflict_policy": "Safety guidance is form-, route-, condition-, and date-specific. Preserve disagreement and never convert absence into safety.",
+      "review_burden": {
+        "extraction": "high",
+        "scientific": "critical",
+        "required_review": "Two-person review for every identity/form mapping, hazard interpretation, exposure condition, and public banner decision."
+      },
+      "gate_status": {
+        "publisher_work_release": "pass",
+        "rights": "conditional",
+        "stable_identity": "pass",
+        "locators": "pass",
+        "units_and_semantics": "conditional",
+        "update_behavior": "pass",
+        "reproducibility": "not_yet_met",
+        "field_ownership": "pass"
+      },
+      "decision": "pilot_only",
+      "decision_reason": "Authoritative for narrow occupational hazards, but substance/form mapping and page-level rights require human review and cannot become generic mineral danger labels."
+    },
+    "handbook_of_mineralogy_reference_only": {
+      "order": 60,
+      "source_id": "msa.handbook_of_mineralogy",
+      "question_group": "private_citation_discovery_only",
+      "publisher": {
+        "name": "Mineralogical Society of America / Mineral Data Publishing",
+        "canonical_url": "https://handbookofmineralogy.org/"
+      },
+      "work": {
+        "title": "Handbook of Mineralogy",
+        "canonical_url": "https://handbookofmineralogy.org/pdf-search/"
+      },
+      "release": {
+        "version": "per_pdf_revision_when_available",
+        "released_at": "varies",
+        "snapshot_kind": "private_reference_only"
+      },
+      "intended_ownership": {
+        "question_keys": [],
+        "collection_fields": [],
+        "excluded_uses": [
+          "public_fact_ingestion",
+          "bulk_extraction",
+          "repackaging_summaries",
+          "public_pdf_redistribution"
+        ]
+      },
+      "authority_fit": [
+        "authoritative_handbook",
+        "private_citation_discovery"
+      ],
+      "claim_contract": {
+        "subject_scopes": [],
+        "value_kinds": [],
+        "cardinality": "not_applicable"
+      },
+      "identity_crosswalk": {
+        "source_record_key": "mineral PDF path/title; no documented machine record identifier",
+        "method": "Curator consultation only; follow primary references and admit those separately.",
+        "status": "not_publicly_admitted",
+        "fuzzy_matching": "forbidden"
+      },
+      "coverage_expectation": {
+        "denominator_rule": "not_applicable",
+        "useful_yield_gate": "No public answer may be populated from this source without written permission and a new admission decision.",
+        "minimum_useful_yield_percent": 0
+      },
+      "format_access": {
+        "formats": [
+          "PDF",
+          "HTML index"
+        ],
+        "access": "public_reading_access",
+        "machine_readable": false,
+        "extraction_risks": [
+          "all_rights_reserved",
+          "no_bulk_api",
+          "summary_repackaging",
+          "medium_locator_resolution"
+        ]
+      },
+      "locator_quality": {
+        "level": "document",
+        "locators": [
+          "mineral PDF URL",
+          "page/section",
+          "cited primary reference"
+        ]
+      },
+      "units_definitions": {
+        "status": "not_admitted_for_normalization",
+        "policy": "Use only to identify candidate primary citations; do not transcribe handbook claims."
+      },
+      "update_semantics": {
+        "cadence": "unclear_per_pdf",
+        "correction_behavior": "Revision dates and replacement behavior are inconsistent across legacy PDFs.",
+        "deletion_behavior": "Not applicable to public ingestion.",
+        "required_action": "Written permission and a versioned rights/release agreement are required before reconsideration."
+      },
+      "rights": {
+        "status": "permission_required",
+        "license_expression": "All-Rights-Reserved",
+        "license_url": "https://handbookofmineralogy.org/",
+        "public_redistribution": "forbidden_without_written_permission",
+        "attribution": "Mineralogical Society of America / Mineral Data Publishing",
+        "changes_notice": "Not applicable because public adaptation is not admitted.",
+        "restrictions": [
+          "request permission for reproduction or online use",
+          "do not extract or repackage summaries"
+        ],
+        "checked_on": "2026-08-28",
+        "evidence_urls": [
+          "https://handbookofmineralogy.org/",
+          "https://www.handbookofmineralogy.org/pdfs/quartz.pdf"
+        ]
+      },
+      "reproducibility": {
+        "status": "not_authorized_for_ingestion",
+        "retrieved_at": "not_applicable",
+        "artifact_sha256": "not_applicable",
+        "parser": "forbidden",
+        "required_snapshot": "None unless written permission changes the decision."
+      },
+      "conflict_policy": "Do not create claims. Admit and cite any discovered primary publication through its own source decision.",
+      "review_burden": {
+        "extraction": "high",
+        "scientific": "high",
+        "required_review": "Private curator consultation only; no adapter or public projection."
+      },
+      "gate_status": {
+        "publisher_work_release": "pass",
+        "rights": "fail",
+        "stable_identity": "conditional",
+        "locators": "conditional",
+        "units_and_semantics": "conditional",
+        "update_behavior": "fail",
+        "reproducibility": "fail",
+        "field_ownership": "pass"
+      },
+      "decision": "private_only",
+      "decision_reason": "Scientifically useful as a curator reference, but current reproduction terms do not permit extraction and republication of its summaries."
+    },
+    "rruff_measurements_candidate": {
+      "order": 70,
+      "source_id": "rruff",
+      "question_group": "specimen_chemistry_and_structure_candidate",
+      "publisher": {
+        "name": "RRUFF Project",
+        "canonical_url": "https://www.rruff.net/rruff-homepage/"
+      },
+      "work": {
+        "title": "RRUFF mineral and measurement database",
+        "canonical_url": "https://rruff.info/"
+      },
+      "release": {
+        "version": "current_service_migration",
+        "released_at": "record_revision_when_available",
+        "snapshot_kind": "deferred"
+      },
+      "intended_ownership": {
+        "question_keys": [
+          "chemistry.formula_variants",
+          "chemistry.compositional_variation",
+          "crystallography.space_group",
+          "crystallography.unit_cell"
+        ],
+        "collection_fields": [
+          "source_external_id",
+          "locality_name",
+          "basis",
+          "evidence"
+        ],
+        "excluded_uses": [
+          "raw_spectra_and_diffraction_files_in_questionnaire_v1",
+          "species_universal_values_from_one_specimen",
+          "any_ingestion_before_written_redistribution_permission"
+        ]
+      },
+      "authority_fit": [
+        "curated_scientific_database",
+        "source_owned_specimen_record",
+        "specialist_measurement_database"
+      ],
+      "claim_contract": {
+        "subject_scopes": [
+          "occurrence",
+          "species",
+          "specimen"
+        ],
+        "value_kinds": [
+          "controlled_term",
+          "identifier",
+          "measurement",
+          "structured",
+          "text"
+        ],
+        "cardinality": "repeatable"
+      },
+      "identity_crosswalk": {
+        "source_record_key": "RRUFF sample ID plus measurement ID",
+        "method": "Exact reviewed crosswalk to an existing mineral, preserving specimen and measurement scope.",
+        "status": "blocked_by_rights",
+        "fuzzy_matching": "forbidden"
+      },
+      "coverage_expectation": {
+        "denominator_rule": "not_applicable_until_rights_are_resolved",
+        "useful_yield_gate": "A written redistribution license must be recorded before defining a pilot yield gate.",
+        "minimum_useful_yield_percent": 0
+      },
+      "format_access": {
+        "formats": [
+          "HTML",
+          "downloadable_raw_and_processed_measurement_files"
+        ],
+        "access": "public_read_and_download",
+        "machine_readable": true,
+        "extraction_risks": [
+          "no_express_redistribution_license_found",
+          "service_migration",
+          "specimen_to_species_generalization"
+        ]
+      },
+      "locator_quality": {
+        "level": "sample_and_measurement",
+        "locators": [
+          "RRUFF sample ID",
+          "measurement ID",
+          "record URL"
+        ]
+      },
+      "units_definitions": {
+        "status": "scientifically_strong_but_not_rights_admitted",
+        "policy": "If permission is obtained, preserve sample, method, raw/processed status, conditions, and measurement ID."
+      },
+      "update_semantics": {
+        "cadence": "ongoing_with_service_migration",
+        "correction_behavior": "Record/version behavior must be documented in a written data agreement.",
+        "deletion_behavior": "Unknown until rights/update agreement is obtained.",
+        "required_action": "Obtain written redistribution and update terms before any pilot snapshot."
+      },
+      "rights": {
+        "status": "unresolved",
+        "license_expression": "NOASSERTION",
+        "license_url": "https://www.rruff.net/rruff-homepage/",
+        "public_redistribution": "not_authorized",
+        "attribution": "RRUFF Project and original measurement/publication creators",
+        "changes_notice": "Not applicable until permission is obtained.",
+        "restrictions": [
+          "public download is not treated as a reuse grant",
+          "written permission required"
+        ],
+        "checked_on": "2026-08-28",
+        "evidence_urls": [
+          "https://rruff.info/R050508",
+          "https://rruff.info/about/downloads/About_RRUFF_brochure.pdf",
+          "https://www.rruff.net/rruff-homepage/"
+        ]
+      },
+      "reproducibility": {
+        "status": "blocked_by_rights",
+        "retrieved_at": "not_applicable",
+        "artifact_sha256": "not_applicable",
+        "parser": "not_implemented",
+        "required_snapshot": "Only after written permission defines permitted records, formats, attribution, and redistribution."
+      },
+      "conflict_policy": "No claims may be created while deferred. If admitted later, keep every sample/measurement observation separate.",
+      "review_burden": {
+        "extraction": "medium",
+        "scientific": "high",
+        "required_review": "Rights review first; then every species crosswalk and pilot measurement condition."
+      },
+      "gate_status": {
+        "publisher_work_release": "pass",
+        "rights": "not_yet_met",
+        "stable_identity": "pass",
+        "locators": "pass",
+        "units_and_semantics": "conditional",
+        "update_behavior": "not_yet_met",
+        "reproducibility": "not_yet_met",
+        "field_ownership": "pass"
+      },
+      "decision": "deferred",
+      "decision_reason": "Identifiers and scientific content are promising, but no official express database redistribution license was found."
+    },
+    "mindat_current_terms": {
+      "order": 80,
+      "source_id": "mindat",
+      "question_group": "systematic_catalog_enrichment_forbidden",
+      "publisher": {
+        "name": "Hudson Institute of Mineralogy / Mindat.org",
+        "canonical_url": "https://www.mindat.org/"
+      },
+      "work": {
+        "title": "Mindat.org mineral and locality database",
+        "canonical_url": "https://www.mindat.org/terms.php"
+      },
+      "release": {
+        "version": "terms_effective_2026-08-21",
+        "released_at": "2026-08-21",
+        "snapshot_kind": "rejected"
+      },
+      "intended_ownership": {
+        "question_keys": [],
+        "collection_fields": [],
+        "excluded_uses": [
+          "systematic_copying",
+          "scraping",
+          "populating_another_database",
+          "AI_or_text_data_mining_without_prior_written_authorization",
+          "API_ingestion_under_current_noncommercial_terms"
+        ]
+      },
+      "authority_fit": [
+        "community_curated_reference_not_admitted"
+      ],
+      "claim_contract": {
+        "subject_scopes": [],
+        "value_kinds": [],
+        "cardinality": "not_applicable"
+      },
+      "identity_crosswalk": {
+        "source_record_key": "numeric mineral/locality IDs exist but are not authorized for this use",
+        "method": "No crosswalk or extraction is permitted under this decision.",
+        "status": "forbidden",
+        "fuzzy_matching": "forbidden"
+      },
+      "coverage_expectation": {
+        "denominator_rule": "not_applicable",
+        "useful_yield_gate": "Zero records may be ingested under current terms.",
+        "minimum_useful_yield_percent": 0
+      },
+      "format_access": {
+        "formats": [
+          "HTML",
+          "approval_controlled_JSON_API"
+        ],
+        "access": "restricted_by_terms_and_api_approval",
+        "machine_readable": true,
+        "extraction_risks": [
+          "explicit_systematic_extraction_prohibition",
+          "AI_TDM_prohibition",
+          "noncommercial_share_alike_API_terms"
+        ]
+      },
+      "locator_quality": {
+        "level": "record_id",
+        "locators": [
+          "numeric mineral ID",
+          "numeric locality ID"
+        ]
+      },
+      "units_definitions": {
+        "status": "not_admitted",
+        "policy": "Do not inspect or map fields for systematic enrichment without authorization."
+      },
+      "update_semantics": {
+        "cadence": "live_service_and_beta_api",
+        "correction_behavior": "Not evaluated because rights fail.",
+        "deletion_behavior": "Not evaluated because rights fail.",
+        "required_action": "A signed compatible bulk/public-redistribution agreement is required before reconsideration."
+      },
+      "rights": {
+        "status": "incompatible_current_terms",
+        "license_expression": "API-described-CC-BY-NC-SA-4.0-with-additional-access-and-use-restrictions",
+        "license_url": "https://www.mindat.org/terms.php",
+        "public_redistribution": "forbidden_for_current_project_workflow",
+        "attribution": "Not applicable because no use is admitted.",
+        "changes_notice": "Not applicable because no use is admitted.",
+        "restrictions": [
+          "no systematic copying",
+          "no scraping",
+          "no database population",
+          "no AI/TDM without prior written authorization"
+        ],
+        "checked_on": "2026-08-28",
+        "evidence_urls": [
+          "https://www.mindat.org/terms.php",
+          "https://www.mindat.org/a/copyrights",
+          "https://www.mindat.org/a/how_to_get_my_mindat_api_key"
+        ]
+      },
+      "reproducibility": {
+        "status": "forbidden",
+        "retrieved_at": "not_applicable",
+        "artifact_sha256": "not_applicable",
+        "parser": "forbidden",
+        "required_snapshot": "None under current terms."
+      },
+      "conflict_policy": "No content claims, crosswalks, or derived catalog records may be created from this source under current terms.",
+      "review_burden": {
+        "extraction": "forbidden",
+        "scientific": "not_assessed",
+        "required_review": "Legal/rights agreement before any technical or scientific pilot."
+      },
+      "gate_status": {
+        "publisher_work_release": "pass",
+        "rights": "fail",
+        "stable_identity": "pass",
+        "locators": "pass",
+        "units_and_semantics": "not_yet_met",
+        "update_behavior": "not_yet_met",
+        "reproducibility": "fail",
+        "field_ownership": "fail"
+      },
+      "decision": "rejected",
+      "decision_reason": "Current terms expressly prohibit the systematic extraction, database population, and AI/TDM workflow this project would require."
+    }
+  }
+}

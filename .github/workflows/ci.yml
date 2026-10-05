@@ -31,7 +31,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: 22
+          node-version: 22.23.3
 
       - name: Enforce the public repository boundary
         run: python3 tools/check-public-boundary.py
@@ -52,6 +52,15 @@ jobs:
             tools/test_check_public_boundary.py \
             tools/test_extract_pages_release.py
           node --test tools/test_validate_public_catalog_sidecars.mjs
+
+      - name: Validate scientific content and private pilot contracts
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          node tools/validate-mineral-content-contracts.mjs .
+          node tools/validate-cod-crystallography-pilot.mjs .
+          node --test tools/test_validate_mineral_content_contracts.mjs \
+            tools/test_validate_cod_crystallography_pilot.mjs
 
       - name: Check Rust formatting
         run: |

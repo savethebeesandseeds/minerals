@@ -1,0 +1,340 @@
+{
+  "format": "waajacu-cod-crystallography-pilot-contract",
+  "schema_version": 1,
+  "contract_revision": 1,
+  "pilot_id": "cod-crystallography-v1",
+  "status": "contract_ready_candidate_discovery_not_run",
+  "reviewed_on": "2026-08-29",
+  "human_contract": "docs/COD_CRYSTALLOGRAPHY_PILOT_V1.md",
+  "digest_policy": {
+    "registry_and_matrix": "waajacu-canonical-json-v1",
+    "schema_artifacts": "sha256_of_exact_file_bytes",
+    "prefix": "sha256:"
+  },
+  "bindings": {
+    "questionnaire_registry": {
+      "path": "schemas/mineral-record-questionnaire-v1.json",
+      "id": "waajacu-mineral-record-questionnaire-v1",
+      "revision": 2,
+      "sha256": "sha256:3299eccef741f16e062801732af0e3ad0bdd998160524454401c70d1ffcbce83"
+    },
+    "source_admission_matrix": {
+      "path": "schemas/mineral-source-admission-matrix-v1.json",
+      "entry_id": "cod_crystal_observations",
+      "revision": 2,
+      "sha256": "sha256:5f4795c40424948224caaff7ca717299d8091c91b176f69dec34a19f7dd10993"
+    },
+    "population": {
+      "release_id": "sha256:684c2830a145bfa0f0b0ecaf4f80bac64ddb51ffcb4a75035304840a868bccc4",
+      "mineral_count": 6226,
+      "identity_policy": "fixed_existing_public_ids_only"
+    }
+  },
+  "scope": {
+    "module": "crystallography",
+    "module_lifecycle": "not_launched",
+    "kind": "private_technical_adapter_contract_without_record_coverage",
+    "question_keys": [
+      "crystallography.space_group",
+      "crystallography.unit_cell",
+      "crystallography.structure_references"
+    ],
+    "excluded_mutations": [
+      "create_mineral",
+      "rename_mineral",
+      "merge_minerals",
+      "change_authority_formula",
+      "change_ima_identity_or_status",
+      "change_classification",
+      "create_questionnaire_coverage_rows",
+      "public_projection"
+    ]
+  },
+  "schemas": {
+    "value_schemas": [
+      {
+        "question_key": "crystallography.space_group",
+        "path": "schemas/values/crystallography-space-group-v1.schema.json",
+        "sha256": "sha256:757be8bd87ae5b9412c7a5cc2583e1f55e2f8dbbb8dab122b78feb4cdf5fac36"
+      },
+      {
+        "question_key": "crystallography.unit_cell",
+        "path": "schemas/values/crystallography-unit-cell-v1.schema.json",
+        "sha256": "sha256:560f522fd5da383d6c5ef71eaa8a6369864107d1ce887d5472e8fbf79674e633"
+      },
+      {
+        "question_key": "crystallography.structure_references",
+        "path": "schemas/values/crystallography-structure-reference-v1.schema.json",
+        "sha256": "sha256:dcebb8eace6791167f3375f16dbf11cd91c48f8d60956d1793046fae17244600"
+      }
+    ],
+    "supporting_schemas": [
+      {
+        "role": "immutable_cod_evidence",
+        "path": "schemas/pilots/cod-evidence-v1.schema.json",
+        "sha256": "sha256:feb702383864ea9cb2ba755983e62101874fcd36ebcd6127957a6f918b52320e"
+      },
+      {
+        "role": "reviewed_crosswalk_decision",
+        "path": "schemas/pilots/cod-crosswalk-decision-v1.schema.json",
+        "sha256": "sha256:55121d1f3484b700ffed3e58318eb7212dc31b9e781fe08b20dfd6a7e88dbbf8"
+      },
+      {
+        "role": "frozen_metadata_discovery_query_plan",
+        "path": "schemas/pilots/cod-metadata-discovery-query-plan-v1.schema.json",
+        "sha256": "sha256:963429003fbef13f251e1d2b78c51af1d7fba9dccfbcd2a815d42d3b240c8932"
+      },
+      {
+        "role": "offline_preparation_manifest",
+        "path": "schemas/pilots/cod-crystallography-preparation-manifest-v1.schema.json",
+        "sha256": "sha256:f7e19faf99c83a8d190882b78b58d7738d24fe73ab16ca74219e5f9a778f60cc"
+      },
+      {
+        "role": "metadata_discovery_execution_index",
+        "path": "schemas/pilots/cod-metadata-discovery-execution-index-v1.schema.json",
+        "sha256": "sha256:ea493be6e7e9e3d2a905aaf3e07a3b3c26d880a3e43c968c1b67618831b306b1"
+      },
+      {
+        "role": "frozen_challenge_eligibility_manifest",
+        "path": "schemas/pilots/cod-crystallography-challenge-eligibility-v1.schema.json",
+        "sha256": "sha256:ac39aba621233f68b35a358a1fbf75bbcef6dcf9ca982933dd2b569d38657eac"
+      },
+      {
+        "role": "frozen_selection_manifest",
+        "path": "schemas/pilots/cod-crystallography-selection-manifest-v1.schema.json",
+        "sha256": "sha256:4f43a5c01a47e31404ee44b46c30203ccc2e82fe42ad7fa57258f289d3330037"
+      },
+      {
+        "role": "private_result_item",
+        "path": "schemas/pilots/cod-crystallography-pilot-item-v1.schema.json",
+        "sha256": "sha256:e0c7e4a62dcf6dcb54095d436a680c0ad9d2be24a026d4a883f5f06c884fc6a8"
+      },
+      {
+        "role": "completed_run_manifest",
+        "path": "schemas/pilots/cod-crystallography-run-manifest-v1.schema.json",
+        "sha256": "sha256:1357b2fa4833b359b64e78e407dcb63f3ccb3dea671ff4150f3268b0ce296c63"
+      }
+    ]
+  },
+  "source_evidence_policy": {
+    "discovery_endpoint": "https://www.crystallography.net/cod/result",
+    "evidence_url_template": "https://www.crystallography.net/cod/{cod_id}.cif@{cod_svn_revision}",
+    "immutable_identity_components": [
+      "cod_id",
+      "cod_svn_revision",
+      "data_block_code",
+      "cif_sha256"
+    ],
+    "ordinary_projection_exclusions": [
+      "duplicate_record",
+      "suboptimal_record",
+      "cod_errors",
+      "retracted_record",
+      "theoretical_determination",
+      "synthetic_only_without_current_species_support"
+    ],
+    "warning_behavior": "manual_review_required",
+    "revision_behavior": "new_immutable_evidence_version_and_review; never_overwrite_prior_revision",
+    "missing_search_result_behavior": "not_deletion; reconcile_by_permanent_cod_id_and_revision_pinned_access"
+  },
+  "sample_design": {
+    "selection_manifest_status": "pending_candidate_discovery_not_frozen",
+    "counts": {
+      "total": 96,
+      "development": 72,
+      "holdout": 24,
+      "baseline": 60,
+      "baseline_development": 45,
+      "baseline_holdout": 15,
+      "challenge": 36,
+      "challenge_development": 27,
+      "challenge_holdout": 9
+    },
+    "baseline": {
+      "salt": "questionnaire-v1-baseline",
+      "hash_input": "UTF8(salt) || 0x00 || UTF8(public_id)",
+      "ranking": "ascending_sha256_bytes_then_ascending_utf8_public_id",
+      "development_ranks": "1-45",
+      "holdout_ranks": "46-60"
+    },
+    "challenge": {
+      "eligibility_freeze": "after_raw_candidate_discovery_and_before_normalized_adapter_output",
+      "selection_salt": "cod-crystallography-v1-challenge-selection",
+      "selection_hash_input": "UTF8(selection_salt) || 0x00 || UTF8(group) || 0x00 || UTF8(stratum) || 0x00 || UTF8(public_id)",
+      "assignment": "declared_group_and_stratum_order_then_lowest_sha256_among_unselected_eligible_public_ids",
+      "shortfall_behavior": "block_and_review_the_sample_design; do_not_fill_from_another_stratum",
+      "split_salt": "cod-crystallography-v1-challenge-split",
+      "split_hash_input": "UTF8(split_salt) || 0x00 || UTF8(group) || 0x00 || UTF8(public_id)",
+      "split_rule": "within_each_group_lowest_three_split_hashes_are_holdout_and_remaining_nine_are_development",
+      "groups": [
+        {
+          "id": "nomenclature_crosswalk",
+          "count": 12,
+          "development": 9,
+          "holdout": 3,
+          "strata": [
+            {
+              "id": "accepted_name_exact_unique",
+              "quota": 3
+            },
+            {
+              "id": "authority_alias_exact_unique",
+              "quota": 3
+            },
+            {
+              "id": "multiple_exact_or_former_name_ambiguity",
+              "quota": 3
+            },
+            {
+              "id": "no_exact_name_candidate",
+              "quota": 3
+            }
+          ]
+        },
+        {
+          "id": "value_shape_applicability",
+          "count": 12,
+          "development": 9,
+          "holdout": 3,
+          "strata": [
+            {
+              "id": "multiple_determinations_or_data_blocks",
+              "quota": 2
+            },
+            {
+              "id": "parenthesized_or_separate_uncertainty",
+              "quota": 2
+            },
+            {
+              "id": "unknown_or_inapplicable_placeholder",
+              "quota": 2
+            },
+            {
+              "id": "nonambient_temperature_or_pressure",
+              "quota": 2
+            },
+            {
+              "id": "incomplete_six_parameter_cell",
+              "quota": 2
+            },
+            {
+              "id": "conflicting_or_multiple_space_group_forms",
+              "quota": 2
+            }
+          ]
+        },
+        {
+          "id": "provenance_risk",
+          "count": 12,
+          "development": 9,
+          "holdout": 3,
+          "strata": [
+            {
+              "id": "duplicate_or_suboptimal_relation",
+              "quota": 3
+            },
+            {
+              "id": "warning_error_or_retraction_status",
+              "quota": 3
+            },
+            {
+              "id": "theoretical_or_synthetic_origin",
+              "quota": 3
+            },
+            {
+              "id": "missing_or_nonstandard_publication_citation",
+              "quota": 3
+            }
+          ]
+        }
+      ]
+    },
+    "replacement_policy": "forbidden_after_selection_manifest_freeze",
+    "query_outcomes_required_for_every_selected_mineral": [
+      "matched",
+      "no_candidate",
+      "ambiguous",
+      "excluded"
+    ]
+  },
+  "crosswalk_policy": {
+    "candidate_algorithm": "exact_authority_names_v1",
+    "target": "one_existing_material_public_id_or_no_link",
+    "many_cod_records_per_mineral": true,
+    "one_cod_sample_to_multiple_minerals": false,
+    "fuzzy_matching": "forbidden",
+    "formula_role": "diagnostic_only_never_candidate_generation_or_acceptance",
+    "accepted_match_bases": [
+      "accepted_name_exact",
+      "authority_alias_exact",
+      "primary_publication_explicit"
+    ],
+    "manual_review": "required_for_every_decision_and_every_accepted_link",
+    "synthetic_or_theoretical_behavior": "unattached_or_rejected_in_v1_unless_primary_evidence_supports_a_natural_current_species_record",
+    "identity_mutation": "forbidden"
+  },
+  "extraction_policy": {
+    "implementation_target": "versioned_rust_adapter",
+    "python_retrieval_automation": "not_part_of_standard_workflow",
+    "cif_unknown_token": "operational_outcome_source_unknown_placeholder",
+    "cif_inapplicable_token": "operational_outcome_source_inapplicable_placeholder",
+    "absent_tag": "operational_outcome_not_present_in_source",
+    "placeholder_to_json_null": "forbidden",
+    "placeholder_to_zero": "forbidden",
+    "raw_lexeme_and_source_field": "required_for_every_extracted_scalar",
+    "uncertainty": "parse_parenthesized_or_separate_standard_uncertainty_and_preserve_raw; disagreement_blocks_review",
+    "space_group_inference": "forbidden",
+    "unit_cell_symmetry_fill": "forbidden",
+    "unit_cell_averaging": "forbidden",
+    "locally_recomputed_volume_as_sourced_claim": "forbidden",
+    "citation_role_upgrade_without_evidence": "forbidden"
+  },
+  "quality_gates": {
+    "schema_valid_results_percent": 100,
+    "reviewed_crosswalk_decisions_percent": 100,
+    "reviewed_extraction_outcomes_percent": 100,
+    "useful_yield_percent": 95,
+    "useful_yield_denominator": "selected_minerals_with_at_least_one_reviewed_accepted_cod_crosswalk",
+    "holdout_configuration_frozen": true,
+    "no_holdout_tuning": true,
+    "no_silent_value_repair": true
+  },
+  "runtime_boundary": {
+    "current_bulk_ingestion_compatible": false,
+    "current_public_exporter_questionnaire_gate": false,
+    "private_artifact_generation": "allowed_for_frozen_candidate_discovery_and_after_selection_freeze",
+    "runtime_staging": "blocked",
+    "required_ingestion_policy": "cod_crystallography_v1",
+    "required_ingestion_shape": "claim_only_many_source_records_per_existing_mineral_with_immutable_revision_history",
+    "required_review_surface": "every_crosswalk_and_every_extraction_outcome",
+    "required_public_gate": "source_admitted_and_module_active_and_claim_resolved_and_exporter_enforces_all_three",
+    "public_projection": "forbidden"
+  },
+  "next_stage": {
+    "name": "rust_candidate_discovery_runner_and_selection_freeze",
+    "may_retrieve": [
+      "frozen_cod_search_metadata",
+      "revision_pinned_cif_bytes_needed_for_challenge_eligibility"
+    ],
+    "must_produce": [
+      "content_addressed_raw_artifacts",
+      "challenge_eligibility_manifest",
+      "frozen_96_mineral_selection_manifest"
+    ],
+    "must_not_produce": [
+      "public_claims",
+      "questionnaire_coverage_rows",
+      "runtime_ingestion_batch",
+      "holdout_normalized_output_before_development_freeze"
+    ]
+  },
+  "official_references": [
+    "https://wiki.crystallography.net/RESTful_API/",
+    "https://wiki.crystallography.net/cod_mysql_schema/",
+    "https://wiki.crystallography.net/cod/id/",
+    "https://www.iucr.org/resources/cif/dictionaries/cif_core",
+    "https://www.iucr.org/__data/iucr/cifdic_html/1/cif_core.dic/Cspace_group.html",
+    "https://www.iucr.org/__data/iucr/cifdic_html/1/cif_core.dic/Ccell.html",
+    "https://www.iucr.org/resources/cif/spec/ancillary/placeholders"
+  ]
+}

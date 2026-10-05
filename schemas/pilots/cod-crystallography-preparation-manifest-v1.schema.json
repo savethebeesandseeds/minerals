@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waajacu.org/schemas/pilots/cod-crystallography-preparation-manifest-v1.schema.json",
+  "title": "COD crystallography offline preparation manifest v1",
+  "description": "A closed, content-addressed envelope for the deterministic offline inputs that must be verified before COD metadata retrieval begins.",
+  "$comment": "Before retrieval, runtime validation MUST validate this schema and run the Rust cod-pilot verifier. That verifier must reproduce all three canonical JSON artifacts byte-for-byte from the bound pilot contract and validated public catalog; verify each declared byte count and SHA-256 digest; reject extra, missing, non-regular, or symlinked files; require population-snapshot.json to be waajacu-cod-population-snapshot v1 with exactly 6,226 unique, ordered public IDs; require baseline-selection.json to be waajacu-cod-baseline-selection v1 with the frozen 60-entry ranking and population hash binding; and require cod-query-plan.json to be waajacu-cod-metadata-discovery-query-plan v1 with its complete frozen request partition and safety invariants. Retrieval MUST consume only the verified query-plan bytes bound here. Separate population-row and baseline-row schemas are intentionally unnecessary at this boundary because those artifacts are closed Rust types with deny_unknown_fields and are regenerated and compared byte-for-byte.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schema_version",
+    "pilot_id",
+    "execution_boundary",
+    "inputs",
+    "artifacts"
+  ],
+  "properties": {
+    "format": {
+      "const": "waajacu-cod-pilot-preparation"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "pilot_id": {
+      "const": "cod-crystallography-v1"
+    },
+    "execution_boundary": {
+      "$ref": "#/$defs/executionBoundary"
+    },
+    "inputs": {
+      "$ref": "#/$defs/inputs"
+    },
+    "artifacts": {
+      "$ref": "#/$defs/artifacts"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "executionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_access",
+        "mutable_registry_access",
+        "database_writes"
+      ],
+      "properties": {
+        "network_access": {
+          "const": "forbidden_during_prepare_and_verify"
+        },
+        "mutable_registry_access": {
+          "const": "forbidden"
+        },
+        "database_writes": {
+          "const": "forbidden"
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pilot_contract",
+        "public_catalog"
+      ],
+      "properties": {
+        "pilot_contract": {
+          "$ref": "#/$defs/pilotContractBinding"
+        },
+        "public_catalog": {
+          "$ref": "#/$defs/publicCatalogBinding"
+        }
+      }
+    },
+    "pilotContractBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "bytes"
+      ],
+      "properties": {
+        "path": {
+          "const": "schemas/pilots/cod-crystallography-pilot-v1.json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        }
+      }
+    },
+    "publicCatalogBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "format",
+        "schema_version",
+        "release_id",
+        "mineral_count",
+        "database_path",
+        "database_sha256",
+        "database_bytes"
+      ],
+      "properties": {
+        "path": {
+          "const": "public-catalog"
+        },
+        "format": {
+          "const": "waajacu-public-catalog-v1"
+        },
+        "schema_version": {
+          "const": 1
+        },
+        "release_id": {
+          "const": "sha256:684c2830a145bfa0f0b0ecaf4f80bac64ddb51ffcb4a75035304840a868bccc4"
+        },
+        "mineral_count": {
+          "const": 6226
+        },
+        "database_path": {
+          "const": "data/catalog-04f38354e7aec37d91466b88b6201997deae40ad53d5d76136f3efc8c45bca0c.sqlite3"
+        },
+        "database_sha256": {
+          "const": "sha256:04f38354e7aec37d91466b88b6201997deae40ad53d5d76136f3efc8c45bca0c"
+        },
+        "database_bytes": {
+          "const": 13967360
+        }
+      }
+    },
+    "artifacts": {
+      "description": "The complete three-file preparation set. No unbound retrieval input is permitted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "population_snapshot",
+        "baseline_selection",
+        "query_plan"
+      ],
+      "properties": {
+        "population_snapshot": {
+          "$ref": "#/$defs/populationSnapshotBinding"
+        },
+        "baseline_selection": {
+          "$ref": "#/$defs/baselineSelectionBinding"
+        },
+        "query_plan": {
+          "$ref": "#/$defs/queryPlanBinding"
+        }
+      }
+    },
+    "populationSnapshotBinding": {
+      "description": "Exact-byte binding for waajacu-cod-population-snapshot v1: the ordered 6,226-mineral public-ID and canonical-name snapshot regenerated by the Rust verifier.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "bytes"
+      ],
+      "properties": {
+        "path": {
+          "const": "population-snapshot.json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        }
+      }
+    },
+    "baselineSelectionBinding": {
+      "description": "Exact-byte binding for waajacu-cod-baseline-selection v1: the deterministic 45-development and 15-holdout baseline regenerated by the Rust verifier.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "bytes"
+      ],
+      "properties": {
+        "path": {
+          "const": "baseline-selection.json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8388608
+        }
+      }
+    },
+    "queryPlanBinding": {
+      "description": "Exact-byte binding for waajacu-cod-metadata-discovery-query-plan v1: the only request plan that retrieval may consume.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "bytes"
+      ],
+      "properties": {
+        "path": {
+          "const": "cod-query-plan.json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        }
+      }
+    }
+  }
+}

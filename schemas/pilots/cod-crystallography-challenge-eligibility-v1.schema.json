@@ -1,0 +1,457 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waajacu.org/schemas/pilots/cod-crystallography-challenge-eligibility-v1.schema.json",
+  "title": "Frozen COD crystallography challenge eligibility manifest v1",
+  "description": "The reviewed, evidence-based pool from which the 36 COD crystallography challenge minerals are selected. It is frozen after raw candidate discovery and before any normalized adapter output is inspected.",
+  "$comment": "Runtime validation MUST reject repeated material_public_id values and repeated evidence_id values even when the surrounding objects differ; verify every public ID and canonical-name snapshot against the bound population; verify every evidence artifact and locator against the bound population or discovery snapshot; require primary_stratum to occur in criterion_tags and in at least one qualifying evidence item; enforce the pilot's per-stratum minimums (3 for each nomenclature_crosswalk and provenance_risk stratum, 2 for each value_shape_applicability stratum); and verify that discovery and entry review times are not later than frozen_at. JSON Schema uniqueItems rejects identical array values but cannot express key uniqueness or these cross-artifact invariants.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schema_version",
+    "pilot_id",
+    "manifest_revision",
+    "status",
+    "frozen_at",
+    "pilot_contract",
+    "population",
+    "discovery_snapshot",
+    "freeze_guard",
+    "eligibility_rule",
+    "entries"
+  ],
+  "properties": {
+    "format": {
+      "const": "waajacu-cod-crystallography-challenge-eligibility-manifest"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "pilot_id": {
+      "const": "cod-crystallography-v1"
+    },
+    "manifest_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "const": "frozen_before_normalized_output"
+    },
+    "frozen_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "pilot_contract": {
+      "$ref": "#/$defs/pilotContractBinding"
+    },
+    "population": {
+      "$ref": "#/$defs/populationBinding"
+    },
+    "discovery_snapshot": {
+      "$ref": "#/$defs/discoverySnapshotBinding"
+    },
+    "freeze_guard": {
+      "$ref": "#/$defs/freezeGuard"
+    },
+    "eligibility_rule": {
+      "$ref": "#/$defs/eligibilityRule"
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 36,
+      "maxItems": 6226,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "artifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "^data/pilots/cod-crystallography-v1/"
+    },
+    "pilotContractBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "contract_revision"
+      ],
+      "properties": {
+        "path": {
+          "const": "schemas/pilots/cod-crystallography-pilot-v1.json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contract_revision": {
+          "const": 1
+        }
+      }
+    },
+    "populationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_id",
+        "mineral_count",
+        "identity_policy",
+        "snapshot_path",
+        "snapshot_sha256"
+      ],
+      "properties": {
+        "release_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "mineral_count": {
+          "const": 6226
+        },
+        "identity_policy": {
+          "const": "fixed_existing_public_ids_only"
+        },
+        "snapshot_path": {
+          "$ref": "#/$defs/artifactPath"
+        },
+        "snapshot_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "discoverySnapshotBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "query_configuration_sha256",
+        "frozen_at",
+        "raw_candidate_discovery_complete",
+        "contains_normalized_adapter_output"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/artifactPath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "query_configuration_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "frozen_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "raw_candidate_discovery_complete": {
+          "const": true
+        },
+        "contains_normalized_adapter_output": {
+          "const": false
+        }
+      }
+    },
+    "freezeGuard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_candidate_discovery_complete",
+        "discovery_snapshot_frozen",
+        "all_entries_reviewed",
+        "normalized_adapter_output_inspected",
+        "normalized_adapter_output_used_for_eligibility"
+      ],
+      "properties": {
+        "raw_candidate_discovery_complete": {
+          "const": true
+        },
+        "discovery_snapshot_frozen": {
+          "const": true
+        },
+        "all_entries_reviewed": {
+          "const": true
+        },
+        "normalized_adapter_output_inspected": {
+          "const": false
+        },
+        "normalized_adapter_output_used_for_eligibility": {
+          "const": false
+        }
+      }
+    },
+    "eligibilityRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "assignment",
+        "allowed_evidence",
+        "normalized_output_policy"
+      ],
+      "properties": {
+        "id": {
+          "const": "cod-crystallography-challenge-eligibility-v1"
+        },
+        "version": {
+          "const": 1
+        },
+        "assignment": {
+          "const": "one_reviewed_primary_group_and_stratum_per_exact_public_id"
+        },
+        "allowed_evidence": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "frozen_population_identity_snapshot"
+            },
+            {
+              "const": "frozen_raw_candidate_discovery_snapshot"
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "normalized_output_policy": {
+          "const": "inspection_and_use_for_eligibility_forbidden"
+        }
+      }
+    },
+    "criterion": {
+      "enum": [
+        "accepted_name_exact_unique",
+        "authority_alias_exact_unique",
+        "multiple_exact_or_former_name_ambiguity",
+        "no_exact_name_candidate",
+        "multiple_determinations_or_data_blocks",
+        "parenthesized_or_separate_uncertainty",
+        "unknown_or_inapplicable_placeholder",
+        "nonambient_temperature_or_pressure",
+        "incomplete_six_parameter_cell",
+        "conflicting_or_multiple_space_group_forms",
+        "duplicate_or_suboptimal_relation",
+        "warning_error_or_retraction_status",
+        "theoretical_or_synthetic_origin",
+        "missing_or_nonstandard_publication_citation"
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence_id",
+        "source_kind",
+        "source_artifact_sha256",
+        "source_locator",
+        "basis",
+        "supports_criterion",
+        "observed_fact"
+      ],
+      "properties": {
+        "evidence_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_kind": {
+          "enum": [
+            "population_identity_snapshot",
+            "cod_candidate_discovery_response",
+            "cod_revision_pinned_cif"
+          ]
+        },
+        "source_artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_locator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "basis": {
+          "enum": [
+            "direct_raw_fact",
+            "absence_in_complete_frozen_result",
+            "comparison_of_raw_metadata_to_authority_identity",
+            "content_addressed_relation_or_status"
+          ]
+        },
+        "supports_criterion": {
+          "$ref": "#/$defs/criterion"
+        },
+        "observed_fact": {
+          "description": "A concise curator statement of the fact visible at source_locator. It is qualification evidence, not normalized crystallographic output.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "curator",
+        "reviewed_at",
+        "rationale",
+        "evidence_verified",
+        "normalized_adapter_output_inspected"
+      ],
+      "properties": {
+        "status": {
+          "const": "reviewed"
+        },
+        "curator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "evidence_verified": {
+          "const": true
+        },
+        "normalized_adapter_output_inspected": {
+          "const": false
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "material_public_id",
+        "canonical_name_snapshot",
+        "decision",
+        "challenge_group",
+        "primary_stratum",
+        "criterion_tags",
+        "qualifying_evidence",
+        "rule_version",
+        "review"
+      ],
+      "properties": {
+        "material_public_id": {
+          "type": "string",
+          "pattern": "^mat_[0-9a-f]{32}$"
+        },
+        "canonical_name_snapshot": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "decision": {
+          "const": "eligible"
+        },
+        "challenge_group": {
+          "enum": [
+            "nomenclature_crosswalk",
+            "value_shape_applicability",
+            "provenance_risk"
+          ]
+        },
+        "primary_stratum": {
+          "$ref": "#/$defs/criterion"
+        },
+        "criterion_tags": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/criterion"
+          }
+        },
+        "qualifying_evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "rule_version": {
+          "const": 1
+        },
+        "review": {
+          "$ref": "#/$defs/review"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "challenge_group": {
+              "const": "nomenclature_crosswalk"
+            },
+            "primary_stratum": {
+              "enum": [
+                "accepted_name_exact_unique",
+                "authority_alias_exact_unique",
+                "multiple_exact_or_former_name_ambiguity",
+                "no_exact_name_candidate"
+              ]
+            }
+          },
+          "required": [
+            "challenge_group",
+            "primary_stratum"
+          ]
+        },
+        {
+          "properties": {
+            "challenge_group": {
+              "const": "value_shape_applicability"
+            },
+            "primary_stratum": {
+              "enum": [
+                "multiple_determinations_or_data_blocks",
+                "parenthesized_or_separate_uncertainty",
+                "unknown_or_inapplicable_placeholder",
+                "nonambient_temperature_or_pressure",
+                "incomplete_six_parameter_cell",
+                "conflicting_or_multiple_space_group_forms"
+              ]
+            }
+          },
+          "required": [
+            "challenge_group",
+            "primary_stratum"
+          ]
+        },
+        {
+          "properties": {
+            "challenge_group": {
+              "const": "provenance_risk"
+            },
+            "primary_stratum": {
+              "enum": [
+                "duplicate_or_suboptimal_relation",
+                "warning_error_or_retraction_status",
+                "theoretical_or_synthetic_origin",
+                "missing_or_nonstandard_publication_citation"
+              ]
+            }
+          },
+          "required": [
+            "challenge_group",
+            "primary_stratum"
+          ]
+        }
+      ]
+    }
+  }
+}

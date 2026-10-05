@@ -824,6 +824,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "minerals-cod-pilot"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "minerals-public-catalog",
+ "reqwest",
+ "ring",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "minerals-ima-release"
 version = "0.1.0"
 dependencies = [

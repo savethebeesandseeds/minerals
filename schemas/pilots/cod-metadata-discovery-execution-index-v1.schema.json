@@ -1,0 +1,779 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waajacu.org/schemas/pilots/cod-metadata-discovery-execution-index-v1.schema.json",
+  "title": "COD metadata discovery execution index v1",
+  "description": "A resumable, ordered index of attempts and immutable raw response bodies for the frozen 1,000-request COD metadata discovery plan. A complete snapshot identity is permitted only after every planned request has one validated successful receipt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schema_version",
+    "pilot_id",
+    "index_revision",
+    "status",
+    "started_at",
+    "updated_at",
+    "plan",
+    "counts",
+    "successful_receipts",
+    "safety_assertions"
+  ],
+  "properties": {
+    "format": {
+      "const": "waajacu-cod-metadata-discovery-execution-index"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "pilot_id": {
+      "const": "cod-crystallography-v1"
+    },
+    "index_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": [
+        "partial",
+        "complete"
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "plan": {
+      "$ref": "#/$defs/planBinding"
+    },
+    "counts": {
+      "$ref": "#/$defs/counts"
+    },
+    "successful_receipts": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "$ref": "#/$defs/successfulReceipt"
+      }
+    },
+    "halted_request": {
+      "$ref": "#/$defs/haltedRequest"
+    },
+    "snapshot_identity": {
+      "$ref": "#/$defs/snapshotIdentity"
+    },
+    "safety_assertions": {
+      "$ref": "#/$defs/safetyAssertions"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "complete"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "completed_at",
+          "snapshot_identity"
+        ],
+        "properties": {
+          "completed_at": {},
+          "snapshot_identity": {},
+          "counts": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/counts"
+              },
+              {
+                "properties": {
+                  "successful_requests": {
+                    "const": 1000
+                  },
+                  "next_ordinal": {
+                    "const": 1000
+                  }
+                }
+              }
+            ]
+          },
+          "successful_receipts": {
+            "type": "array",
+            "minItems": 1000,
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/$defs/successfulReceipt"
+            }
+          }
+        },
+        "not": {
+          "required": [
+            "halted_request"
+          ]
+        }
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "completed_at"
+              ]
+            },
+            {
+              "required": [
+                "snapshot_identity"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "planBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "request_count"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^data/pilots/cod-crystallography-v1/[A-Za-z0-9._/-]*query-plan[A-Za-z0-9._/-]*\\.json$",
+          "maxLength": 1000
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "request_count": {
+          "const": 1000
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planned_requests",
+        "successful_requests",
+        "next_ordinal",
+        "attempts",
+        "http_response_attempts",
+        "transport_error_attempts",
+        "response_limit_attempts",
+        "raw_body_count",
+        "raw_body_bytes"
+      ],
+      "properties": {
+        "planned_requests": {
+          "const": 1000
+        },
+        "successful_requests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "next_ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "http_response_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "transport_error_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "response_limit_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "raw_body_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "raw_body_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8589934592
+        }
+      }
+    },
+    "successfulReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ordinal",
+        "ddd_prefix",
+        "method",
+        "url",
+        "request_sha256",
+        "attempts",
+        "successful_attempt_number",
+        "response"
+      ],
+      "properties": {
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "ddd_prefix": {
+          "type": "string",
+          "pattern": "^[0-9]{3}$"
+        },
+        "method": {
+          "const": "GET"
+        },
+        "url": {
+          "$ref": "#/$defs/requestUrl"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "attempts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/attempt"
+          }
+        },
+        "successful_attempt_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "response": {
+          "$ref": "#/$defs/successfulResponse"
+        }
+      }
+    },
+    "successfulResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status_code",
+        "content_type",
+        "retrieved_at",
+        "raw_body",
+        "json_validation"
+      ],
+      "properties": {
+        "status_code": {
+          "const": 200
+        },
+        "content_type": {
+          "enum": [
+            "application/json",
+            "text/json",
+            "text/plain"
+          ]
+        },
+        "retrieved_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "raw_body": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rawBodyBinding"
+            },
+            {
+              "properties": {
+                "bytes": {
+                  "minimum": 1,
+                  "maximum": 134217728
+                }
+              }
+            }
+          ]
+        },
+        "json_validation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "valid",
+            "maximum_depth",
+            "row_count"
+          ],
+          "properties": {
+            "valid": {
+              "const": true
+            },
+            "maximum_depth": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 64
+            },
+            "row_count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempt_number",
+        "started_at",
+        "finished_at",
+        "elapsed_ms",
+        "outcome",
+        "retry_disposition"
+      ],
+      "properties": {
+        "attempt_number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finished_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "elapsed_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 180000
+        },
+        "outcome": {
+          "enum": [
+            "http_response",
+            "transport_error",
+            "response_limit_exceeded"
+          ]
+        },
+        "status_code": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 599
+        },
+        "content_type": {
+          "$ref": "#/$defs/nullableHeaderValue"
+        },
+        "retry_after": {
+          "$ref": "#/$defs/nullableHeaderValue"
+        },
+        "raw_body": {
+          "$ref": "#/$defs/rawBodyBinding"
+        },
+        "bytes_received": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 134217729
+        },
+        "error_kind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,79}$"
+        },
+        "retry_disposition": {
+          "enum": [
+            "success",
+            "retry_fixed_backoff",
+            "retry_retry_after",
+            "stop_nonretryable_status",
+            "stop_attempt_limit",
+            "stop_retry_after_cap",
+            "stop_response_header_limit",
+            "stop_response_limit",
+            "stop_transport_error",
+            "stop_invalid_content_encoding",
+            "stop_invalid_content_type",
+            "stop_invalid_json",
+            "stop_invalid_semantics",
+            "stop_json_depth_limit",
+            "stop_row_limit",
+            "stop_total_limit"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "http_response"
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "required": [
+              "status_code",
+              "content_type",
+              "retry_after",
+              "raw_body"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "bytes_received"
+                  ]
+                },
+                {
+                  "required": [
+                    "error_kind"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "raw_body"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "transport_error"
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "required": [
+              "error_kind"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "status_code"
+                  ]
+                },
+                {
+                  "required": [
+                    "content_type"
+                  ]
+                },
+                {
+                  "required": [
+                    "retry_after"
+                  ]
+                },
+                {
+                  "required": [
+                    "bytes_received"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "response_limit_exceeded"
+              }
+            },
+            "required": [
+              "outcome"
+            ]
+          },
+          "then": {
+            "required": [
+              "status_code",
+              "bytes_received",
+              "error_kind"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "content_type"
+                  ]
+                },
+                {
+                  "required": [
+                    "retry_after"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status_code": {
+                "const": 200
+              }
+            },
+            "required": [
+              "status_code"
+            ]
+          },
+          "then": {
+            "properties": {
+              "raw_body": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/rawBodyBinding"
+                  },
+                  {
+                    "properties": {
+                      "bytes": {
+                        "maximum": 134217728
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "raw_body": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/rawBodyBinding"
+                  },
+                  {
+                    "properties": {
+                      "bytes": {
+                        "maximum": 1048576
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "haltedRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ordinal",
+        "ddd_prefix",
+        "method",
+        "url",
+        "request_sha256",
+        "reason",
+        "attempts"
+      ],
+      "properties": {
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999
+        },
+        "ddd_prefix": {
+          "type": "string",
+          "pattern": "^[0-9]{3}$"
+        },
+        "method": {
+          "const": "GET"
+        },
+        "url": {
+          "$ref": "#/$defs/requestUrl"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reason": {
+          "enum": [
+            "attempts_exhausted",
+            "nonretryable_http_status",
+            "retry_after_exceeds_cap",
+            "response_header_limit",
+            "response_body_limit",
+            "total_body_limit",
+            "invalid_content_encoding",
+            "invalid_content_type",
+            "invalid_json",
+            "invalid_semantics",
+            "json_depth_limit",
+            "row_limit",
+            "transport_error",
+            "operator_interrupt"
+          ]
+        },
+        "attempts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "$ref": "#/$defs/attempt"
+          }
+        }
+      }
+    },
+    "requestUrl": {
+      "type": "string",
+      "pattern": "^https://www\\.crystallography\\.net/cod/result\\?format=json&id=[0-9]{3}%25&include_duplicates=1&include_errors=1&include_theoretical=1$"
+    },
+    "nullableHeaderValue": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "rawBodyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "bytes"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^data/pilots/cod-crystallography-v1/objects/sha256/[0-9a-f]{2}/[0-9a-f]{64}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 134217728
+        }
+      }
+    },
+    "snapshotIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "input",
+        "request_count",
+        "sha256"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "input": {
+          "const": "UTF8(plan_sha256) || for ordinal 0..999: 0x00 || UTF8(request_sha256) || 0x00 || UTF8(successful_raw_body_sha256)"
+        },
+        "request_count": {
+          "const": 1000
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "safetyAssertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_sha256_verified_before_execution",
+        "successful_receipts_are_contiguous_from_ordinal_zero",
+        "every_receipt_matches_its_plan_request",
+        "attempt_numbers_are_contiguous_from_one",
+        "successful_response_matches_the_final_attempt",
+        "all_complete_http_response_bodies_are_content_addressed",
+        "cas_paths_match_body_hashes",
+        "counts_match_receipts_attempts_and_raw_bodies",
+        "request_start_spacing_and_retry_policy_were_enforced",
+        "raw_response_bytes_are_immutable",
+        "candidate_discovery_precedes_normalization",
+        "normalized_output_was_not_produced",
+        "catalog_and_registry_databases_were_not_written",
+        "complete_snapshot_identity_requires_all_1000_receipts"
+      ],
+      "properties": {
+        "plan_sha256_verified_before_execution": {
+          "const": true
+        },
+        "successful_receipts_are_contiguous_from_ordinal_zero": {
+          "const": true
+        },
+        "every_receipt_matches_its_plan_request": {
+          "const": true
+        },
+        "attempt_numbers_are_contiguous_from_one": {
+          "const": true
+        },
+        "successful_response_matches_the_final_attempt": {
+          "const": true
+        },
+        "all_complete_http_response_bodies_are_content_addressed": {
+          "const": true
+        },
+        "cas_paths_match_body_hashes": {
+          "const": true
+        },
+        "counts_match_receipts_attempts_and_raw_bodies": {
+          "const": true
+        },
+        "request_start_spacing_and_retry_policy_were_enforced": {
+          "const": true
+        },
+        "raw_response_bytes_are_immutable": {
+          "const": true
+        },
+        "candidate_discovery_precedes_normalization": {
+          "const": true
+        },
+        "normalized_output_was_not_produced": {
+          "const": true
+        },
+        "catalog_and_registry_databases_were_not_written": {
+          "const": true
+        },
+        "complete_snapshot_identity_requires_all_1000_receipts": {
+          "const": true
+        }
+      }
+    }
+  }
+}

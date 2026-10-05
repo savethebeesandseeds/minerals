@@ -36,6 +36,7 @@ FORBIDDEN_DATA_ROOTS = (
     "data/.report-work",
     "data/backups",
     "data/images",
+    "data/pilots",
     "data/reports",
 )
 

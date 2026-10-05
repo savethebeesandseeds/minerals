@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waajacu.org/schemas/pilots/cod-evidence-v1.schema.json",
+  "title": "Immutable COD evidence reference v1",
+  "description": "A revision-pinned COD CIF data block and the source facts needed to determine whether it can participate in a private pilot or later public resolution.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "cod_id",
+    "cod_svn_revision",
+    "cif_url",
+    "cif_sha256",
+    "data_block_code",
+    "retrieved_at",
+    "cod_status",
+    "determination_method",
+    "material_origin",
+    "record_relations"
+  ],
+  "properties": {
+    "cod_id": {
+      "type": "string",
+      "pattern": "^[0-9]{7}$"
+    },
+    "cod_svn_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "cif_url": {
+      "type": "string",
+      "pattern": "^https://www\\.crystallography\\.net/cod/[0-9]{7}\\.cif@[1-9][0-9]*$"
+    },
+    "cif_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "data_block_code": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "not": {
+        "enum": [
+          ".",
+          "?"
+        ]
+      }
+    },
+    "retrieved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cod_status": {
+      "enum": [
+        "unflagged",
+        "warnings",
+        "errors",
+        "retracted",
+        "unknown"
+      ]
+    },
+    "determination_method": {
+      "enum": [
+        "single_crystal",
+        "powder_diffraction",
+        "theoretical",
+        "unknown"
+      ]
+    },
+    "material_origin": {
+      "enum": [
+        "natural",
+        "synthetic",
+        "unknown"
+      ]
+    },
+    "record_relations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "quality"
+      ],
+      "properties": {
+        "quality": {
+          "enum": [
+            "optimal",
+            "suboptimal",
+            "unknown"
+          ]
+        },
+        "duplicate_of": {
+          "type": "string",
+          "pattern": "^[0-9]{7}$"
+        },
+        "same_structure_as": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{7}$"
+          }
+        }
+      }
+    }
+  }
+}

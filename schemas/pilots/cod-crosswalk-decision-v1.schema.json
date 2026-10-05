@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waajacu.org/schemas/pilots/cod-crosswalk-decision-v1.schema.json",
+  "title": "COD-to-mineral crosswalk decision v1",
+  "description": "A deterministic candidate and manual review decision linking one immutable COD CIF block to at most one mineral in the frozen Waajacu population. Formula and fuzzy matching can never create or accept a link.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "crosswalk_id",
+    "source_sample_id",
+    "cod_locator",
+    "source_identity",
+    "candidate_generation",
+    "decision",
+    "reason_codes",
+    "review"
+  ],
+  "properties": {
+    "crosswalk_id": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source_sample_id": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "cod_locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cod_id",
+        "cod_svn_revision",
+        "data_block_code"
+      ],
+      "properties": {
+        "cod_id": {
+          "type": "string",
+          "pattern": "^[0-9]{7}$"
+        },
+        "cod_svn_revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "data_block_code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "not": {
+            "enum": [
+              ".",
+              "?"
+            ]
+          }
+        }
+      }
+    },
+    "source_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "material_origin"
+      ],
+      "properties": {
+        "mineral_name_raw": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "formula_raw": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "primary_publication_locator": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "material_origin": {
+          "enum": [
+            "natural",
+            "synthetic",
+            "unknown"
+          ]
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "mineral_name_raw"
+          ]
+        },
+        {
+          "required": [
+            "primary_publication_locator"
+          ]
+        }
+      ]
+    },
+    "candidate_generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "fuzzy_matching",
+        "formula_role"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "exact_authority_names_v1"
+        },
+        "fuzzy_matching": {
+          "const": "forbidden"
+        },
+        "formula_role": {
+          "const": "diagnostic_only_never_candidate_generation"
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "material_public_id",
+        "match_basis",
+        "formula_assessment",
+        "citation_assessment"
+      ],
+      "properties": {
+        "material_public_id": {
+          "type": "string",
+          "pattern": "^mat_[0-9a-f]{32}$"
+        },
+        "match_basis": {
+          "enum": [
+            "accepted_name_exact",
+            "authority_alias_exact",
+            "primary_publication_explicit"
+          ]
+        },
+        "formula_assessment": {
+          "enum": [
+            "compatible",
+            "compatible_variable",
+            "incompatible",
+            "indeterminate"
+          ]
+        },
+        "citation_assessment": {
+          "enum": [
+            "explicit_current_species",
+            "synthetic_analogue_only",
+            "ambiguous",
+            "contradicts",
+            "not_assessed"
+          ]
+        }
+      }
+    },
+    "decision": {
+      "enum": [
+        "accepted",
+        "needs_attention",
+        "rejected",
+        "superseded"
+      ]
+    },
+    "reason_codes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "accepted_name_exact",
+          "authority_alias_exact",
+          "primary_publication_explicit",
+          "multiple_exact_candidates",
+          "missing_mineral_name",
+          "former_name_ambiguity",
+          "polymorph_ambiguity",
+          "formula_conflict",
+          "citation_ambiguous",
+          "citation_contradicts",
+          "synthetic_analogue_only",
+          "theoretical_record",
+          "no_supported_candidate",
+          "newer_revision_supersedes"
+        ]
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "reviewer",
+        "reviewed_at",
+        "rationale"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "reviewed",
+            "verified"
+          ]
+        },
+        "reviewer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "const": "accepted"
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
+      "then": {
+        "required": [
+          "candidate"
+        ],
+        "properties": {
+          "source_identity": {
+            "required": [
+              "primary_publication_locator"
+            ],
+            "not": {
+              "properties": {
+                "material_origin": {
+                  "const": "synthetic"
+                }
+              },
+              "required": [
+                "material_origin"
+              ]
+            }
+          },
+          "candidate": {
+            "properties": {
+              "citation_assessment": {
+                "const": "explicit_current_species"
+              }
+            },
+            "required": [
+              "citation_assessment"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

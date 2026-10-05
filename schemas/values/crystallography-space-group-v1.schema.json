@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waajacu.org/schemas/values/crystallography-space-group-v1.schema.json",
+  "title": "Crystallography space-group observations v1",
+  "description": "Repeatable, source-reported ordinary three-dimensional space-group observations. Distinct determinations and conflicting provenance layers remain distinct.",
+  "type": "array",
+  "minItems": 1,
+  "maxItems": 32,
+  "items": {
+    "$ref": "#/$defs/observation"
+  },
+  "$defs": {
+    "sourceField": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 160,
+      "pattern": "^_[A-Za-z0-9_.-]+$"
+    },
+    "reportedText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "not": {
+        "enum": [
+          ".",
+          "?",
+          "N/A",
+          "n/a",
+          "unknown"
+        ]
+      }
+    },
+    "normalizedSymbol": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/reportedText"
+        },
+        {
+          "pattern": "^\\S(?:.*\\S)?$"
+        }
+      ]
+    },
+    "hmSymbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw",
+        "normalized",
+        "source_field",
+        "form"
+      ],
+      "properties": {
+        "raw": {
+          "$ref": "#/$defs/reportedText"
+        },
+        "normalized": {
+          "$ref": "#/$defs/normalizedSymbol"
+        },
+        "source_field": {
+          "$ref": "#/$defs/sourceField"
+        },
+        "form": {
+          "enum": [
+            "alternate",
+            "full",
+            "legacy"
+          ]
+        }
+      }
+    },
+    "hallSymbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw",
+        "normalized",
+        "source_field"
+      ],
+      "properties": {
+        "raw": {
+          "$ref": "#/$defs/reportedText"
+        },
+        "normalized": {
+          "$ref": "#/$defs/normalizedSymbol"
+        },
+        "source_field": {
+          "$ref": "#/$defs/sourceField"
+        }
+      }
+    },
+    "itNumber": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "raw",
+        "source_field"
+      ],
+      "properties": {
+        "value": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 230
+        },
+        "raw": {
+          "$ref": "#/$defs/reportedText"
+        },
+        "source_field": {
+          "$ref": "#/$defs/sourceField"
+        }
+      }
+    },
+    "coordinateSystemCode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw",
+        "source_field"
+      ],
+      "properties": {
+        "raw": {
+          "$ref": "#/$defs/reportedText"
+        },
+        "source_field": {
+          "$ref": "#/$defs/sourceField"
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symmetry_kind",
+        "provenance_role",
+        "consistency"
+      ],
+      "properties": {
+        "symmetry_kind": {
+          "const": "ordinary_3d"
+        },
+        "provenance_role": {
+          "enum": [
+            "source_curated",
+            "author_reported_original"
+          ]
+        },
+        "hm_symbol": {
+          "$ref": "#/$defs/hmSymbol"
+        },
+        "hall_symbol": {
+          "$ref": "#/$defs/hallSymbol"
+        },
+        "it_number": {
+          "$ref": "#/$defs/itNumber"
+        },
+        "it_coordinate_system_code": {
+          "$ref": "#/$defs/coordinateSystemCode"
+        },
+        "consistency": {
+          "enum": [
+            "consistent",
+            "unverified",
+            "conflicting"
+          ]
+        },
+        "operations_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "hm_symbol"
+          ]
+        },
+        {
+          "required": [
+            "hall_symbol"
+          ]
+        },
+        {
+          "required": [
+            "it_number"
+          ]
+        }
+      ]
+    }
+  }
+}

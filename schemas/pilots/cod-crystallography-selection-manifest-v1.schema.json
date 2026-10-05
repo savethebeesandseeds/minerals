@@ -1,0 +1,395 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waajacu.org/schemas/pilots/cod-crystallography-selection-manifest-v1.schema.json",
+  "title": "COD crystallography 96-mineral selection manifest v1",
+  "description": "The frozen mineral sample. Selection is independent of later COD match and extraction outcomes, so no failed or difficult selected mineral may be replaced.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schema_version",
+    "pilot_id",
+    "manifest_revision",
+    "status",
+    "questionnaire",
+    "source_matrix",
+    "population",
+    "scope",
+    "selection_policy",
+    "challenge_eligibility",
+    "counts",
+    "entries"
+  ],
+  "properties": {
+    "format": {
+      "const": "waajacu-cod-crystallography-selection-manifest"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "pilot_id": {
+      "const": "cod-crystallography-v1"
+    },
+    "manifest_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "const": "frozen_before_normalized_output"
+    },
+    "questionnaire": {
+      "$ref": "#/$defs/questionnaireBinding"
+    },
+    "source_matrix": {
+      "$ref": "#/$defs/sourceMatrixBinding"
+    },
+    "population": {
+      "$ref": "#/$defs/populationBinding"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "selection_policy": {
+      "$ref": "#/$defs/selectionPolicy"
+    },
+    "challenge_eligibility": {
+      "$ref": "#/$defs/artifactBinding"
+    },
+    "counts": {
+      "$ref": "#/$defs/counts"
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 96,
+      "maxItems": 96,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "questionnaireBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "revision",
+        "sha256"
+      ],
+      "properties": {
+        "id": {
+          "const": "waajacu-mineral-record-questionnaire-v1"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sourceMatrixBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entry_id",
+        "revision",
+        "sha256"
+      ],
+      "properties": {
+        "entry_id": {
+          "const": "cod_crystal_observations"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "populationBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "release_id",
+        "mineral_count"
+      ],
+      "properties": {
+        "release_id": {
+          "$ref": "#/$defs/sha256"
+        },
+        "mineral_count": {
+          "const": 6226
+        },
+        "artifact_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "module",
+        "question_keys"
+      ],
+      "properties": {
+        "module": {
+          "const": "crystallography"
+        },
+        "question_keys": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "crystallography.space_group"
+            },
+            {
+              "const": "crystallography.unit_cell"
+            },
+            {
+              "const": "crystallography.structure_references"
+            }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        }
+      }
+    },
+    "selectionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "baseline_salt",
+        "baseline_hash_input",
+        "challenge_selection_salt",
+        "challenge_split_salt",
+        "challenge_assignment",
+        "replacement_policy"
+      ],
+      "properties": {
+        "version": {
+          "const": "questionnaire-pilot-selection-v1"
+        },
+        "baseline_salt": {
+          "const": "questionnaire-v1-baseline"
+        },
+        "baseline_hash_input": {
+          "const": "UTF8(baseline_salt) || 0x00 || UTF8(public_id)"
+        },
+        "challenge_selection_salt": {
+          "const": "cod-crystallography-v1-challenge-selection"
+        },
+        "challenge_split_salt": {
+          "const": "cod-crystallography-v1-challenge-split"
+        },
+        "challenge_assignment": {
+          "const": "declared_group_and_stratum_order_then_lowest_sha256_among_unselected_eligible_public_ids"
+        },
+        "replacement_policy": {
+          "const": "forbidden_after_freeze"
+        }
+      }
+    },
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "rule_version",
+        "frozen_at"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^data/pilots/cod-crystallography-v1/"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "rule_version": {
+          "const": 1
+        },
+        "frozen_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total",
+        "development",
+        "holdout",
+        "baseline",
+        "baseline_development",
+        "baseline_holdout",
+        "challenge",
+        "challenge_development",
+        "challenge_holdout"
+      ],
+      "properties": {
+        "total": {
+          "const": 96
+        },
+        "development": {
+          "const": 72
+        },
+        "holdout": {
+          "const": 24
+        },
+        "baseline": {
+          "const": 60
+        },
+        "baseline_development": {
+          "const": 45
+        },
+        "baseline_holdout": {
+          "const": 15
+        },
+        "challenge": {
+          "const": 36
+        },
+        "challenge_development": {
+          "const": 27
+        },
+        "challenge_holdout": {
+          "const": 9
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "position",
+        "material_public_id",
+        "canonical_name_snapshot",
+        "selection_kind",
+        "split",
+        "selection_digest"
+      ],
+      "properties": {
+        "position": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 96
+        },
+        "material_public_id": {
+          "type": "string",
+          "pattern": "^mat_[0-9a-f]{32}$"
+        },
+        "canonical_name_snapshot": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "selection_kind": {
+          "enum": [
+            "baseline",
+            "challenge"
+          ]
+        },
+        "split": {
+          "enum": [
+            "development",
+            "holdout"
+          ]
+        },
+        "selection_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "challenge_group": {
+          "enum": [
+            "nomenclature_crosswalk",
+            "value_shape_applicability",
+            "provenance_risk"
+          ]
+        },
+        "primary_stratum": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "criterion_tags": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "qualifying_evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sha256"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "selection_kind": {
+                "const": "challenge"
+              }
+            },
+            "required": [
+              "selection_kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "challenge_group",
+              "primary_stratum",
+              "criterion_tags",
+              "qualifying_evidence_ids"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "challenge_group"
+                  ]
+                },
+                {
+                  "required": [
+                    "primary_stratum"
+                  ]
+                },
+                {
+                  "required": [
+                    "criterion_tags"
+                  ]
+                },
+                {
+                  "required": [
+                    "qualifying_evidence_ids"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
