@@ -31,6 +31,21 @@ black-background prompt can be resumed separately.
 The user ended this session and will return later. The requested scheduled
 monitor was deleted; no automatic continuation is scheduled.
 
+### Pending repository layout
+
+The user requested a future folder reorganization around these exact names:
+
+- `doc/` — project documentation, replacing the current `docs/` directory.
+- `code/` — application source, Rust crates, tooling, and tests.
+- `web/` — the public web application, assets, and related WebAssembly work.
+
+This is a recorded task for a later session; no files have been moved. Plan the
+exact moves and update Cargo paths, Docker bind mounts, launchers, setup and CI
+scripts, deployment paths, tests, documentation links, and project instructions
+together. Preserve private data, the completed COD snapshot, the image queue,
+Git history, and repository ownership. Keep the canonical development page at
+`http://127.0.0.1:18965/` working with its current annotation policy.
+
 ## Why this is coordinated
 
 The current public records are strongest on identity, nomenclature, authority

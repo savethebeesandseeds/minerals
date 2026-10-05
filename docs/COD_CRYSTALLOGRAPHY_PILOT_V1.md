@@ -58,6 +58,11 @@ Pending, in order:
 4. Only after a passing pilot, implement the reviewed claim-only ingestion
    path and make the separate source-admission and publication decisions.
 
+Separate pending maintenance: reorganize the project around `doc/`, `code/`,
+and `web/`, as recorded in the
+[repository-layout backlog](MINERAL_RECORD_ENRICHMENT_BACKLOG.md#pending-repository-layout).
+This folder migration has not started; the evidence paths above are current.
+
 **No COD crystallographic values have been normalized, ingested, or published
 by this retrieval.** The public catalog remains unchanged and COD remains
 `pilot_only`. The image dispatcher and black-background image instructions are
