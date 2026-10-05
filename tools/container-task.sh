@@ -76,6 +76,10 @@ contracts() {
 }
 
 case "${1:-}" in
+  record-research)
+    (( $# == 2 )) && [[ "$2" == capture || "$2" == prepare || "$2" == verify ]] || fail 'record-research requires capture, prepare, or verify'
+    run_private env MINERALS_MODE=admin python3 -B tools/prepare-mineral-record-research.py "$2"
+    ;;
   contracts)
     (( $# == 1 )) || fail 'contracts takes no arguments'
     contracts
@@ -132,5 +136,5 @@ case "${1:-}" in
         --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT"
     fi
     ;;
-  *) fail 'expected contracts, validate, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
+  *) fail 'expected contracts, validate, record-research, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
 esac

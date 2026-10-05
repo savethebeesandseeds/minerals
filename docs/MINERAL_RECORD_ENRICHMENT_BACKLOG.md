@@ -10,6 +10,11 @@
 > Occurrence/locality data remains the first map-aware addition. Images remain
 > a separate later project with their own provenance and asset pipeline.
 
+The [record-by-record research workbench](MINERAL_RECORD_RESEARCH_WORKFLOW.md)
+tracks the whole fixed population and preserves source-linked private drafts.
+Codex owns this research and draft-writing effort while source pilots proceed.
+Research progress is reported separately from reviewed and published content.
+
 ## Why this is coordinated
 
 The current public records are strongest on identity, nomenclature, authority
