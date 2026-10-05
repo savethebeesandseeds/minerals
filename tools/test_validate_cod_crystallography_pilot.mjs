@@ -24,6 +24,7 @@ const FILES = [
   "schemas/pilots/cod-metadata-discovery-query-plan-v1.schema.json",
   "schemas/pilots/cod-crystallography-preparation-manifest-v1.schema.json",
   "schemas/pilots/cod-metadata-discovery-execution-index-v1.schema.json",
+  "schemas/pilots/cod-metadata-discovery-execution-index-v2.schema.json",
   "schemas/pilots/cod-crystallography-challenge-eligibility-v1.schema.json",
   "schemas/pilots/cod-crystallography-selection-manifest-v1.schema.json",
   "schemas/pilots/cod-crystallography-pilot-item-v1.schema.json",
@@ -103,6 +104,18 @@ test("accepts the checked-in private COD pilot contract", async () => {
     sampleMinerals: 96,
     publicProjection: "forbidden",
   });
+});
+
+test("rejects recovery schemas that conceal exceptions or allow repeated resets", async (context) => {
+  const root = await fixture(context);
+  const recovery = "schemas/pilots/cod-metadata-discovery-execution-index-v2.schema.json";
+  await mutateJson(root, recovery, (schema) => {
+    schema.$defs.safetyAssertions.properties.request_start_spacing_and_retry_policy_were_enforced.const = true;
+  });
+  await assert.rejects(validateCodCrystallographyPilot(root), /reviewed transport recovery schema drifted/);
+  await copyFile(path.join(SOURCE_ROOT, recovery), path.join(root, recovery));
+  await mutateJson(root, recovery, (schema) => { schema.properties.transport_recoveries.maxItems = 1000; });
+  await assert.rejects(validateCodCrystallographyPilot(root), /reviewed transport recovery schema drifted/);
 });
 
 test("rejects an unbound value-schema edit", async (context) => {

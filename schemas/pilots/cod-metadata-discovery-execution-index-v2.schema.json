@@ -1,0 +1,398 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://waajacu.org/schemas/pilots/cod-metadata-discovery-execution-index-v2.schema.json",
+  "title": "COD metadata discovery execution index v2 with reviewed transport recovery",
+  "description": "Private execution of the unchanged v1 query plan with explicitly reviewed exceptions to its four-attempt per-request limit. At most eight distinct shards may each receive one additional four-attempt cycle after a five-minute cooldown. Every failed index is retained as immutable content-addressed bytes; counts include recovered failures, and the complete snapshot hash binds recovery history. V1 preparation and schema artifacts remain unchanged.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "schema_version",
+    "pilot_id",
+    "index_revision",
+    "status",
+    "started_at",
+    "updated_at",
+    "plan",
+    "counts",
+    "successful_receipts",
+    "safety_assertions",
+    "transport_recoveries"
+  ],
+  "properties": {
+    "format": {
+      "const": "waajacu-cod-metadata-discovery-execution-index"
+    },
+    "schema_version": {
+      "const": 2
+    },
+    "pilot_id": {
+      "const": "cod-crystallography-v1"
+    },
+    "index_revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": [
+        "partial",
+        "complete"
+      ]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "plan": {
+      "$ref": "#/$defs/planBinding"
+    },
+    "counts": {
+      "$ref": "#/$defs/counts"
+    },
+    "successful_receipts": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "$ref": "#/$defs/successfulReceipt"
+      }
+    },
+    "halted_request": {
+      "$ref": "#/$defs/haltedRequest"
+    },
+    "snapshot_identity": {
+      "$ref": "#/$defs/snapshotIdentity"
+    },
+    "safety_assertions": {
+      "$ref": "#/$defs/safetyAssertions"
+    },
+    "transport_recoveries": {
+      "maxItems": 8,
+      "items": {
+        "$ref": "#/$defs/transportRecovery"
+      },
+      "minItems": 1,
+      "type": "array"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "complete"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "required": [
+          "completed_at",
+          "snapshot_identity"
+        ],
+        "properties": {
+          "completed_at": {},
+          "snapshot_identity": {},
+          "counts": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/counts"
+              },
+              {
+                "properties": {
+                  "successful_requests": {
+                    "const": 1000
+                  },
+                  "next_ordinal": {
+                    "const": 1000
+                  }
+                }
+              }
+            ]
+          },
+          "successful_receipts": {
+            "type": "array",
+            "minItems": 1000,
+            "maxItems": 1000,
+            "items": {
+              "$ref": "#/$defs/successfulReceipt"
+            }
+          }
+        },
+        "not": {
+          "required": [
+            "halted_request"
+          ]
+        }
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "completed_at"
+              ]
+            },
+            {
+              "required": [
+                "snapshot_identity"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "$ref": "cod-metadata-discovery-execution-index-v1.schema.json#/$defs/sha256"
+    },
+    "planBinding": {
+      "$ref": "cod-metadata-discovery-execution-index-v1.schema.json#/$defs/planBinding"
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planned_requests",
+        "successful_requests",
+        "next_ordinal",
+        "attempts",
+        "http_response_attempts",
+        "transport_error_attempts",
+        "response_limit_attempts",
+        "raw_body_count",
+        "raw_body_bytes"
+      ],
+      "properties": {
+        "planned_requests": {
+          "const": 1000
+        },
+        "successful_requests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "next_ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4032
+        },
+        "http_response_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "transport_error_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4032
+        },
+        "response_limit_attempts": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "raw_body_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4000
+        },
+        "raw_body_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8589934592
+        }
+      }
+    },
+    "successfulReceipt": {
+      "$ref": "cod-metadata-discovery-execution-index-v1.schema.json#/$defs/successfulReceipt"
+    },
+    "successfulResponse": {
+      "$ref": "cod-metadata-discovery-execution-index-v1.schema.json#/$defs/successfulResponse"
+    },
+    "attempt": {
+      "$ref": "cod-metadata-discovery-execution-index-v1.schema.json#/$defs/attempt"
+    },
+    "haltedRequest": {
+      "$ref": "cod-metadata-discovery-execution-index-v1.schema.json#/$defs/haltedRequest"
+    },
+    "requestUrl": {
+      "$ref": "cod-metadata-discovery-execution-index-v1.schema.json#/$defs/requestUrl"
+    },
+    "nullableHeaderValue": {
+      "$ref": "cod-metadata-discovery-execution-index-v1.schema.json#/$defs/nullableHeaderValue"
+    },
+    "rawBodyBinding": {
+      "$ref": "cod-metadata-discovery-execution-index-v1.schema.json#/$defs/rawBodyBinding"
+    },
+    "snapshotIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "algorithm",
+        "input",
+        "request_count",
+        "sha256"
+      ],
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "input": {
+          "const": "UTF8(v1_snapshot_sha256) || 0x00 || canonical_JSON_plus_LF(transport_recoveries)"
+        },
+        "request_count": {
+          "const": 1000
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "safetyAssertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_sha256_verified_before_execution",
+        "successful_receipts_are_contiguous_from_ordinal_zero",
+        "every_receipt_matches_its_plan_request",
+        "attempt_numbers_are_contiguous_from_one",
+        "successful_response_matches_the_final_attempt",
+        "all_complete_http_response_bodies_are_content_addressed",
+        "cas_paths_match_body_hashes",
+        "counts_match_receipts_attempts_and_raw_bodies",
+        "request_start_spacing_and_retry_policy_were_enforced",
+        "raw_response_bytes_are_immutable",
+        "candidate_discovery_precedes_normalization",
+        "normalized_output_was_not_produced",
+        "catalog_and_registry_databases_were_not_written",
+        "complete_snapshot_identity_requires_all_1000_receipts",
+        "reviewed_transport_recovery_policy_was_enforced"
+      ],
+      "properties": {
+        "plan_sha256_verified_before_execution": {
+          "const": true
+        },
+        "successful_receipts_are_contiguous_from_ordinal_zero": {
+          "const": true
+        },
+        "every_receipt_matches_its_plan_request": {
+          "const": true
+        },
+        "attempt_numbers_are_contiguous_from_one": {
+          "const": true
+        },
+        "successful_response_matches_the_final_attempt": {
+          "const": true
+        },
+        "all_complete_http_response_bodies_are_content_addressed": {
+          "const": true
+        },
+        "cas_paths_match_body_hashes": {
+          "const": true
+        },
+        "counts_match_receipts_attempts_and_raw_bodies": {
+          "const": true
+        },
+        "request_start_spacing_and_retry_policy_were_enforced": {
+          "const": false
+        },
+        "raw_response_bytes_are_immutable": {
+          "const": true
+        },
+        "candidate_discovery_precedes_normalization": {
+          "const": true
+        },
+        "normalized_output_was_not_produced": {
+          "const": true
+        },
+        "catalog_and_registry_databases_were_not_written": {
+          "const": true
+        },
+        "complete_snapshot_identity_requires_all_1000_receipts": {
+          "const": true
+        },
+        "reviewed_transport_recovery_policy_was_enforced": {
+          "const": true
+        }
+      }
+    },
+    "transportRecovery": {
+      "additionalProperties": false,
+      "required": [
+        "reviewed_at",
+        "reviewer",
+        "reason",
+        "previous_index",
+        "halted_request"
+      ],
+      "properties": {
+        "halted_request": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/haltedRequest"
+            },
+            {
+              "properties": {
+                "attempts": {
+                  "maxItems": 4,
+                  "items": {
+                    "properties": {
+                      "outcome": {
+                        "const": "transport_error"
+                      },
+                      "error_kind": {
+                        "enum": [
+                          "connect",
+                          "timeout"
+                        ]
+                      }
+                    }
+                  },
+                  "minItems": 4,
+                  "type": "array"
+                },
+                "reason": {
+                  "const": "transport_error"
+                }
+              }
+            }
+          ]
+        },
+        "reviewed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reviewer": {
+          "minLength": 1,
+          "maxLength": 120,
+          "type": "string"
+        },
+        "reason": {
+          "minLength": 1,
+          "maxLength": 2000,
+          "type": "string"
+        },
+        "previous_index": {
+          "$ref": "#/$defs/rawBodyBinding"
+        }
+      },
+      "type": "object"
+    }
+  }
+}

@@ -1,7 +1,7 @@
 use std::{env, ffi::OsString, path::PathBuf, process::ExitCode};
 
 use anyhow::{bail, Context, Result};
-use minerals_cod_pilot::{fetch, prepare, verify, verify_execution};
+use minerals_cod_pilot::{fetch, prepare, recover_transport, verify, verify_execution};
 
 #[tokio::main]
 async fn main() -> ExitCode {
@@ -37,6 +37,19 @@ async fn run(arguments: Vec<OsString>) -> Result<()> {
             prepared,
             pilot_root,
         } => serde_json::to_value(verify_execution(&repo_root, &prepared, &pilot_root)?)?,
+        Options::RecoverTransport {
+            repo_root,
+            prepared,
+            pilot_root,
+            reviewer,
+            reason,
+        } => serde_json::to_value(recover_transport(
+            &repo_root,
+            &prepared,
+            &pilot_root,
+            &reviewer,
+            &reason,
+        )?)?,
     };
     println!("{}", serde_json::to_string_pretty(&output)?);
     Ok(())
@@ -63,6 +76,13 @@ enum Options {
         prepared: PathBuf,
         pilot_root: PathBuf,
     },
+    RecoverTransport {
+        repo_root: PathBuf,
+        prepared: PathBuf,
+        pilot_root: PathBuf,
+        reviewer: String,
+        reason: String,
+    },
 }
 
 impl Options {
@@ -78,9 +98,17 @@ impl Options {
             .next()
             .context("missing command; expected prepare, verify, fetch, or verify-execution")?;
         let command = command.to_str().context("command must be valid Unicode")?;
-        if !["prepare", "verify", "fetch", "verify-execution"].contains(&command) {
+        if ![
+            "prepare",
+            "verify",
+            "fetch",
+            "verify-execution",
+            "recover-transport",
+        ]
+        .contains(&command)
+        {
             bail!(
-                "unknown command '{command}'; expected prepare, verify, fetch, or verify-execution"
+                "unknown command '{command}'; expected prepare, verify, fetch, verify-execution, or recover-transport"
             );
         }
 
@@ -88,10 +116,31 @@ impl Options {
         let mut artifact_path = None;
         let mut pilot_root = None;
         let mut max_new_requests = None;
+        let mut reviewer = None;
+        let mut reason = None;
         while let Some(argument) = arguments.next() {
             let option = argument
                 .to_str()
                 .context("option names must be valid Unicode")?;
+            if option == "--reviewer" || option == "--reason" {
+                ensure_command(command, "recover-transport", option)?;
+                let slot = if option == "--reviewer" {
+                    &mut reviewer
+                } else {
+                    &mut reason
+                };
+                if slot.is_some() {
+                    bail!("duplicate option '{option}'");
+                }
+                *slot = Some(
+                    arguments
+                        .next()
+                        .with_context(|| format!("missing value for '{option}'"))?
+                        .into_string()
+                        .map_err(|_| anyhow::anyhow!("'{option}' must be Unicode"))?,
+                );
+                continue;
+            }
             if option == "--max-new-requests" {
                 ensure_command(command, "fetch", option)?;
                 if max_new_requests.is_some() {
@@ -118,10 +167,14 @@ impl Options {
                 "--repo-root" => &mut repo_root,
                 "--output" if command == "prepare" => &mut artifact_path,
                 "--input" if command == "verify" => &mut artifact_path,
-                "--prepared" if command == "fetch" || command == "verify-execution" => {
+                "--prepared"
+                    if ["fetch", "verify-execution", "recover-transport"].contains(&command) =>
+                {
                     &mut artifact_path
                 }
-                "--pilot-root" if command == "fetch" || command == "verify-execution" => {
+                "--pilot-root"
+                    if ["fetch", "verify-execution", "recover-transport"].contains(&command) =>
+                {
                     &mut pilot_root
                 }
                 _ => bail!("option '{option}' is not valid for {command}"),
@@ -163,6 +216,13 @@ impl Options {
                 prepared: artifact_path,
                 pilot_root: pilot_root.context("missing required --pilot-root PATH")?,
             },
+            "recover-transport" => Self::RecoverTransport {
+                repo_root,
+                prepared: artifact_path,
+                pilot_root: pilot_root.context("missing required --pilot-root PATH")?,
+                reviewer: reviewer.context("missing required --reviewer TEXT")?,
+                reason: reason.context("missing required --reason TEXT")?,
+            },
             _ => unreachable!("command was validated"),
         }))
     }
@@ -182,6 +242,7 @@ fn print_help() {
          cod-pilot verify --repo-root PATH --input PREPARED_DIRECTORY\n  \
          cod-pilot fetch --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1 [--max-new-requests N]\n  \
          cod-pilot verify-execution --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1\n\n\
+         cod-pilot recover-transport --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1 --reviewer TEXT --reason TEXT\n\n\
          Prepare, verify, and verify-execution perform no network requests. Fetch is\n\
          sequential and writes only immutable raw bodies plus its execution index;\n\
          no command opens data/minerals.db or writes any database."
@@ -191,6 +252,46 @@ fn print_help() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recovery_requires_explicit_review_and_rejects_fetch_options() -> Result<()> {
+        let mut args: Vec<OsString> = [
+            "recover-transport",
+            "--repo-root",
+            ".",
+            "--prepared",
+            "prepared",
+            "--pilot-root",
+            "pilot",
+        ]
+        .into_iter()
+        .map(OsString::from)
+        .collect();
+        assert!(Options::parse(args.clone()).is_err());
+        args.extend(
+            [
+                "--reviewer",
+                "codex/operator",
+                "--reason",
+                "Connectivity reviewed",
+            ]
+            .into_iter()
+            .map(OsString::from),
+        );
+        assert!(
+            matches!(Options::parse(args.clone())?, Some(Options::RecoverTransport { reviewer, reason, .. }) if reviewer == "codex/operator" && reason == "Connectivity reviewed")
+        );
+        args.extend(["--max-new-requests", "1"].into_iter().map(OsString::from));
+        assert!(Options::parse(args).is_err());
+        assert!(Options::parse(
+            ["fetch", "--reviewer", "operator"]
+                .into_iter()
+                .map(OsString::from)
+                .collect()
+        )
+        .is_err());
+        Ok(())
+    }
 
     #[test]
     fn parses_explicit_prepare_and_verify_paths() -> Result<()> {

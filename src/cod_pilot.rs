@@ -70,6 +70,8 @@ const ATTEMPT_START_INTERVAL_MS: u64 = 12_000;
 const CONNECT_TIMEOUT_MS: u64 = 15_000;
 const ATTEMPT_TIMEOUT_MS: u64 = 180_000;
 const MAX_ATTEMPTS: usize = 4;
+const MAX_TRANSPORT_RECOVERIES: usize = 8;
+const TRANSPORT_RECOVERY_WAIT_MS: i64 = 300_000;
 const RETRY_BACKOFF_MS: [u64; 4] = [0, 12_000, 24_000, 48_000];
 const RETRY_AFTER_CAP_MS: u64 = 300_000;
 const MAX_RESPONSE_HEADER_BYTES: usize = 65_536;
@@ -392,6 +394,8 @@ pub struct DiscoveryExecutionIndex {
     successful_receipts: Vec<SuccessfulReceipt>,
     #[serde(skip_serializing_if = "Option::is_none")]
     halted_request: Option<HaltedRequest>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    transport_recoveries: Vec<TransportRecovery>,
     #[serde(skip_serializing_if = "Option::is_none")]
     snapshot_identity: Option<SnapshotIdentity>,
     safety_assertions: ExecutionSafetyAssertions,
@@ -514,6 +518,18 @@ struct HaltedRequest {
     attempts: Vec<ExecutionAttempt>,
 }
 
+/// An explicit exception to the v1 per-request attempt limit, retained in v2
+/// indices together with the exact index that exhausted its attempt budget.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TransportRecovery {
+    reviewed_at: String,
+    reviewer: String,
+    reason: String,
+    previous_index: RawBodyBinding,
+    halted_request: HaltedRequest,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct SnapshotIdentity {
@@ -535,6 +551,8 @@ struct ExecutionSafetyAssertions {
     cas_paths_match_body_hashes: bool,
     counts_match_receipts_attempts_and_raw_bodies: bool,
     request_start_spacing_and_retry_policy_were_enforced: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reviewed_transport_recovery_policy_was_enforced: Option<bool>,
     raw_response_bytes_are_immutable: bool,
     candidate_discovery_precedes_normalization: bool,
     normalized_output_was_not_produced: bool,
@@ -696,6 +714,111 @@ pub fn verify_execution(
     Ok(index)
 }
 
+/// Offline, reviewed recovery for exhausted connection failures only. This
+/// preserves the prior index in CAS before granting one additional four-attempt
+/// cycle. It neither retrieves data nor edits the frozen query/preparation.
+pub fn recover_transport(
+    repo_root: &Path,
+    prepared: &Path,
+    pilot_root: &Path,
+    reviewer: &str,
+    reason: &str,
+) -> Result<DiscoveryExecutionIndex> {
+    validate_review_text(reviewer, 120, "recovery reviewer")?;
+    validate_review_text(reason, 2_000, "recovery reason")?;
+    let context = load_execution_context(repo_root, prepared, pilot_root)?;
+    let _fetch_lock = FetchLock::acquire(&context.pilot_root)?;
+    let index_path = context.pilot_root.join(DISCOVERY_INDEX_FILE);
+    let index = load_execution_index(&index_path)?.context("no execution index to recover")?;
+    let recovered =
+        reviewed_transport_recovery(&context, &index, reviewer, reason, timestamp_now())?;
+    persist_execution_index(&context, &index_path, recovered)
+}
+
+fn reviewed_transport_recovery(
+    context: &ExecutionContext,
+    index: &DiscoveryExecutionIndex,
+    reviewer: &str,
+    reason: &str,
+    reviewed_at: String,
+) -> Result<DiscoveryExecutionIndex> {
+    validate_execution_index(context, index)?;
+    validate_review_text(reviewer, 120, "recovery reviewer")?;
+    validate_review_text(reason, 2_000, "recovery reason")?;
+    ensure!(
+        index.transport_recoveries.len() < MAX_TRANSPORT_RECOVERIES,
+        "reviewed recovery limit reached"
+    );
+    let halted = index
+        .halted_request
+        .as_ref()
+        .context("execution has no halted request")?;
+    validate_transport_recovery_halt(halted, &reviewed_at)?;
+    ensure!(
+        index
+            .transport_recoveries
+            .iter()
+            .all(|review| review.halted_request.ordinal != halted.ordinal),
+        "this shard has already received its reviewed recovery cycle"
+    );
+    let previous_index = store_raw_body(context, &canonical_file_bytes(index)?)?;
+    let mut recovered = index.clone();
+    recovered.schema_version = 2;
+    recovered.transport_recoveries.push(TransportRecovery {
+        reviewed_at,
+        reviewer: reviewer.to_string(),
+        reason: reason.to_string(),
+        previous_index,
+        halted_request: halted.clone(),
+    });
+    recovered.halted_request = None;
+    recovered.safety_assertions = recovered_execution_safety_assertions();
+    recovered.counts = recompute_execution_counts(&recovered)?;
+    validate_execution_index(context, &recovered)?;
+    Ok(recovered)
+}
+
+fn validate_review_text(value: &str, maximum: usize, label: &str) -> Result<()> {
+    ensure!(
+        !value.is_empty()
+            && value.trim() == value
+            && value.chars().count() <= maximum
+            && !value.chars().any(char::is_control)
+            && value.nfc().eq(value.chars()),
+        "{label} must be trimmed NFC text without control characters (1–{maximum} characters)"
+    );
+    Ok(())
+}
+
+fn validate_transport_recovery_halt(halted: &HaltedRequest, reviewed_at: &str) -> Result<()> {
+    ensure!(
+        halted.reason == "transport_error"
+            && halted.attempts.len() == MAX_ATTEMPTS
+            && halted.attempts.iter().all(|attempt| {
+                attempt.outcome == "transport_error"
+                    && matches!(attempt.error_kind.as_deref(), Some("connect" | "timeout"))
+                    && attempt.status_code.is_none()
+                    && attempt.raw_body.is_none()
+                    && attempt.content_type.is_none()
+                    && attempt.retry_after.is_none()
+                    && attempt.bytes_received.is_none()
+            }),
+        "recovery requires four completed connection/timeout failures without an HTTP response"
+    );
+    let finished = parse_timestamp(
+        &halted.attempts.last().unwrap().finished_at,
+        "failed cycle finished_at",
+    )?;
+    ensure!(
+        parse_timestamp(reviewed_at, "recovery reviewed_at")?
+            .signed_duration_since(finished)
+            .num_milliseconds()
+            >= TRANSPORT_RECOVERY_WAIT_MS,
+        "reviewed recovery requires at least a five-minute cooldown"
+    );
+    Ok(())
+}
+
 /// Fetch COD metadata in the exact frozen query-plan order.
 ///
 /// Existing receipts and CAS objects are fully revalidated before any request
@@ -807,9 +930,10 @@ pub async fn fetch(
                         let completed_at = timestamp_now();
                         index.status = "complete".to_string();
                         index.completed_at = Some(completed_at);
-                        index.snapshot_identity = Some(snapshot_identity(
+                        index.snapshot_identity = Some(execution_snapshot_identity(
                             &index.plan.sha256,
                             &index.successful_receipts,
+                            &index.transport_recoveries,
                         )?);
                     }
                     index = persist_execution_index(&context, &index_path, index)?;
@@ -1000,6 +1124,7 @@ fn new_execution_index(plan: ExecutionPlanBinding) -> DiscoveryExecutionIndex {
         },
         successful_receipts: Vec::new(),
         halted_request: None,
+        transport_recoveries: Vec::new(),
         snapshot_identity: None,
         safety_assertions: execution_safety_assertions(),
     }
@@ -1016,12 +1141,22 @@ fn execution_safety_assertions() -> ExecutionSafetyAssertions {
         cas_paths_match_body_hashes: true,
         counts_match_receipts_attempts_and_raw_bodies: true,
         request_start_spacing_and_retry_policy_were_enforced: true,
+        reviewed_transport_recovery_policy_was_enforced: None,
         raw_response_bytes_are_immutable: true,
         candidate_discovery_precedes_normalization: true,
         normalized_output_was_not_produced: true,
         catalog_and_registry_databases_were_not_written: true,
         complete_snapshot_identity_requires_all_1000_receipts: true,
     }
+}
+
+fn recovered_execution_safety_assertions() -> ExecutionSafetyAssertions {
+    let mut assertions = execution_safety_assertions();
+    // Recovery is an explicitly recorded exception to the original four
+    // attempts per request. Do not claim that original limit still holds.
+    assertions.request_start_spacing_and_retry_policy_were_enforced = false;
+    assertions.reviewed_transport_recovery_policy_was_enforced = Some(true);
+    assertions
 }
 
 fn load_execution_index(path: &Path) -> Result<Option<DiscoveryExecutionIndex>> {
@@ -1179,6 +1314,12 @@ fn recompute_execution_counts(index: &DiscoveryExecutionIndex) -> Result<Executi
                 .iter()
                 .flat_map(|halted| halted.attempts.iter()),
         )
+        .chain(
+            index
+                .transport_recoveries
+                .iter()
+                .flat_map(|review| review.halted_request.attempts.iter()),
+        )
     {
         counts.attempts = counts
             .attempts
@@ -1207,7 +1348,7 @@ fn validate_execution_index(
 ) -> Result<()> {
     ensure!(
         index.format == "waajacu-cod-metadata-discovery-execution-index"
-            && index.schema_version == 1
+            && matches!(index.schema_version, 1 | 2)
             && index.pilot_id == PILOT_ID
             && index.index_revision >= 1,
         "execution index identity fields are invalid"
@@ -1219,7 +1360,18 @@ fn validate_execution_index(
     parse_timestamp(&index.started_at, "index started_at")?;
     parse_timestamp(&index.updated_at, "index updated_at")?;
     ensure!(
-        index.safety_assertions == execution_safety_assertions(),
+        (index.schema_version == 1 && index.transport_recoveries.is_empty())
+            || (index.schema_version == 2
+                && (1..=MAX_TRANSPORT_RECOVERIES).contains(&index.transport_recoveries.len())),
+        "execution version does not match its reviewed recovery history"
+    );
+    ensure!(
+        index.safety_assertions
+            == if index.schema_version == 1 {
+                execution_safety_assertions()
+            } else {
+                recovered_execution_safety_assertions()
+            },
         "execution index safety assertions drifted"
     );
     ensure!(
@@ -1227,10 +1379,28 @@ fn validate_execution_index(
         "execution index has too many successful receipts"
     );
 
+    validate_recovery_archives(context, index)?;
     let mut previous_start: Option<DateTime<Utc>> = None;
     for (ordinal, receipt) in index.successful_receipts.iter().enumerate() {
+        validate_recovery_before_ordinal(
+            context,
+            index,
+            ordinal,
+            receipt.attempts.first(),
+            &mut previous_start,
+        )?;
         validate_receipt(context, receipt, ordinal, &mut previous_start)?;
     }
+    validate_recovery_before_ordinal(
+        context,
+        index,
+        index.successful_receipts.len(),
+        index
+            .halted_request
+            .as_ref()
+            .and_then(|halted| halted.attempts.first()),
+        &mut previous_start,
+    )?;
     if let Some(halted) = &index.halted_request {
         ensure!(
             index.status == "partial"
@@ -1269,9 +1439,10 @@ fn validate_execution_index(
         parse_timestamp(index.completed_at.as_deref().unwrap(), "index completed_at")?;
         ensure!(
             index.snapshot_identity.as_ref()
-                == Some(&snapshot_identity(
+                == Some(&execution_snapshot_identity(
                     &index.plan.sha256,
                     &index.successful_receipts,
+                    &index.transport_recoveries,
                 )?),
             "complete snapshot identity drifted"
         );
@@ -1282,6 +1453,95 @@ fn validate_execution_index(
                 && index.snapshot_identity.is_none(),
             "partial execution index contains complete-only fields"
         );
+    }
+    Ok(())
+}
+
+fn validate_recovery_archives(
+    context: &ExecutionContext,
+    index: &DiscoveryExecutionIndex,
+) -> Result<()> {
+    let mut previous_ordinal = None;
+    for (position, review) in index.transport_recoveries.iter().enumerate() {
+        let ordinal = review.halted_request.ordinal as usize;
+        ensure!(
+            ordinal <= index.successful_receipts.len() && ordinal < REQUEST_COUNT,
+            "recovery ordinal is outside the saved prefix"
+        );
+        ensure!(
+            previous_ordinal.is_none_or(|previous| ordinal > previous),
+            "only one recovery per shard is permitted, in ordinal order"
+        );
+        previous_ordinal = Some(ordinal);
+        validate_review_text(&review.reviewer, 120, "recovery reviewer")?;
+        validate_review_text(&review.reason, 2_000, "recovery reason")?;
+        validate_transport_recovery_halt(&review.halted_request, &review.reviewed_at)?;
+        ensure!(
+            review.previous_index.bytes <= 16_777_216,
+            "archived execution index exceeds 16MiB"
+        );
+        let bytes = read_and_validate_raw_body(context, &review.previous_index)?;
+        ensure_canonical_json_file(&bytes, "archived execution index")?;
+        let previous: DiscoveryExecutionIndex =
+            serde_json::from_slice(&bytes).context("invalid archived execution index")?;
+        ensure!(
+            previous.format == index.format
+                && previous.pilot_id == index.pilot_id
+                && previous.schema_version == if position == 0 { 1 } else { 2 }
+                && previous.index_revision <= index.index_revision
+                && previous.status == "partial"
+                && previous.completed_at.is_none()
+                && previous.snapshot_identity.is_none()
+                && previous.started_at == index.started_at
+                && previous.plan == index.plan
+                && previous.successful_receipts == index.successful_receipts[..ordinal]
+                && previous.transport_recoveries == index.transport_recoveries[..position]
+                && previous.halted_request.as_ref() == Some(&review.halted_request)
+                && previous.counts == recompute_execution_counts(&previous)?
+                && previous.safety_assertions
+                    == if position == 0 {
+                        execution_safety_assertions()
+                    } else {
+                        recovered_execution_safety_assertions()
+                    },
+            "archived execution index does not match the retained failure and history"
+        );
+        ensure!(
+            parse_timestamp(&previous.updated_at, "archived index updated_at")?
+                <= parse_timestamp(&review.reviewed_at, "recovery reviewed_at")?,
+            "review precedes archived index"
+        );
+    }
+    Ok(())
+}
+
+fn validate_recovery_before_ordinal(
+    context: &ExecutionContext,
+    index: &DiscoveryExecutionIndex,
+    ordinal: usize,
+    next_attempt: Option<&ExecutionAttempt>,
+    previous_start: &mut Option<DateTime<Utc>>,
+) -> Result<()> {
+    if let Some(review) = index
+        .transport_recoveries
+        .iter()
+        .find(|review| review.halted_request.ordinal as usize == ordinal)
+    {
+        let halted = &review.halted_request;
+        let planned = &context.plan.requests[ordinal];
+        ensure!(
+            halted == &halted_request(planned, "transport_error", halted.attempts.clone()),
+            "recovered failure does not match the frozen request"
+        );
+        validate_attempts(context, &halted.attempts, previous_start)?;
+        validate_halted_request(halted)?;
+        if let Some(next) = next_attempt {
+            ensure!(
+                parse_timestamp(&next.started_at, "recovered attempt started_at")?
+                    >= parse_timestamp(&review.reviewed_at, "recovery reviewed_at")?,
+                "retrieval precedes its recovery review"
+            );
+        }
     }
     Ok(())
 }
@@ -1664,6 +1924,25 @@ fn snapshot_identity(
     })
 }
 
+fn execution_snapshot_identity(
+    plan_sha256: &str,
+    receipts: &[SuccessfulReceipt],
+    recoveries: &[TransportRecovery],
+) -> Result<SnapshotIdentity> {
+    let mut identity = snapshot_identity(plan_sha256, receipts)?;
+    if !recoveries.is_empty() {
+        let mut digest = DigestContext::new(&SHA256);
+        digest.update(identity.sha256.as_bytes());
+        digest.update(&[0_u8]);
+        digest.update(&canonical_file_bytes(&recoveries)?);
+        identity.sha256 = format_sha256_identifier(digest.finish().as_ref());
+        identity.input =
+            "UTF8(v1_snapshot_sha256) || 0x00 || canonical_JSON_plus_LF(transport_recoveries)"
+                .to_string();
+    }
+    Ok(identity)
+}
+
 fn halted_request(
     request: &PlannedRequest,
     reason: &str,
@@ -1734,6 +2013,15 @@ async fn wait_for_attempt_start(
             .and_then(|halted| halted.attempts.last())
             .or_else(|| {
                 index
+                    .transport_recoveries
+                    .last()
+                    .filter(|review| {
+                        review.halted_request.ordinal as usize == index.successful_receipts.len()
+                    })
+                    .and_then(|review| review.halted_request.attempts.last())
+            })
+            .or_else(|| {
+                index
                     .successful_receipts
                     .last()
                     .and_then(|receipt| receipt.attempts.last())
@@ -1801,6 +2089,7 @@ async fn perform_attempt(
     let mut response = match response {
         Ok(response) => response,
         Err(error) => {
+            log_transport_error(request.ordinal, attempt_number, &error);
             let finished_at = timestamp_now();
             let attempt = ExecutionAttempt {
                 attempt_number: attempt_number as u32,
@@ -2192,6 +2481,19 @@ fn reqwest_error_kind(error: &reqwest::Error) -> &'static str {
         "request"
     } else {
         "transport"
+    }
+}
+
+fn log_transport_error(ordinal: u32, attempt: usize, error: &reqwest::Error) {
+    eprintln!(
+        "COD shard {ordinal:03}, attempt {attempt}/{MAX_ATTEMPTS}: {}: {error}",
+        reqwest_error_kind(error)
+    );
+    let mut source = std::error::Error::source(error);
+    for _ in 0..8 {
+        let Some(cause) = source else { break };
+        eprintln!("  caused by: {cause}");
+        source = cause.source();
     }
 }
 
@@ -3779,6 +4081,229 @@ mod tests {
 
         fs::create_dir(temporary.path().join(FETCH_LOCK_NAME))?;
         assert!(FetchLock::acquire(temporary.path()).is_err());
+        Ok(())
+    }
+
+    fn recovery_fixture() -> Result<(TempDir, ExecutionContext, DiscoveryExecutionIndex)> {
+        let temporary = TempDir::new()?;
+        let repo_root = temporary.path().canonicalize()?;
+        let pilot_root = repo_root.join(PILOT_ROOT_RELATIVE);
+        fs::create_dir_all(&pilot_root)?;
+        let context = ExecutionContext {
+            repo_root,
+            pilot_root: pilot_root.canonicalize()?,
+            plan: build_query_plan()?,
+            plan_binding: ExecutionPlanBinding {
+                path: format!("{PILOT_ROOT_RELATIVE}/prepared/{QUERY_PLAN_FILE}"),
+                sha256: format!("sha256:{}", "0".repeat(64)),
+                request_count: REQUEST_COUNT as u32,
+            },
+        };
+        let mut index = new_execution_index(context.plan_binding.clone());
+        index.index_revision = 10;
+        index.started_at = "2026-01-01T00:00:00.000Z".to_string();
+        index.updated_at = "2026-01-01T00:01:29.000Z".to_string();
+        let raw = store_raw_body(&context, b"[]")?;
+        let mut success = reserved_attempt(1);
+        success.started_at = "2026-01-01T00:00:00.000Z".to_string();
+        success.finished_at = success.started_at.clone();
+        success.outcome = "http_response".to_string();
+        success.status_code = Some(200);
+        success.content_type = Some(Some("application/json".to_string()));
+        success.retry_after = Some(None);
+        success.raw_body = Some(raw.clone());
+        success.error_kind = None;
+        success.retry_disposition = "success".to_string();
+        let request = &context.plan.requests[0];
+        index.successful_receipts.push(SuccessfulReceipt {
+            ordinal: 0,
+            ddd_prefix: request.ddd_prefix.clone(),
+            method: request.method.clone(),
+            url: request.url.clone(),
+            request_sha256: request.request_sha256.clone(),
+            attempts: vec![success.clone()],
+            successful_attempt_number: 1,
+            response: SuccessfulResponse {
+                status_code: 200,
+                content_type: "application/json".to_string(),
+                retrieved_at: success.finished_at.clone(),
+                raw_body: raw,
+                json_validation: JsonValidation {
+                    valid: true,
+                    maximum_depth: 1,
+                    row_count: 0,
+                },
+            },
+        });
+        let base = parse_timestamp("2026-01-01T00:00:00.000Z", "fixture base")?;
+        let attempts = [12, 24, 48, 96]
+            .into_iter()
+            .enumerate()
+            .map(|(position, second)| {
+                let mut attempt = reserved_attempt(position + 1);
+                let time = base + ChronoDuration::seconds(second);
+                attempt.started_at = time.to_rfc3339_opts(SecondsFormat::Millis, true);
+                attempt.finished_at = attempt.started_at.clone();
+                attempt.error_kind = Some("connect".to_string());
+                attempt
+            })
+            .collect();
+        index.halted_request = Some(halted_request(
+            &context.plan.requests[1],
+            "transport_error",
+            attempts,
+        ));
+        index.updated_at = "2026-01-01T00:01:36.000Z".to_string();
+        index.counts = recompute_execution_counts(&index)?;
+        validate_execution_index(&context, &index)?;
+        Ok((temporary, context, index))
+    }
+
+    #[test]
+    fn reviewed_recovery_preserves_receipts_counts_and_exact_failed_index() -> Result<()> {
+        let (_temporary, context, index) = recovery_fixture()?;
+        let recovered = reviewed_transport_recovery(
+            &context,
+            &index,
+            "codex/operator",
+            "Connectivity verified; no HTTP response received",
+            "2026-01-01T00:10:00.000Z".to_string(),
+        )?;
+        assert_eq!(recovered.schema_version, 2);
+        assert_eq!(recovered.successful_receipts, index.successful_receipts);
+        assert_eq!(recovered.counts, index.counts);
+        assert!(recovered.halted_request.is_none());
+        assert!(
+            !recovered
+                .safety_assertions
+                .request_start_spacing_and_retry_policy_were_enforced
+        );
+        assert_eq!(
+            read_and_validate_raw_body(
+                &context,
+                &recovered.transport_recoveries[0].previous_index
+            )?,
+            canonical_file_bytes(&index)?
+        );
+        validate_execution_index(&context, &recovered)?;
+        let mut duplicate = recovered.clone();
+        duplicate.halted_request = index.halted_request.clone();
+        for attempt in &mut duplicate.halted_request.as_mut().unwrap().attempts {
+            let shifted = parse_timestamp(&attempt.started_at, "fixture attempt")?
+                + ChronoDuration::minutes(20);
+            attempt.started_at = shifted.to_rfc3339_opts(SecondsFormat::Millis, true);
+            attempt.finished_at = attempt.started_at.clone();
+        }
+        duplicate.counts = recompute_execution_counts(&duplicate)?;
+        assert!(reviewed_transport_recovery(
+            &context,
+            &duplicate,
+            "operator",
+            "Repeat",
+            "2026-01-01T00:30:00.000Z".to_string()
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("already received"));
+        Ok(())
+    }
+
+    #[test]
+    fn recovered_success_keeps_failures_and_cannot_precede_review() -> Result<()> {
+        let (_temporary, context, index) = recovery_fixture()?;
+        let mut recovered = reviewed_transport_recovery(
+            &context,
+            &index,
+            "operator",
+            "Reviewed connectivity",
+            "2026-01-01T00:10:00.000Z".to_string(),
+        )?;
+        let planned = &context.plan.requests[1];
+        let mut receipt = recovered.successful_receipts[0].clone();
+        receipt.ordinal = 1;
+        receipt.ddd_prefix = planned.ddd_prefix.clone();
+        receipt.url = planned.url.clone();
+        receipt.request_sha256 = planned.request_sha256.clone();
+        receipt.attempts[0].started_at = "2026-01-01T00:10:00.000Z".to_string();
+        receipt.attempts[0].finished_at = receipt.attempts[0].started_at.clone();
+        receipt.response.retrieved_at = receipt.attempts[0].finished_at.clone();
+        recovered.successful_receipts.push(receipt);
+        recovered.counts = recompute_execution_counts(&recovered)?;
+        assert_eq!(recovered.counts.attempts, 6);
+        assert_eq!(recovered.counts.transport_error_attempts, 4);
+        validate_execution_index(&context, &recovered)?;
+        recovered.successful_receipts[1].attempts[0].started_at =
+            "2026-01-01T00:09:59.000Z".to_string();
+        assert!(validate_execution_index(&context, &recovered).is_err());
+        let receipts = vec![index.successful_receipts[0].clone(); REQUEST_COUNT];
+        let original = execution_snapshot_identity(&index.plan.sha256, &receipts, &[])?;
+        let reviewed = execution_snapshot_identity(
+            &index.plan.sha256,
+            &receipts,
+            &recovered.transport_recoveries,
+        )?;
+        assert_ne!(original.sha256, reviewed.sha256);
+        Ok(())
+    }
+
+    #[test]
+    fn recovery_rejects_early_review_reserved_attempts_and_response_failures() -> Result<()> {
+        let (_temporary, context, index) = recovery_fixture()?;
+        assert!(reviewed_transport_recovery(
+            &context,
+            &index,
+            "operator",
+            "Reviewed",
+            "2026-01-01T00:06:35.000Z".to_string()
+        )
+        .is_err());
+        for kind in ["attempt_reserved", "body", "decode", "request"] {
+            let mut invalid = index.halted_request.clone().unwrap();
+            invalid.attempts[0].error_kind = Some(kind.to_string());
+            assert!(
+                validate_transport_recovery_halt(&invalid, "2026-01-01T00:10:00.000Z").is_err()
+            );
+        }
+        let mut invalid = index.halted_request.clone().unwrap();
+        invalid.reason = "invalid_json".to_string();
+        assert!(validate_transport_recovery_halt(&invalid, "2026-01-01T00:10:00.000Z").is_err());
+        assert!(reviewed_transport_recovery(
+            &context,
+            &index,
+            "operator",
+            "",
+            "2026-01-01T00:10:00.000Z".to_string()
+        )
+        .is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn recovered_history_fails_closed_on_tampering_and_wrong_version() -> Result<()> {
+        let (_temporary, context, index) = recovery_fixture()?;
+        let recovered = reviewed_transport_recovery(
+            &context,
+            &index,
+            "operator",
+            "Reviewed connectivity",
+            "2026-01-01T00:10:00.000Z".to_string(),
+        )?;
+        let mut invalid = recovered.clone();
+        invalid.schema_version = 1;
+        assert!(validate_execution_index(&context, &invalid).is_err());
+        invalid = recovered.clone();
+        invalid.transport_recoveries[0].halted_request.attempts[0].elapsed_ms = 1;
+        assert!(validate_execution_index(&context, &invalid).is_err());
+        invalid = recovered.clone();
+        invalid.counts.attempts -= 4;
+        assert!(validate_execution_index(&context, &invalid).is_err());
+        fs::write(
+            context
+                .repo_root
+                .join(&recovered.transport_recoveries[0].previous_index.path),
+            b"damaged",
+        )?;
+        assert!(validate_execution_index(&context, &recovered).is_err());
         Ok(())
     }
 

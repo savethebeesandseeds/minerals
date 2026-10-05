@@ -100,11 +100,14 @@ case "${1:-}" in
     seal_cache
     printf 'Container validation passed. Reviewed release: %s\n' "$task_release_parent/release"
     ;;
-  pilot-verify|pilot-fetch)
+  pilot-verify|pilot-fetch|pilot-recover-transport)
     task_command=$1
     shift
     task_extra=()
-    if [[ "$task_command" == pilot-fetch && $# == 2 && "$1" == --max-new-requests ]]; then
+    if [[ "$task_command" == pilot-recover-transport ]]; then
+      (( $# == 4 )) && [[ "$1" == --reviewer && "$3" == --reason ]] || fail 'pilot-recover-transport requires --reviewer TEXT --reason TEXT'
+      task_extra=("$@")
+    elif [[ "$task_command" == pilot-fetch && $# == 2 && "$1" == --max-new-requests ]]; then
       [[ "$2" =~ ^[1-9][0-9]{0,3}$ ]] && (( 10#$2 <= 1000 )) || fail 'request bound must be 1–1000'
       task_extra=(--max-new-requests "$2")
     elif (( $# != 0 )); then
@@ -113,7 +116,10 @@ case "${1:-}" in
     open_cache
     run_builder cargo build --locked -p minerals-cod-pilot --bin cod-pilot
     seal_cache
-    if [[ "$task_command" == pilot-verify ]]; then
+    if [[ "$task_command" == pilot-recover-transport ]]; then
+      run_private "$TASK_TARGET/debug/cod-pilot" recover-transport --repo-root . \
+        --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT" "${task_extra[@]}"
+    elif [[ "$task_command" == pilot-verify ]]; then
       run_private "$TASK_TARGET/debug/cod-pilot" verify --repo-root . --input "$TASK_PREPARED"
       run_private "$TASK_TARGET/debug/cod-pilot" verify-execution --repo-root . \
         --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT"
@@ -125,5 +131,5 @@ case "${1:-}" in
         --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT"
     fi
     ;;
-  *) fail 'expected contracts, validate, pilot-verify, or pilot-fetch' ;;
+  *) fail 'expected contracts, validate, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
 esac

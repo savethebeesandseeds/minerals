@@ -431,6 +431,16 @@ export async function validateCodCrystallographyPilot(rootDirectory) {
     fail("accepted COD crosswalk no longer requires a candidate and primary-publication review locator");
   }
   const discoveryPlanSchema = supporting.get("frozen_metadata_discovery_query_plan");
+  const recoverySchema = (await lintJsonSchema(root, "schemas/pilots/cod-metadata-discovery-execution-index-v2.schema.json", schemaCache)).schema;
+  if (recoverySchema.properties.schema_version.const !== 2 ||
+      recoverySchema.properties.transport_recoveries.minItems !== 1 ||
+      recoverySchema.properties.transport_recoveries.maxItems !== 8 ||
+      recoverySchema.$defs.safetyAssertions.properties.request_start_spacing_and_retry_policy_were_enforced.const !== false ||
+      recoverySchema.$defs.safetyAssertions.properties.reviewed_transport_recovery_policy_was_enforced.const !== true ||
+      recoverySchema.$defs.transportRecovery.properties.halted_request.allOf[1].properties.attempts.minItems !== 4 ||
+      recoverySchema.$defs.transportRecovery.properties.halted_request.allOf[1].properties.attempts.maxItems !== 4) {
+    fail("reviewed transport recovery schema drifted");
+  }
   if (
     discoveryPlanSchema.properties.requests.minItems !== 1000 ||
     discoveryPlanSchema.properties.requests.maxItems !== 1000 ||

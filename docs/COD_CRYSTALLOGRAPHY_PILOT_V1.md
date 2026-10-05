@@ -1,6 +1,6 @@
 # COD crystallography adapter pilot v1
 
-Status: **private technical contract; retrieval not started**
+Status: **private technical contract; metadata retrieval in progress**
 
 Source decision: **`pilot_only`**
 
@@ -474,6 +474,42 @@ Neither successful preparation nor successful retrieval is a crosswalk,
 scientific answer, ingestion batch, or publication decision. Challenge
 eligibility is separately reviewed and frozen before normalized adapter output
 may be inspected.
+
+### Reviewed connection recovery (execution index v2)
+
+The original query plan and preparation remain frozen, including their
+four-attempt limit. Exhausting that limit still stops `fetch`; there is no
+automatic reset or indefinite retry. After diagnosing connectivity, an operator
+can record an explicit exception with the offline `recover-transport` command.
+It accepts only four completed connection/timeout failures with no HTTP
+response, after at least five minutes of cooldown. HTTP failures, invalid
+responses, body-read failures, interrupted reservations, damaged evidence, and
+validation failures cannot use this recovery path.
+
+Recovery verifies existing evidence, retains the exact failed execution index
+as immutable content-addressed bytes, and records a reviewer, reason,
+timestamp, and the failed attempts. Every successful receipt and attempt count
+is preserved. Each shard may receive only one additional four-attempt cycle;
+at most eight shards may receive reviewed recovery in one run.
+
+Recovered indices use the separate
+[`execution index v2 schema`](../schemas/pilots/cod-metadata-discovery-execution-index-v2.schema.json).
+They set the assertion that the original retry policy was enforced to `false`
+and assert enforcement of the reviewed recovery policy instead. The completed
+v2 snapshot hash also binds the recovery history. The original v1 schema,
+scientific contract, query hashes, inclusion flags, response limits, 12-second
+cadence, and population remain unchanged.
+
+```bash
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh \
+  pilot-recover-transport --reviewer 'operator-id' \
+  --reason 'Connection diagnosis supporting another bounded cycle'
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh pilot-fetch
+```
+
+Recovery performs no network requests; the separate `pilot-fetch` command
+resumes retrieval. Both commands share the same exclusive fetch lock. Transport
+logs include the shard, attempt number, and underlying error chain.
 
 ## Staged next sequence
 
