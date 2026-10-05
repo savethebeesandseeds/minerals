@@ -10,6 +10,8 @@ Read [the product vision](docs/VISION.md), [architecture](docs/ARCHITECTURE.md),
 [source admission decisions](docs/MINERAL_SOURCE_ADMISSION_V1.md),
 [private COD crystallography pilot](docs/COD_CRYSTALLOGRAPHY_PILOT_V1.md),
 [enrichment backlog](docs/MINERAL_RECORD_ENRICHMENT_BACKLOG.md),
+[single-image standard](docs/MINERAL_IMAGE_SINGLE_IMAGE_V1.md),
+[parallel image-agent workflow](docs/MINERAL_IMAGE_AGENT_WORKFLOW_V1.md),
 [ingestion policy](docs/INGESTION.md), [operations guide](docs/OPERATIONS.md),
 and [one-branch GitHub Pages deployment guide](docs/GITHUB_PAGES.md).
 
