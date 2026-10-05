@@ -511,6 +511,21 @@ Recovery performs no network requests; the separate `pilot-fetch` command
 resumes retrieval. Both commands share the same exclusive fetch lock. Transport
 logs include the shard, attempt number, and underlying error chain.
 
+Execution index v3 additionally permits a generic `request` error only when the
+review supplies the private `runs/<run>/run.log` and its exact shard, attempt,
+URL, `SendRequest` cause, and TLS `close_notify` failure establish that the
+connection closed before response headers. The complete log is stored in CAS
+and bound into the review and snapshot identity. Incorrect, missing, duplicate,
+or unrelated log evidence is rejected. The v1 and v2 schemas remain unchanged;
+the same cooldown and recovery limits apply.
+
+For this case, append `--failure-log data/pilots/cod-crystallography-v1/runs/<run>/run.log`
+to the recovery command. The client retains no idle connections between its
+deliberately spaced requests, to avoid reusing connections that COD may have
+closed. This mitigates one observed failure mode; it cannot guarantee source
+availability. Certificate verification remains enabled. Body errors now retain
+their `body_` phase in the error kind and are ineligible for reviewed recovery.
+
 ## Staged next sequence
 
 The pilot proceeds in this order:

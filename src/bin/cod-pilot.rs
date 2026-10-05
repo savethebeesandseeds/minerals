@@ -43,12 +43,14 @@ async fn run(arguments: Vec<OsString>) -> Result<()> {
             pilot_root,
             reviewer,
             reason,
+            failure_log,
         } => serde_json::to_value(recover_transport(
             &repo_root,
             &prepared,
             &pilot_root,
             &reviewer,
             &reason,
+            failure_log.as_deref(),
         )?)?,
     };
     println!("{}", serde_json::to_string_pretty(&output)?);
@@ -82,6 +84,7 @@ enum Options {
         pilot_root: PathBuf,
         reviewer: String,
         reason: String,
+        failure_log: Option<PathBuf>,
     },
 }
 
@@ -118,6 +121,7 @@ impl Options {
         let mut max_new_requests = None;
         let mut reviewer = None;
         let mut reason = None;
+        let mut failure_log = None;
         while let Some(argument) = arguments.next() {
             let option = argument
                 .to_str()
@@ -164,6 +168,7 @@ impl Options {
                 continue;
             }
             let slot = match option {
+                "--failure-log" if command == "recover-transport" => &mut failure_log,
                 "--repo-root" => &mut repo_root,
                 "--output" if command == "prepare" => &mut artifact_path,
                 "--input" if command == "verify" => &mut artifact_path,
@@ -222,6 +227,7 @@ impl Options {
                 pilot_root: pilot_root.context("missing required --pilot-root PATH")?,
                 reviewer: reviewer.context("missing required --reviewer TEXT")?,
                 reason: reason.context("missing required --reason TEXT")?,
+                failure_log,
             },
             _ => unreachable!("command was validated"),
         }))
@@ -242,7 +248,7 @@ fn print_help() {
          cod-pilot verify --repo-root PATH --input PREPARED_DIRECTORY\n  \
          cod-pilot fetch --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1 [--max-new-requests N]\n  \
          cod-pilot verify-execution --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1\n\n\
-         cod-pilot recover-transport --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1 --reviewer TEXT --reason TEXT\n\n\
+         cod-pilot recover-transport --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1 --reviewer TEXT --reason TEXT [--failure-log PRIVATE_RUN_LOG]\n\n\
          Prepare, verify, and verify-execution perform no network requests. Fetch is\n\
          sequential and writes only immutable raw bodies plus its execution index;\n\
          no command opens data/minerals.db or writes any database."
@@ -281,6 +287,22 @@ mod tests {
         assert!(
             matches!(Options::parse(args.clone())?, Some(Options::RecoverTransport { reviewer, reason, .. }) if reviewer == "codex/operator" && reason == "Connectivity reviewed")
         );
+        let mut logged = args.clone();
+        logged.extend(
+            [
+                "--failure-log",
+                "data/pilots/cod-crystallography-v1/runs/example/run.log",
+            ]
+            .into_iter()
+            .map(OsString::from),
+        );
+        assert!(matches!(
+            Options::parse(logged)?,
+            Some(Options::RecoverTransport {
+                failure_log: Some(_),
+                ..
+            })
+        ));
         args.extend(["--max-new-requests", "1"].into_iter().map(OsString::from));
         assert!(Options::parse(args).is_err());
         assert!(Options::parse(

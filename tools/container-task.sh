@@ -105,7 +105,8 @@ case "${1:-}" in
     shift
     task_extra=()
     if [[ "$task_command" == pilot-recover-transport ]]; then
-      (( $# == 4 )) && [[ "$1" == --reviewer && "$3" == --reason ]] || fail 'pilot-recover-transport requires --reviewer TEXT --reason TEXT'
+      (( $# == 4 || $# == 6 )) && [[ "$1" == --reviewer && "$3" == --reason ]] || fail 'pilot-recover-transport requires --reviewer TEXT --reason TEXT [--failure-log PRIVATE_RUN_LOG]'
+      if (( $# == 6 )); then [[ "$5" == --failure-log ]] || fail 'only --failure-log may follow the review'; fi
       task_extra=("$@")
     elif [[ "$task_command" == pilot-fetch && $# == 2 && "$1" == --max-new-requests ]]; then
       [[ "$2" =~ ^[1-9][0-9]{0,3}$ ]] && (( 10#$2 <= 1000 )) || fail 'request bound must be 1–1000'

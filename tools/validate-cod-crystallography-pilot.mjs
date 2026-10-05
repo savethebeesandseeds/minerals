@@ -441,6 +441,15 @@ export async function validateCodCrystallographyPilot(rootDirectory) {
       recoverySchema.$defs.transportRecovery.properties.halted_request.allOf[1].properties.attempts.maxItems !== 4) {
     fail("reviewed transport recovery schema drifted");
   }
+  const tlsRecovery = (await lintJsonSchema(root, "schemas/pilots/cod-metadata-discovery-execution-index-v3.schema.json", schemaCache)).schema;
+  const logReview = tlsRecovery.$defs.transportRecovery.oneOf?.[1];
+  if (tlsRecovery.properties.schema_version.const !== 3 ||
+      !tlsRecovery.properties.transport_recoveries.contains.required.includes("request_failure_log") ||
+      !logReview?.required.includes("request_failure_log") ||
+      !logReview.properties.halted_request.allOf[1].properties.attempts.items.properties.error_kind.enum.includes("request") ||
+      logReview.properties.halted_request.allOf[1].properties.attempts.contains.properties.error_kind.const !== "request") {
+    fail("log-evidenced TLS recovery schema drifted");
+  }
   if (
     discoveryPlanSchema.properties.requests.minItems !== 1000 ||
     discoveryPlanSchema.properties.requests.maxItems !== 1000 ||

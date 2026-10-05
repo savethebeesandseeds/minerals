@@ -25,6 +25,7 @@ const FILES = [
   "schemas/pilots/cod-crystallography-preparation-manifest-v1.schema.json",
   "schemas/pilots/cod-metadata-discovery-execution-index-v1.schema.json",
   "schemas/pilots/cod-metadata-discovery-execution-index-v2.schema.json",
+  "schemas/pilots/cod-metadata-discovery-execution-index-v3.schema.json",
   "schemas/pilots/cod-crystallography-challenge-eligibility-v1.schema.json",
   "schemas/pilots/cod-crystallography-selection-manifest-v1.schema.json",
   "schemas/pilots/cod-crystallography-pilot-item-v1.schema.json",

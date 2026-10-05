@@ -528,6 +528,8 @@ struct TransportRecovery {
     reason: String,
     previous_index: RawBodyBinding,
     halted_request: HaltedRequest,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    request_failure_log: Option<RawBodyBinding>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -723,6 +725,7 @@ pub fn recover_transport(
     pilot_root: &Path,
     reviewer: &str,
     reason: &str,
+    failure_log: Option<&Path>,
 ) -> Result<DiscoveryExecutionIndex> {
     validate_review_text(reviewer, 120, "recovery reviewer")?;
     validate_review_text(reason, 2_000, "recovery reason")?;
@@ -730,17 +733,38 @@ pub fn recover_transport(
     let _fetch_lock = FetchLock::acquire(&context.pilot_root)?;
     let index_path = context.pilot_root.join(DISCOVERY_INDEX_FILE);
     let index = load_execution_index(&index_path)?.context("no execution index to recover")?;
-    let recovered =
-        reviewed_transport_recovery(&context, &index, reviewer, reason, timestamp_now())?;
+    let failure_log_bytes = failure_log
+        .map(|path| read_recovery_log(&context, path))
+        .transpose()?;
+    let recovered = reviewed_transport_recovery_with_log(
+        &context,
+        &index,
+        reviewer,
+        reason,
+        timestamp_now(),
+        failure_log_bytes.as_deref(),
+    )?;
     persist_execution_index(&context, &index_path, recovered)
 }
 
+#[cfg(test)]
 fn reviewed_transport_recovery(
     context: &ExecutionContext,
     index: &DiscoveryExecutionIndex,
     reviewer: &str,
     reason: &str,
     reviewed_at: String,
+) -> Result<DiscoveryExecutionIndex> {
+    reviewed_transport_recovery_with_log(context, index, reviewer, reason, reviewed_at, None)
+}
+
+fn reviewed_transport_recovery_with_log(
+    context: &ExecutionContext,
+    index: &DiscoveryExecutionIndex,
+    reviewer: &str,
+    reason: &str,
+    reviewed_at: String,
+    failure_log: Option<&[u8]>,
 ) -> Result<DiscoveryExecutionIndex> {
     validate_execution_index(context, index)?;
     validate_review_text(reviewer, 120, "recovery reviewer")?;
@@ -753,7 +777,7 @@ fn reviewed_transport_recovery(
         .halted_request
         .as_ref()
         .context("execution has no halted request")?;
-    validate_transport_recovery_halt(halted, &reviewed_at)?;
+    validate_transport_recovery_halt_with_log(halted, &reviewed_at, failure_log)?;
     ensure!(
         index
             .transport_recoveries
@@ -762,14 +786,22 @@ fn reviewed_transport_recovery(
         "this shard has already received its reviewed recovery cycle"
     );
     let previous_index = store_raw_body(context, &canonical_file_bytes(index)?)?;
+    let request_failure_log = failure_log
+        .map(|bytes| store_raw_body(context, bytes))
+        .transpose()?;
     let mut recovered = index.clone();
-    recovered.schema_version = 2;
+    recovered.schema_version = if index.schema_version == 3 || request_failure_log.is_some() {
+        3
+    } else {
+        2
+    };
     recovered.transport_recoveries.push(TransportRecovery {
         reviewed_at,
         reviewer: reviewer.to_string(),
         reason: reason.to_string(),
         previous_index,
         halted_request: halted.clone(),
+        request_failure_log,
     });
     recovered.halted_request = None;
     recovered.safety_assertions = recovered_execution_safety_assertions();
@@ -790,13 +822,24 @@ fn validate_review_text(value: &str, maximum: usize, label: &str) -> Result<()> 
     Ok(())
 }
 
+#[cfg(test)]
 fn validate_transport_recovery_halt(halted: &HaltedRequest, reviewed_at: &str) -> Result<()> {
+    validate_transport_recovery_halt_with_log(halted, reviewed_at, None)
+}
+
+fn validate_transport_recovery_halt_with_log(
+    halted: &HaltedRequest,
+    reviewed_at: &str,
+    failure_log: Option<&[u8]>,
+) -> Result<()> {
     ensure!(
         halted.reason == "transport_error"
             && halted.attempts.len() == MAX_ATTEMPTS
             && halted.attempts.iter().all(|attempt| {
                 attempt.outcome == "transport_error"
-                    && matches!(attempt.error_kind.as_deref(), Some("connect" | "timeout"))
+                    && (matches!(attempt.error_kind.as_deref(), Some("connect" | "timeout"))
+                        || (attempt.error_kind.as_deref() == Some("request")
+                            && failure_log.is_some()))
                     && attempt.status_code.is_none()
                     && attempt.raw_body.is_none()
                     && attempt.content_type.is_none()
@@ -805,6 +848,9 @@ fn validate_transport_recovery_halt(halted: &HaltedRequest, reviewed_at: &str) -
             }),
         "recovery requires four completed connection/timeout failures without an HTTP response"
     );
+    if let Some(bytes) = failure_log {
+        validate_pre_response_tls_log(halted, bytes)?;
+    }
     let finished = parse_timestamp(
         &halted.attempts.last().unwrap().finished_at,
         "failed cycle finished_at",
@@ -816,6 +862,59 @@ fn validate_transport_recovery_halt(halted: &HaltedRequest, reviewed_at: &str) -
             >= TRANSPORT_RECOVERY_WAIT_MS,
         "reviewed recovery requires at least a five-minute cooldown"
     );
+    Ok(())
+}
+
+fn read_recovery_log(context: &ExecutionContext, argument: &Path) -> Result<Vec<u8>> {
+    let path = resolve_repo_argument(&context.repo_root, argument);
+    let relative = repo_relative_path(&context.repo_root, &path)?;
+    ensure!(
+        relative.starts_with(&format!("{PILOT_ROOT_RELATIVE}/runs/"))
+            && relative.ends_with("/run.log"),
+        "failure log must be a private pilot runs/<run>/run.log"
+    );
+    let path = safe_repo_file(&context.repo_root, &relative, "recovery failure log")?;
+    ensure!(
+        fs::metadata(&path)?.len() <= 1_048_576,
+        "recovery log exceeds 1MiB"
+    );
+    read_regular_file(&path, "recovery failure log")
+}
+
+fn validate_pre_response_tls_log(halted: &HaltedRequest, bytes: &[u8]) -> Result<()> {
+    ensure!(bytes.len() <= 1_048_576, "recovery log exceeds 1MiB");
+    let log = std::str::from_utf8(bytes).context("recovery log is not UTF-8")?;
+    let requests = halted
+        .attempts
+        .iter()
+        .filter(|attempt| attempt.error_kind.as_deref() == Some("request"))
+        .collect::<Vec<_>>();
+    ensure!(
+        !requests.is_empty(),
+        "a TLS failure log is only accepted for a generic request failure"
+    );
+    for attempt in requests {
+        let heading = format!("COD shard {:03}, attempt {}/{MAX_ATTEMPTS}: request: error sending request for url ({})", halted.ordinal, attempt.attempt_number, halted.url);
+        let mut matches = log
+            .split("COD shard ")
+            .filter_map(|block| block.strip_prefix(heading.strip_prefix("COD shard ").unwrap()));
+        let block = matches
+            .next()
+            .context("failure log does not identify the exact planned shard/attempt/URL")?;
+        ensure!(
+            matches.next().is_none(),
+            "failure log repeats the reviewed attempt"
+        );
+        ensure!(
+            block
+                .lines()
+                .any(|line| line.trim() == "caused by: client error (SendRequest)")
+                && block.lines().any(|line| line.trim().starts_with(
+                    "caused by: peer closed connection without sending TLS close_notify:"
+                )),
+            "failure log does not establish pre-response TLS closure"
+        );
+    }
     Ok(())
 }
 
@@ -1348,7 +1447,7 @@ fn validate_execution_index(
 ) -> Result<()> {
     ensure!(
         index.format == "waajacu-cod-metadata-discovery-execution-index"
-            && matches!(index.schema_version, 1 | 2)
+            && matches!(index.schema_version, 1..=3)
             && index.pilot_id == PILOT_ID
             && index.index_revision >= 1,
         "execution index identity fields are invalid"
@@ -1361,8 +1460,13 @@ fn validate_execution_index(
     parse_timestamp(&index.updated_at, "index updated_at")?;
     ensure!(
         (index.schema_version == 1 && index.transport_recoveries.is_empty())
-            || (index.schema_version == 2
-                && (1..=MAX_TRANSPORT_RECOVERIES).contains(&index.transport_recoveries.len())),
+            || ((index.schema_version == 2 || index.schema_version == 3)
+                && (1..=MAX_TRANSPORT_RECOVERIES).contains(&index.transport_recoveries.len())
+                && (index.schema_version == 3)
+                    == index
+                        .transport_recoveries
+                        .iter()
+                        .any(|review| review.request_failure_log.is_some())),
         "execution version does not match its reviewed recovery history"
     );
     ensure!(
@@ -1475,7 +1579,22 @@ fn validate_recovery_archives(
         previous_ordinal = Some(ordinal);
         validate_review_text(&review.reviewer, 120, "recovery reviewer")?;
         validate_review_text(&review.reason, 2_000, "recovery reason")?;
-        validate_transport_recovery_halt(&review.halted_request, &review.reviewed_at)?;
+        let failure_log = review
+            .request_failure_log
+            .as_ref()
+            .map(|binding| {
+                ensure!(
+                    binding.bytes <= 1_048_576,
+                    "archived recovery log exceeds 1MiB"
+                );
+                read_and_validate_raw_body(context, binding)
+            })
+            .transpose()?;
+        validate_transport_recovery_halt_with_log(
+            &review.halted_request,
+            &review.reviewed_at,
+            failure_log.as_deref(),
+        )?;
         ensure!(
             review.previous_index.bytes <= 16_777_216,
             "archived execution index exceeds 16MiB"
@@ -1487,7 +1606,17 @@ fn validate_recovery_archives(
         ensure!(
             previous.format == index.format
                 && previous.pilot_id == index.pilot_id
-                && previous.schema_version == if position == 0 { 1 } else { 2 }
+                && previous.schema_version
+                    == if position == 0 {
+                        1
+                    } else if index.transport_recoveries[..position]
+                        .iter()
+                        .any(|review| review.request_failure_log.is_some())
+                    {
+                        3
+                    } else {
+                        2
+                    }
                 && previous.index_revision <= index.index_revision
                 && previous.status == "partial"
                 && previous.completed_at.is_none()
@@ -1996,6 +2125,10 @@ fn build_http_client(plan: &QueryPlan) -> Result<Client> {
     Client::builder()
         .https_only(true)
         .redirect(Policy::none())
+        // COD sometimes closes idle TLS connections without close_notify.
+        // Each deliberately spaced request gets a fresh connection; certificate
+        // verification and truncated-response checks stay enabled.
+        .pool_max_idle_per_host(0)
         .connect_timeout(Duration::from_millis(plan.transport.connect_timeout_ms))
         .timeout(Duration::from_millis(plan.transport.attempt_timeout_ms))
         .build()
@@ -2218,6 +2351,7 @@ async fn perform_attempt(
             });
         }
         Err(error) => {
+            eprintln!("COD shard {:03}, attempt {attempt_number}/{MAX_ATTEMPTS}: body read failed: {error}", request.ordinal);
             let attempt = ExecutionAttempt {
                 attempt_number: attempt_number as u32,
                 started_at,
@@ -2229,7 +2363,9 @@ async fn perform_attempt(
                 retry_after: None,
                 raw_body: None,
                 bytes_received: None,
-                error_kind: Some(reqwest_error_kind(&error).to_string()),
+                // Retain the failure phase so a body timeout cannot later be
+                // mistaken for a pre-response connection timeout in recovery.
+                error_kind: Some(format!("body_{}", reqwest_error_kind(&error))),
                 retry_disposition: if attempt_number < MAX_ATTEMPTS {
                     "retry_fixed_backoff"
                 } else {
@@ -4257,7 +4393,13 @@ mod tests {
             "2026-01-01T00:06:35.000Z".to_string()
         )
         .is_err());
-        for kind in ["attempt_reserved", "body", "decode", "request"] {
+        for kind in [
+            "attempt_reserved",
+            "body",
+            "body_timeout",
+            "decode",
+            "request",
+        ] {
             let mut invalid = index.halted_request.clone().unwrap();
             invalid.attempts[0].error_kind = Some(kind.to_string());
             assert!(
@@ -4275,6 +4417,131 @@ mod tests {
             "2026-01-01T00:10:00.000Z".to_string()
         )
         .is_err());
+        Ok(())
+    }
+
+    fn tls_failure_log(halted: &HaltedRequest) -> Vec<u8> {
+        format!("COD shard {:03}, attempt 1/{MAX_ATTEMPTS}: request: error sending request for url ({})\n  caused by: client error (SendRequest)\n  caused by: connection error\n  caused by: peer closed connection without sending TLS close_notify: https://docs.rs/rustls/latest/rustls/manual/_03_howto/index.html#unexpected-eof\n", halted.ordinal, halted.url).into_bytes()
+    }
+
+    #[test]
+    fn legacy_request_recovery_requires_exact_tls_log_and_retains_it() -> Result<()> {
+        let (_temporary, context, mut index) = recovery_fixture()?;
+        index.halted_request.as_mut().unwrap().attempts[0].error_kind = Some("request".to_string());
+        let halted = index.halted_request.as_ref().unwrap();
+        let log = tls_failure_log(halted);
+        assert!(reviewed_transport_recovery(
+            &context,
+            &index,
+            "operator",
+            "Reviewed",
+            "2026-01-01T00:10:00.000Z".to_string()
+        )
+        .is_err());
+        for bad in [
+            b"unrelated log".to_vec(),
+            log.repeat(2),
+            String::from_utf8(log.clone())?
+                .replace("attempt 1/4", "attempt 2/4")
+                .into_bytes(),
+            String::from_utf8(log.clone())?
+                .replace("SendRequest", "ReadBody")
+                .into_bytes(),
+            String::from_utf8(log.clone())?
+                .replace("id=001%25", "id=999%25")
+                .into_bytes(),
+        ] {
+            assert!(validate_pre_response_tls_log(halted, &bad).is_err());
+        }
+        let recovered = reviewed_transport_recovery_with_log(
+            &context,
+            &index,
+            "operator",
+            "TLS closure established by exact log",
+            "2026-01-01T00:10:00.000Z".to_string(),
+            Some(&log),
+        )?;
+        assert_eq!(recovered.schema_version, 3);
+        assert_eq!(recovered.counts, index.counts);
+        assert_eq!(
+            read_and_validate_raw_body(
+                &context,
+                recovered.transport_recoveries[0]
+                    .request_failure_log
+                    .as_ref()
+                    .unwrap()
+            )?,
+            log
+        );
+        validate_execution_index(&context, &recovered)?;
+        let mut invalid = recovered.clone();
+        invalid.transport_recoveries[0].request_failure_log = None;
+        assert!(validate_execution_index(&context, &invalid).is_err());
+        invalid = recovered.clone();
+        invalid.schema_version = 2;
+        assert!(validate_execution_index(&context, &invalid).is_err());
+        let log_path = context.repo_root.join(
+            &recovered.transport_recoveries[0]
+                .request_failure_log
+                .as_ref()
+                .unwrap()
+                .path,
+        );
+        fs::write(log_path, b"damaged")?;
+        assert!(validate_execution_index(&context, &recovered).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn tls_recovery_extension_preserves_prior_v2_review() -> Result<()> {
+        let (_temporary, context, index) = recovery_fixture()?;
+        let mut next = reviewed_transport_recovery(
+            &context,
+            &index,
+            "operator",
+            "Reviewed connectivity",
+            "2026-01-01T00:10:00.000Z".to_string(),
+        )?;
+        next.index_revision += 1;
+        let planned = &context.plan.requests[1];
+        let mut receipt = next.successful_receipts[0].clone();
+        receipt.ordinal = 1;
+        receipt.ddd_prefix = planned.ddd_prefix.clone();
+        receipt.url = planned.url.clone();
+        receipt.request_sha256 = planned.request_sha256.clone();
+        receipt.attempts[0].started_at = "2026-01-01T00:10:00.000Z".to_string();
+        receipt.attempts[0].finished_at = receipt.attempts[0].started_at.clone();
+        receipt.response.retrieved_at = receipt.attempts[0].finished_at.clone();
+        next.successful_receipts.push(receipt);
+        let mut halted = halted_request(
+            &context.plan.requests[2],
+            "transport_error",
+            index.halted_request.as_ref().unwrap().attempts.clone(),
+        );
+        for attempt in &mut halted.attempts {
+            let shifted = parse_timestamp(&attempt.started_at, "fixture attempt")?
+                + ChronoDuration::minutes(20);
+            attempt.started_at = shifted.to_rfc3339_opts(SecondsFormat::Millis, true);
+            attempt.finished_at = attempt.started_at.clone();
+        }
+        halted.attempts[0].error_kind = Some("request".to_string());
+        next.halted_request = Some(halted.clone());
+        next.counts = recompute_execution_counts(&next)?;
+        let recovered = reviewed_transport_recovery_with_log(
+            &context,
+            &next,
+            "operator",
+            "TLS closure reviewed",
+            "2026-01-01T00:30:00.000Z".to_string(),
+            Some(&tls_failure_log(&halted)),
+        )?;
+        assert_eq!(recovered.schema_version, 3);
+        assert_eq!(
+            recovered.transport_recoveries[0],
+            next.transport_recoveries[0]
+        );
+        assert_eq!(recovered.counts, next.counts);
+        validate_execution_index(&context, &recovered)?;
         Ok(())
     }
 
