@@ -76,6 +76,14 @@ contracts() {
 }
 
 case "${1:-}" in
+  image-queue)
+    shift
+    run_private python3 -B tools/mineral-image-queue.py "$@"
+    ;;
+  image-queue-test)
+    (( $# == 1 )) || fail 'image-queue-test takes no arguments'
+    run_private python3 -B -m unittest tools/test_mineral_image_queue.py
+    ;;
   record-research)
     (( $# == 2 )) && [[ "$2" == capture || "$2" == prepare || "$2" == verify ]] || fail 'record-research requires capture, prepare, or verify'
     run_private env MINERALS_MODE=admin python3 -B tools/prepare-mineral-record-research.py "$2"
@@ -136,5 +144,5 @@ case "${1:-}" in
         --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT"
     fi
     ;;
-  *) fail 'expected contracts, validate, record-research, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
+  *) fail 'expected image-queue, image-queue-test, contracts, validate, record-research, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
 esac
