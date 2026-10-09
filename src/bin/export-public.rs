@@ -123,9 +123,7 @@ fn assemble_catalog_release(
             bail!("assembled public catalog manifest differs from the validated source");
         }
         for relative in catalog_snapshot_files(&expected)? {
-            if relative == Path::new(&expected.database.path)
-                && !source.join(&relative).exists()
-            {
+            if relative == Path::new(&expected.database.path) && !source.join(&relative).exists() {
                 continue;
             }
             if !files_are_identical(&source.join(&relative), &staging.join(&relative))? {
