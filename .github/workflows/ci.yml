@@ -67,6 +67,18 @@ jobs:
           cargo fmt --all -- --check
           cargo fmt --manifest-path map-wasm/Cargo.toml -- --check
 
+      - name: Restore the immutable COD pilot test catalog
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          frozen_commit=6073b0257dcdaad0f9d1fd3ab33cef30eb2a06c2
+          git fetch --no-tags --depth=1 origin "$frozen_commit"
+          fixture="$RUNNER_TEMP/waajacu-frozen-cod-pilot"
+          mkdir "$fixture"
+          cp -R schemas "$fixture/schemas"
+          git archive "$frozen_commit" public-catalog | tar -x -C "$fixture"
+          echo "MINERALS_TEST_REPO_ROOT=$fixture" >> "$GITHUB_ENV"
+
       - name: Test native workspace
         run: cargo test --locked --workspace
 
