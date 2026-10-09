@@ -12,11 +12,14 @@ import {
   CATALOG_FORMAT,
   CATALOG_SCHEMA_VERSION,
   MAX_QUERY_LENGTH,
+  codRelationshipLabel,
+  groupEvidenceBySource,
   isOfferActiveAt,
   normalizeSearchParams,
   normalizeSearchQuery,
   normalizeSlug,
   parseRoute,
+  publishedResearchProfile,
   routeHref,
   validateManifest,
   validateWorkerRequest,
@@ -31,6 +34,64 @@ import {
 
 const DIGEST = "0123456789abcdef".repeat(4);
 const RELEASE_DIGEST = "fedcba9876543210".repeat(4);
+
+test("published research preserves sourced observations and models without exposing private drafts", () => {
+  const observation = { question_key: "physical.density", value: 2.7, unit: "g/cm³", source_url: "https://example.org/paper", locator: "Table 2", qualification: "Measured specimen at 20 °C", subject_scope: "specimen" };
+  const observations = Array.from({ length: 121 }, (_, index) => ({ ...observation, value: index }));
+  const source = {
+    hardness_mohs: 5,
+    public_research: {
+      publication_status: "published", review_status: "reviewed",
+      description: { text: "Approved sourced profile", source_urls: [observation.source_url] },
+      observations: [...observations, { ...observation, private_research: true }, { ...observation, review_status: "draft" }],
+      cod_records: [{ cod_id: "9000001", status: "name_matched", primary_assignment: false }],
+      structures: [{ cod_id: "9000002", source_formula: "K2 S O4", conditions: { temperature: 291.15 }, atom_sites: { labels: ["K1"] } }],
+    },
+  };
+  const profile = publishedResearchProfile(JSON.stringify(source));
+  assert.deepEqual(profile.properties, { hardness_mohs: 5 });
+  assert.equal(profile.research.observations.length, 121);
+  assert.deepEqual(profile.research.observations[120], observations[120]);
+  assert.equal(profile.research.observations[0].locator, "Table 2");
+  assert.equal(profile.research.observations[0].qualification, observation.qualification);
+  assert.equal(profile.research.structures[0].conditions.temperature, 291.15);
+  assert.equal(profile.research.description.text, "Approved sourced profile");
+  assert.deepEqual(source.public_research.observations[0], observations[0]);
+  assert.equal(source.public_research.observations.length, 123);
+});
+
+test("research display requires the explicit public release projection", () => {
+  for (const raw of ["not JSON", null, [], { public_research: { publication_status: "draft", review_status: "reviewed", observations: [{}] } }, { public_research: { publication_status: "published", review_status: "unreviewed" } }, { public_research: { publication_status: "published", review_status: "reviewed", private_research: true } }]) {
+    assert.equal(publishedResearchProfile(raw).research, null);
+  }
+  const result = publishedResearchProfile({ formula: "K2SO4", public_research: { publication_status: "published", review_status: "verified", observations: "invalid", cod_records: [null, { cod_id: "1" }, { cod_id: "2", publication_status: "private" }] } });
+  assert.deepEqual(result.properties, { formula: "K2SO4" });
+  assert.deepEqual(result.research.observations, []);
+  assert.deepEqual(result.research.cod_records, [{ cod_id: "1" }]);
+  const malformedDescription = publishedResearchProfile({ public_research: { publication_status: "published", review_status: "reviewed", description: { text: "Profile", source_urls: "not an array" } } });
+  assert.deepEqual(malformedDescription.research.description.source_urls, []);
+});
+
+test("COD name leads and primary associations do not imply universal verification", () => {
+  assert.match(codRelationshipLabel("name_matched"), /scientific comparison pending/);
+  assert.match(codRelationshipLabel("candidate"), /scientific comparison pending/);
+  assert.equal(codRelationshipLabel("identified"), "Identified phase relationship");
+  assert.equal(codRelationshipLabel("counterpart"), "Counterpart relationship");
+  assert.match(codRelationshipLabel("related"), /historical model/);
+  assert.equal(codRelationshipLabel("unknown"), "Relationship not classified");
+});
+
+test("source grouping retains every claim and keeps license snapshots separate", () => {
+  const first = { canonical_url: "https://example.org/paper", publisher: "Journal", license_spdx: "CC-BY-4.0", claim_scope: "density", claim_json: "{\"locator\":\"Table 2\"}" };
+  const second = { ...first, claim_scope: "formula", review_status: "reviewed" };
+  const third = { ...first, license_spdx: "LicenseRef-Research" };
+  const fourth = { title: "Unlinked source" };
+  const fifth = { title: "Another unlinked source" };
+  const grouped = groupEvidenceBySource([first, second, third, fourth, fifth]);
+  assert.deepEqual(grouped, [[first, second], [third], [fourth], [fifth]]);
+  assert.equal(grouped.flat().length, 5);
+  assert.equal(grouped[0][0].claim_json, first.claim_json);
+});
 
 function validManifest() {
   return {
@@ -368,6 +429,10 @@ test("the shell is subpath-relative, cache-versioned, and app-owned code avoids 
   ]);
   assert.equal(deployedCssUrl.searchParams.get("v"), createHash("sha256").update(cssBytes).digest("hex"));
   assert.equal(appModuleUrl.searchParams.get("v"), createHash("sha256").update(appBytes).digest("hex"));
+  const corePath = app.match(/from "(\.\/app-core\.mjs\?v=[0-9a-f]{64})"/)?.[1];
+  assert.ok(corePath, "the updated helper module must have a content-addressed cache URL");
+  const coreBytes = await readFile(new URL("./app-core.mjs", import.meta.url));
+  assert.equal(new URL(corePath, appModuleUrl).searchParams.get("v"), createHash("sha256").update(coreBytes).digest("hex"));
   assert.deepEqual([...deployedCssUrl.searchParams.keys()], ["v"]);
   assert.deepEqual([...appModuleUrl.searchParams.keys()], ["v"]);
   assert.equal(new URL(mapPath, appModuleUrl).href, "https://catalog.example/releases/2026-08/map/map-loader.js");

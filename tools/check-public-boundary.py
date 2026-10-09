@@ -14,9 +14,12 @@ import sqlite3
 import subprocess
 import sys
 from urllib.parse import quote
+import zlib
 
 
 MAX_SECRET_SCAN_BYTES = 2 * 1024 * 1024
+MAX_DATABASE_BYTES = 512 * 1024 * 1024
+MAX_MANIFEST_BYTES = 64 * 1024
 PUBLIC_CATALOG_ROOT = "public-catalog"
 PUBLIC_CATALOG_MANIFEST = f"{PUBLIC_CATALOG_ROOT}/catalog-manifest.json"
 SIDECAR_VALIDATOR = Path(__file__).with_name("validate-public-catalog-sidecars.mjs")
@@ -163,43 +166,86 @@ def is_public_catalog_database_path(path: str) -> bool:
     )
 
 
+def catalog_database_identity(manifest_bytes: bytes) -> tuple[str, str, int]:
+    if not 0 < len(manifest_bytes) <= MAX_MANIFEST_BYTES:
+        raise BoundaryError("public catalog manifest has an invalid size")
+    try:
+        database = json.loads(manifest_bytes)["database"]
+        relative = database["path"]
+        digest = database["sha256"]
+        size = database["bytes"]
+    except (KeyError, TypeError, json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise BoundaryError("cannot validate catalog manifest database identity") from error
+    match = (
+        re.fullmatch(r"data/catalog-([0-9a-f]{64})\.sqlite3", relative)
+        if isinstance(relative, str)
+        else None
+    )
+    if match is None or digest != f"sha256:{match[1]}":
+        raise BoundaryError("public catalog manifest database identity is invalid")
+    if isinstance(size, bool) or not isinstance(size, int) or not 0 < size <= MAX_DATABASE_BYTES:
+        raise BoundaryError("public catalog manifest database size is invalid")
+    return f"{PUBLIC_CATALOG_ROOT}/{relative}", match[1], size
+
+
+def decode_catalog_gzip(encoded: bytes, expected_bytes: int) -> bytes:
+    if isinstance(expected_bytes, bool) or not isinstance(expected_bytes, int) or not 0 < expected_bytes <= MAX_DATABASE_BYTES:
+        raise BoundaryError("public catalog manifest database size is invalid")
+    if not 0 < len(encoded) <= MAX_DATABASE_BYTES:
+        raise BoundaryError("gzip catalog artifact has an invalid size")
+    try:
+        decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        decoded = decoder.decompress(encoded, expected_bytes + 1)
+    except zlib.error as error:
+        raise BoundaryError("gzip catalog sidecar cannot be decoded safely") from error
+    if len(decoded) != expected_bytes:
+        raise BoundaryError("decoded catalog byte length does not match the manifest")
+    if not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+        raise BoundaryError("gzip catalog sidecar has incomplete or trailing compressed input")
+    return decoded
+
+
 def public_catalog_snapshot_findings(
     repo: Path, paths: list[str], *, validate_compression: bool = True
 ) -> list[tuple[str, str]]:
     actual = {path for path in paths if below(path, PUBLIC_CATALOG_ROOT)}
-    raw_databases = sorted(
-        path
-        for path in actual
-        if re.fullmatch(
-            rf"{re.escape(PUBLIC_CATALOG_ROOT)}/data/"
-            r"catalog-[0-9a-f]{64}\.sqlite3",
-            path,
-        )
-    )
-    if len(raw_databases) != 1:
-        return [
-            (
-                PUBLIC_CATALOG_ROOT,
-                "must track exactly one sanitized raw catalog database",
-            )
-        ]
-
-    raw = raw_databases[0]
-    expected = {PUBLIC_CATALOG_MANIFEST, raw, f"{raw}.br", f"{raw}.gz"}
-    if actual != expected:
-        return [
-            (
-                PUBLIC_CATALOG_ROOT,
-                "must contain exactly the manifest and one matching raw/br/gz catalog set",
-            )
-        ]
-
     findings: list[tuple[str, str]] = []
     try:
+        if PUBLIC_CATALOG_MANIFEST not in actual:
+            raise BoundaryError("must track the public catalog manifest")
+        manifest_size = int(git(repo, "cat-file", "-s", f":{PUBLIC_CATALOG_MANIFEST}"))
+        if not 0 < manifest_size <= MAX_MANIFEST_BYTES:
+            raise BoundaryError("public catalog manifest has an invalid size")
+        manifest_bytes = git(repo, "cat-file", "blob", f":{PUBLIC_CATALOG_MANIFEST}")
+        raw, digest, expected_bytes = catalog_database_identity(manifest_bytes)
+        expected = {PUBLIC_CATALOG_MANIFEST, f"{raw}.br", f"{raw}.gz"}
+        if raw in actual:
+            expected.add(raw)
+        if actual != expected:
+            raise BoundaryError(
+                "must track exactly the manifest and matching br/gz catalog pair, with optional raw database"
+            )
+        catalog_root = repo / PUBLIC_CATALOG_ROOT
+        data_root = catalog_root / "data"
+        if catalog_root.is_symlink() or not catalog_root.is_dir() or data_root.is_symlink() or not data_root.is_dir():
+            raise BoundaryError("public catalog root and data must be real directories")
+        if {item.name for item in catalog_root.iterdir()} != {"catalog-manifest.json", "data"}:
+            raise BoundaryError("public catalog worktree root contains an unexpected or missing entry")
+        expected_data_names = {PurePosixPath(relative).name for relative in expected if relative != PUBLIC_CATALOG_MANIFEST}
+        if {item.name for item in data_root.iterdir()} != expected_data_names:
+            raise BoundaryError("public catalog worktree data contains an unexpected or missing entry")
         for relative in sorted(expected):
             candidate = repo.joinpath(*PurePosixPath(relative).parts)
             if candidate.is_symlink() or not candidate.is_file():
                 findings.append((relative, "worktree artifact is not a regular file"))
+                continue
+            maximum = MAX_MANIFEST_BYTES if relative == PUBLIC_CATALOG_MANIFEST else MAX_DATABASE_BYTES
+            if not 0 < candidate.stat().st_size <= maximum:
+                findings.append((relative, "worktree artifact has an invalid size"))
+                continue
+            indexed_size = int(git(repo, "cat-file", "-s", f":{relative}"))
+            if indexed_size != candidate.stat().st_size:
+                findings.append((relative, "worktree bytes differ from the staged Git blob; refusing to scan a different file"))
                 continue
             indexed = git(repo, "cat-file", "blob", f":{relative}")
             if candidate.read_bytes() != indexed:
@@ -212,27 +258,17 @@ def public_catalog_snapshot_findings(
         if findings:
             return findings
 
-        manifest_bytes = git(repo, "cat-file", "blob", f":{PUBLIC_CATALOG_MANIFEST}")
-        manifest = json.loads(manifest_bytes)
-        database = manifest["database"]
-        relative_database = raw.removeprefix(f"{PUBLIC_CATALOG_ROOT}/")
-        digest = raw.removeprefix(f"{PUBLIC_CATALOG_ROOT}/data/catalog-").removesuffix(
-            ".sqlite3"
+        raw_bytes = (
+            git(repo, "cat-file", "blob", f":{raw}")
+            if raw in expected
+            else decode_catalog_gzip(git(repo, "cat-file", "blob", f":{raw}.gz"), expected_bytes)
         )
-        if database["path"] != relative_database:
-            findings.append(
-                (PUBLIC_CATALOG_MANIFEST, "database path does not name the tracked raw file")
-            )
-        if database["sha256"] != f"sha256:{digest}":
-            findings.append(
-                (PUBLIC_CATALOG_MANIFEST, "database SHA-256 does not match its filename")
-            )
-        raw_bytes = git(repo, "cat-file", "blob", f":{raw}")
-        if len(raw_bytes) != database["bytes"]:
+        if len(raw_bytes) != expected_bytes:
             findings.append((raw, "database byte length does not match the manifest"))
         if hashlib.sha256(raw_bytes).hexdigest() != digest:
             findings.append((raw, "database content does not match its SHA-256 filename"))
-        if validate_compression:
+        del raw_bytes
+        if validate_compression and not findings:
             node = os.environ.get("WAAJACU_NODE", "node")
             try:
                 completed = subprocess.run(
@@ -252,8 +288,8 @@ def public_catalog_snapshot_findings(
                 raise BoundaryError(detail)
     except BoundaryError as error:
         findings.append((PUBLIC_CATALOG_ROOT, f"catalog validation failed: {error}"))
-    except (KeyError, TypeError, json.JSONDecodeError) as error:
-        findings.append((PUBLIC_CATALOG_MANIFEST, f"cannot validate catalog manifest: {error}"))
+    except (OSError, ValueError) as error:
+        findings.append((PUBLIC_CATALOG_ROOT, f"cannot inspect catalog artifacts: {error}"))
     return findings
 
 
@@ -361,17 +397,23 @@ def scan_tracked_secrets(repo: Path, paths: list[str]) -> list[tuple[str, str]]:
 def scan_public_catalog_text(
     repo: Path, paths: list[str]
 ) -> list[tuple[str, str]]:
-    databases = [
+    databases = {
         path
         for path in paths
         if is_public_catalog_database_path(path) and path.endswith(".sqlite3")
-    ]
+    }
+    compressed = {
+        path.removesuffix(".gz")
+        for path in paths
+        if is_public_catalog_database_path(path) and path.endswith(".sqlite3.gz")
+    } - databases
     findings: list[tuple[str, str]] = []
-    for relative in databases:
-        candidate = repo.joinpath(*PurePosixPath(relative).parts)
+    for relative in sorted(databases | compressed):
+        artifact = f"{relative}.gz" if relative in compressed else relative
+        candidate = repo.joinpath(*PurePosixPath(artifact).parts)
         if candidate.is_symlink() or not candidate.is_file():
             raise BoundaryError(
-                f"public catalog database is not a regular file: {relative}"
+                f"public catalog database is not a regular file: {artifact}"
             )
         database_path = candidate.resolve()
         try:
@@ -380,9 +422,28 @@ def scan_public_catalog_text(
             raise BoundaryError(
                 f"public catalog database escapes the repository: {relative}"
             ) from error
-        uri = f"file:{quote(database_path.as_posix(), safe='/:')}?mode=ro&immutable=1"
+        connection = None
         try:
-            connection = sqlite3.connect(uri, uri=True)
+            if relative in compressed:
+                manifest_path = repo / PUBLIC_CATALOG_MANIFEST
+                if manifest_path.is_symlink() or not manifest_path.is_file():
+                    raise BoundaryError("public catalog manifest is not a regular file")
+                if not 0 < manifest_path.stat().st_size <= MAX_MANIFEST_BYTES:
+                    raise BoundaryError("public catalog manifest has an invalid size")
+                declared, digest, expected_bytes = catalog_database_identity(manifest_path.read_bytes())
+                if declared != relative:
+                    raise BoundaryError("compressed catalog path does not match the manifest")
+                if not 0 < candidate.stat().st_size <= MAX_DATABASE_BYTES:
+                    raise BoundaryError("gzip catalog artifact has an invalid size")
+                raw_bytes = decode_catalog_gzip(candidate.read_bytes(), expected_bytes)
+                if hashlib.sha256(raw_bytes).hexdigest() != digest:
+                    raise BoundaryError("decoded catalog content does not match its SHA-256 filename")
+                connection = sqlite3.connect(":memory:")
+                connection.deserialize(raw_bytes)
+                del raw_bytes
+            else:
+                uri = f"file:{quote(database_path.as_posix(), safe='/:')}?mode=ro&immutable=1"
+                connection = sqlite3.connect(uri, uri=True)
             connection.execute("PRAGMA query_only = ON")
             tables = list(
                 connection.execute(
@@ -428,11 +489,13 @@ def scan_public_catalog_text(
                                     reason,
                                 )
                             )
-            connection.close()
         except sqlite3.Error as error:
             raise BoundaryError(
                 f"failed to scan public catalog text in {relative}: {error}"
             ) from error
+        finally:
+            if connection is not None:
+                connection.close()
     return findings
 
 
@@ -545,9 +608,11 @@ def main() -> int:
             for path in paths
             if (reason := forbidden_path_reason(path)) is not None
         ]
-        path_findings.extend(public_catalog_snapshot_findings(repo, paths))
+        catalog_findings = public_catalog_snapshot_findings(repo, paths)
+        path_findings.extend(catalog_findings)
         secret_findings = scan_tracked_secrets(repo, paths)
-        secret_findings.extend(scan_public_catalog_text(repo, paths))
+        if not catalog_findings:
+            secret_findings.extend(scan_public_catalog_text(repo, paths))
 
         history_findings: list[tuple[str, str]] = []
         historical_secret_findings: list[tuple[str, str]] = []

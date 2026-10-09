@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 import re
 import sys
 import time
+import zlib
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -40,6 +41,7 @@ PUBLIC_APP_FILES = (
     "map/minerals_map.wasm",
 )
 MANIFEST_FILE = "catalog-manifest.json"
+MAX_DATABASE_BYTES = 512 * 1024 * 1024
 
 
 class VerificationError(RuntimeError):
@@ -83,18 +85,46 @@ def load_expected_files(app_root: Path, catalog_root: Path) -> dict[str, bytes]:
     try:
         manifest = json.loads(manifest_bytes)
         database_path = manifest["database"]["path"]
+        database_digest = manifest["database"]["sha256"]
+        database_bytes = manifest["database"]["bytes"]
     except (KeyError, TypeError, json.JSONDecodeError) as error:
         raise VerificationError("public catalog manifest is malformed") from error
     if not isinstance(database_path, str) or not re.fullmatch(
         r"data/catalog-[0-9a-f]{64}\.sqlite3", database_path
     ):
         raise VerificationError("public catalog manifest has an unsafe database path")
+    if (
+        database_digest != "sha256:" + database_path.removeprefix("data/catalog-").removesuffix(".sqlite3")
+        or type(database_bytes) is not int
+        or not 0 < database_bytes <= MAX_DATABASE_BYTES
+    ):
+        raise VerificationError("public catalog manifest has an invalid database identity")
 
     expected[MANIFEST_FILE] = manifest_bytes
-    expected[database_path] = require_file(catalog_root, database_path).read_bytes()
     for suffix in (".br", ".gz"):
         relative = f"{database_path}{suffix}"
         expected[relative] = require_file(catalog_root, relative).read_bytes()
+    # A compressed source package still deploys the complete raw SQLite file.
+    # Prove its expected bytes without requiring an oversized Git blob.
+    try:
+        decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
+        decoded = decoder.decompress(expected[f"{database_path}.gz"], database_bytes + 1)
+    except zlib.error as error:
+        raise VerificationError("public catalog gzip cannot be decoded safely") from error
+    if (
+        len(decoded) != database_bytes
+        or not decoder.eof
+        or decoder.unused_data
+        or decoder.unconsumed_tail
+        or "sha256:" + hashlib.sha256(decoded).hexdigest() != database_digest
+    ):
+        raise VerificationError("public catalog gzip does not match its manifest identity")
+    raw_path = catalog_root / database_path
+    if raw_path.exists() or raw_path.is_symlink():
+        raw = require_file(catalog_root, database_path).read_bytes()
+        if raw != decoded:
+            raise VerificationError("public raw catalog differs from its gzip source")
+    expected[database_path] = decoded
     return expected
 
 

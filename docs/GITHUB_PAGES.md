@@ -34,8 +34,9 @@ Intentionally public and version-controlled:
 - all source code and documentation;
 - the exact static application files allowlisted by `export-public`;
 - `public-catalog/catalog-manifest.json`; and
-- the matching sanitized, content-addressed SQLite database and its Brotli and
-  gzip representations under `public-catalog/data/`.
+- the matching content-addressed Brotli and gzip database representations
+  under `public-catalog/data/`; small legacy snapshots may also contain the
+  raw sanitized SQLite database.
 
 Local service state that must never enter Git or Pages:
 
@@ -63,9 +64,11 @@ python3 tools/check-public-boundary.py
 Because the repository is public, a committed catalog snapshot remains in Git
 history even after a later snapshot removes a row. Review evidence, licensing,
 offers, attribution, and descriptive text as material intended for permanent
-public distribution. Each current database file is below GitHub's 100 MiB
-single-file limit; use another public data distribution mechanism before a
-future raw snapshot approaches that limit.
+public distribution. The enriched snapshot uses a compressed source package
+to stay below GitHub's 100 MiB single-file limit. The assembler reconstructs
+the exact raw database from gzip and checks its manifest hash, size, schema
+and equality with Brotli. The deployed website still contains all three
+representations. This changes packaging without reducing the selected data.
 
 ## Updating application code
 
@@ -95,62 +98,47 @@ configured cache lifetime; the verification job waits for convergence.
 ## Updating the public mineral data
 
 Only export on the private administration machine that holds the reviewed live
-database. Always use a fresh output directory.
+database. Apply the explicit publication selection first; publication of a
+mineral identity alone does not publish its working research. See the
+[reviewed research release](PUBLIC_RESEARCH_RELEASE_2026_10_08.md).
+Always use a fresh output directory.
 
-PowerShell:
+Use the existing managed admin container on Windows:
 
 ```powershell
-$review = ".\public-releases\review-2026-08-22-1"
-cargo build --locked --release -p minerals-public-catalog --bin export-public
-& .\target\release\export-public.exe `
-  --data-root .\data `
-  --output $review `
-  --app-root .\public-app
-
-& .\target\release\export-public.exe `
-  --validate-release $review `
-  --app-root .\public-app
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh public-export
 ```
 
-Linux or macOS:
-
-```bash
-review="./public-releases/review-2026-08-22-1"
-cargo build --locked --release -p minerals-public-catalog --bin export-public
-./target/release/export-public \
-  --data-root ./data \
-  --output "$review" \
-  --app-root ./public-app
-
-./target/release/export-public \
-  --validate-release "$review" \
-  --app-root ./public-app
-```
+The task builds, exports and validates in a fresh container-local directory.
+It then preserves the exact reviewed release through the existing private
+data bind and prints its host location under the ignored
+`data/backups/public-exports/` directory. This also works when Docker cannot
+archive a container's temporary filesystem. Do not run project toolchains on
+Windows.
 
 Review the generated content. Then update only these tracked artifacts:
 
 ```text
 public-catalog/catalog-manifest.json
-public-catalog/data/catalog-<manifest SHA-256>.sqlite3
 public-catalog/data/catalog-<manifest SHA-256>.sqlite3.br
 public-catalog/data/catalog-<manifest SHA-256>.sqlite3.gz
 ```
 
-Remove the previous three content-addressed files from
-`public-catalog/data/` only after the new four-file set is ready. The
-assembler rejects extra or mismatched snapshots. Test the exact tracked
-combination in another fresh directory:
+Keep the raw `.sqlite3` in the ignored reviewed export. It is optional in the
+tracked source package; older four-file snapshots remain supported. Both
+compressed files are required and must reconstruct the same complete database.
+Remove the previous content-addressed files from `public-catalog/data/` only
+after the new source package is ready. The assembler rejects extra or
+mismatched snapshots. Test the exact tracked
+combination in another fresh directory inside the same managed container:
 
 ```bash
-./target/release/export-public \
-  --assemble-catalog ./public-catalog \
-  --output ./target/pages-review \
-  --app-root ./public-app
-
-WAAJACU_CATALOG_SMOKE_DIR=./target/pages-review \
-  node --test public-app/tests.mjs
-python3 tools/check-public-boundary.py
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh public-assemble
 ```
+
+The Git boundary checker also runs in Pages CI. For local validation, run it
+in a temporary container-local checkout made from a reviewed Git bundle;
+the live administrator intentionally has no `.git` mount.
 
 Commit the reviewed snapshot and push `main`. No tag, GitHub Release, archive,
 manual checksum entry, or secondary branch is needed.

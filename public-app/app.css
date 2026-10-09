@@ -1003,6 +1003,14 @@ button { color: inherit; }
 .record-panel h2 { margin: 0.7rem 0 1.4rem; font: 400 clamp(1.8rem, 3.2vw, 3rem)/1 var(--sans); letter-spacing: -0.04em; }
 .panel-index { margin: 0; color: var(--gold-dark); font: 0.58rem/1 var(--mono); }
 .record-data-stack { display: grid; gap: 1.3rem; }
+.research-group { margin-top: 1.5rem; }
+.research-item { padding: 1rem 0; border-top: 1px solid var(--line-paper); }
+.research-panel h3 { font: 450 1.05rem/1.3 var(--sans); }
+.research-item h3 { margin: 0 0 0.6rem; }
+.research-item > p { font-size: 0.82rem; line-height: 1.5; }
+.research-source { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1rem; margin-top: 0.8rem; }
+.research-source p { margin: 0; overflow-wrap: anywhere; font-size: 0.72rem; }
+.research-item .notice { margin-bottom: 0; }
 .record-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
 .record-facts .record-fact { min-height: 6.3rem; padding: 1rem; border-top: 1px solid var(--line-paper); border-right: 1px solid var(--line-paper); }
 .record-facts .record-fact:nth-child(2n) { border-right: 0; }

@@ -78,7 +78,22 @@ export async function validateCatalogSidecars(catalogRoot) {
     fail("public catalog manifest database size is invalid");
   }
 
-  const rawPath = await requireRegularFile(catalogRoot, databasePath, MAX_DATABASE_BYTES);
+  const dataDirectory = path.join(catalogRoot, "data");
+  const dataMetadata = await lstat(dataDirectory);
+  if (dataMetadata.isSymbolicLink() || !dataMetadata.isDirectory()) {
+    fail("public catalog data must be a real directory");
+  }
+  const dataNames = (await readdir(dataDirectory)).map(String);
+  const rawName = path.basename(databasePath);
+  const includesRaw = dataNames.includes(rawName);
+  exactNames(
+    dataNames,
+    [...(includesRaw ? [rawName] : []), `${rawName}.br`, `${rawName}.gz`],
+    "public catalog data",
+  );
+  const rawPath = includesRaw
+    ? await requireRegularFile(catalogRoot, databasePath, MAX_DATABASE_BYTES)
+    : null;
   const brotliPath = await requireRegularFile(
     catalogRoot,
     `${databasePath}.br`,
@@ -89,24 +104,6 @@ export async function validateCatalogSidecars(catalogRoot) {
     `${databasePath}.gz`,
     MAX_DATABASE_BYTES,
   );
-  const dataDirectory = path.join(catalogRoot, "data");
-  const dataMetadata = await lstat(dataDirectory);
-  if (dataMetadata.isSymbolicLink() || !dataMetadata.isDirectory()) {
-    fail("public catalog data must be a real directory");
-  }
-  exactNames(
-    (await readdir(dataDirectory)).map(String),
-    [path.basename(rawPath), path.basename(brotliPath), path.basename(gzipPath)],
-    "public catalog data",
-  );
-
-  const raw = await readFile(rawPath);
-  if (raw.length !== expectedBytes) {
-    fail("raw public catalog size does not match the manifest");
-  }
-  if (createHash("sha256").update(raw).digest("hex") !== match[1]) {
-    fail("raw public catalog SHA-256 does not match the manifest");
-  }
 
   let brotli;
   let gzip;
@@ -135,6 +132,13 @@ export async function validateCatalogSidecars(catalogRoot) {
     gzip = decoded.buffer;
   } catch {
     fail("gzip catalog sidecar cannot be decoded safely");
+  }
+  const raw = rawPath ? await readFile(rawPath) : gzip;
+  if (raw.length !== expectedBytes) {
+    fail("raw public catalog size does not match the manifest");
+  }
+  if (createHash("sha256").update(raw).digest("hex") !== match[1]) {
+    fail("raw public catalog SHA-256 does not match the manifest");
   }
   if (!brotli.equals(raw)) {
     fail("Brotli catalog sidecar does not decode to the raw public database");

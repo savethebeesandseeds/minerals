@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import gzip
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -28,16 +30,16 @@ class PagesLiveVerificationTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(f"app:{relative}".encode())
 
-            digest = "a" * 64
+            digest = hashlib.sha256(b"sqlite").hexdigest()
             database = f"data/catalog-{digest}.sqlite3"
-            manifest = {"database": {"path": database}}
+            manifest = {"database": {"path": database, "sha256": "sha256:" + digest, "bytes": 6}}
             (catalog / "data").mkdir()
             (catalog / "catalog-manifest.json").write_text(
                 json.dumps(manifest), encoding="utf-8"
             )
             (catalog / database).write_bytes(b"sqlite")
             (catalog / f"{database}.br").write_bytes(b"brotli")
-            (catalog / f"{database}.gz").write_bytes(b"gzip")
+            (catalog / f"{database}.gz").write_bytes(gzip.compress(b"sqlite"))
 
             expected = VERIFY.load_expected_files(app, catalog)
             self.assertEqual(
@@ -53,6 +55,18 @@ class PagesLiveVerificationTests(unittest.TestCase):
             )
             self.assertEqual(expected[""], expected["index.html"])
             self.assertEqual(expected[database], b"sqlite")
+            (catalog / database).unlink()
+            self.assertEqual(VERIFY.load_expected_files(app, catalog), expected)
+
+            good_gzip = (catalog / f"{database}.gz").read_bytes()
+            for invalid in (good_gzip[:-1], good_gzip + b"trailing", good_gzip + good_gzip, gzip.compress(b"wrong!"), gzip.compress(b"sqlite-over-limit")):
+                (catalog / f"{database}.gz").write_bytes(invalid)
+                with self.assertRaises(VERIFY.VerificationError):
+                    VERIFY.load_expected_files(app, catalog)
+            (catalog / f"{database}.gz").write_bytes(good_gzip)
+            (catalog / database).write_bytes(b"wrong!")
+            with self.assertRaisesRegex(VERIFY.VerificationError, "differs"):
+                VERIFY.load_expected_files(app, catalog)
 
     def test_base_url_requires_https_without_query_or_fragment(self) -> None:
         self.assertEqual(

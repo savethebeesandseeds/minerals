@@ -7,6 +7,7 @@
 //! dependency on the mutable mineral registry, never writes a database, and opens
 //! its sole database input—the validated public catalog—read-only.
 
+pub mod cod_matching;
 pub mod cod_selection;
 
 use std::{

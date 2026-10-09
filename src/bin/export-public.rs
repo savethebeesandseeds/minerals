@@ -10,8 +10,8 @@ use std::{
 use anyhow::{bail, Context, Result};
 use getrandom::getrandom;
 use minerals_public_catalog::{
-    export_public_catalog, validate_public_catalog_release, PublicCatalogManifest,
-    PUBLIC_CATALOG_MANIFEST_FILE,
+    copy_public_catalog_source, export_public_catalog, validate_public_catalog_release,
+    PublicCatalogManifest, PUBLIC_CATALOG_MANIFEST_FILE,
 };
 
 const PUBLIC_APP_FILES: &[&str] = &[
@@ -115,16 +115,19 @@ fn assemble_catalog_release(
     let output = resolve_fresh_output(output)?;
     validate_assembly_separation(&source, &app_root, &output)?;
     validate_catalog_source_hygiene(&source)?;
-    let expected = validate_public_catalog_release(&source)?;
-
     stage_and_promote(&output, |staging| {
         copy_public_app(&app_root, staging)?;
-        let copied_files = copy_catalog_snapshot(&source, staging, &expected)?;
+        let expected = copy_public_catalog_source(&source, staging)?;
         let published = validate_existing_release(staging, &app_root)?;
         if published != expected {
             bail!("assembled public catalog manifest differs from the validated source");
         }
-        for relative in copied_files {
+        for relative in catalog_snapshot_files(&expected)? {
+            if relative == Path::new(&expected.database.path)
+                && !source.join(&relative).exists()
+            {
+                continue;
+            }
             if !files_are_identical(&source.join(&relative), &staging.join(&relative))? {
                 bail!(
                     "catalog-only source changed while it was assembled: {}",
@@ -206,34 +209,6 @@ fn validate_catalog_source_hygiene(source: &Path) -> Result<()> {
         bail!("catalog-only source is missing data directory");
     }
     Ok(())
-}
-
-fn copy_catalog_snapshot(
-    source: &Path,
-    output: &Path,
-    manifest: &PublicCatalogManifest,
-) -> Result<Vec<PathBuf>> {
-    let files = catalog_snapshot_files(manifest)?;
-
-    // Validate every explicit source path before writing anything. This is an
-    // intentionally fixed copy, never a recursive directory traversal.
-    let sources = files
-        .iter()
-        .map(|relative| {
-            require_relative_file_path(source, relative, "catalog-only source file")
-                .map(|path| (relative.clone(), path))
-        })
-        .collect::<Result<Vec<_>>>()?;
-
-    for (relative, source_file) in &sources {
-        let destination = output.join(relative);
-        let parent = destination
-            .parent()
-            .context("catalog destination has no parent")?;
-        prepare_real_directory(parent, "catalog destination directory")?;
-        copy_file_atomically(source_file, &destination)?;
-    }
-    Ok(sources.into_iter().map(|(relative, _)| relative).collect())
 }
 
 fn catalog_snapshot_files(manifest: &PublicCatalogManifest) -> Result<Vec<PathBuf>> {
@@ -1290,6 +1265,116 @@ mod tests {
                 fs::read(output.join(relative))?,
                 "assembled app bytes changed for {relative}"
             );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn assembles_compressed_only_source_into_an_exact_complete_release() -> Result<()> {
+        let root = TempDir::new()?;
+        let source = root.path().join("catalog-source");
+        let app = root.path().join("public-app");
+        let output = root.path().join("release");
+        let expected = prepare_test_catalog(root.path(), &source)?;
+        prepare_test_app(&app)?;
+        let raw = fs::read(source.join(&expected.database.path))?;
+        fs::remove_file(source.join(&expected.database.path))?;
+        assert!(
+            validate_public_catalog_release(&source).is_err(),
+            "deployed release validation must still require raw SQLite"
+        );
+        let published = assemble_catalog_release(&source, &app, &output)?;
+        assert_eq!(published, expected);
+        assert_eq!(validate_existing_release(&output, &app)?, expected);
+        assert_eq!(fs::read(output.join(&expected.database.path))?, raw);
+        assert!(
+            !source.join(&expected.database.path).exists(),
+            "assembly modified the committed compressed-only source"
+        );
+        for relative in catalog_snapshot_files(&expected)? {
+            if relative != Path::new(&expected.database.path) {
+                assert_eq!(
+                    fs::read(source.join(&relative))?,
+                    fs::read(output.join(&relative))?
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn compressed_only_assembly_rejects_invalid_sources_without_publishing() -> Result<()> {
+        let root = TempDir::new()?;
+        let source = root.path().join("catalog-source");
+        let app = root.path().join("public-app");
+        let expected = prepare_test_catalog(root.path(), &source)?;
+        prepare_test_app(&app)?;
+        fs::remove_file(source.join(&expected.database.path))?;
+        let gzip_path = source.join(format!("{}.gz", expected.database.path));
+        let brotli_path = source.join(format!("{}.br", expected.database.path));
+        let gzip = fs::read(&gzip_path)?;
+        let brotli = fs::read(&brotli_path)?;
+        let manifest_bytes = fs::read(source.join(PUBLIC_CATALOG_MANIFEST_FILE))?;
+        for case in [
+            "truncated_gzip",
+            "trailing_gzip",
+            "corrupt_brotli",
+            "missing_brotli",
+            "extra_file",
+            "wrong_size",
+            "wrong_path",
+            "wrong_decoded_hash",
+            "decompression_limit",
+        ] {
+            fs::write(&gzip_path, &gzip)?;
+            fs::write(&brotli_path, &brotli)?;
+            fs::write(source.join(PUBLIC_CATALOG_MANIFEST_FILE), &manifest_bytes)?;
+            let extra = source.join("data/extra.txt");
+            match case {
+                "truncated_gzip" => fs::write(&gzip_path, &gzip[..gzip.len() / 2])?,
+                "trailing_gzip" => {
+                    let mut bytes = gzip.clone();
+                    bytes.push(1);
+                    fs::write(&gzip_path, bytes)?;
+                }
+                "corrupt_brotli" => fs::write(&brotli_path, b"invalid Brotli stream")?,
+                "missing_brotli" => fs::remove_file(&brotli_path)?,
+                "extra_file" => fs::write(&extra, b"must not be published")?,
+                "wrong_size" | "wrong_path" => {
+                    let mut invalid = expected.clone();
+                    if case == "wrong_size" {
+                        invalid.database.bytes += 1;
+                    } else {
+                        invalid.database.path = "../private.sqlite3".to_string();
+                    }
+                    fs::write(
+                        source.join(PUBLIC_CATALOG_MANIFEST_FILE),
+                        serde_json::to_vec(&invalid)?,
+                    )?;
+                }
+                "wrong_decoded_hash" | "decompression_limit" => {
+                    let bytes = if case == "wrong_decoded_hash" {
+                        expected.database.bytes
+                    } else {
+                        expected.database.bytes + 4096
+                    };
+                    let mut encoder =
+                        flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+                    encoder.write_all(&vec![0u8; bytes as usize])?;
+                    fs::write(&gzip_path, encoder.finish()?)?;
+                }
+                _ => unreachable!(),
+            }
+            let output = root.path().join(format!("release-{case}"));
+            assert!(
+                assemble_catalog_release(&source, &app, &output).is_err(),
+                "accepted corrupt compressed-only source: {case}"
+            );
+            assert!(!output.exists(), "failed source published output: {case}");
+            assert!(!source.join(&expected.database.path).exists());
+            if extra.exists() {
+                fs::remove_file(&extra)?;
+            }
         }
         Ok(())
     }

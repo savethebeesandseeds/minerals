@@ -1262,6 +1262,10 @@ pub fn init_registry_database_with_options(data_root: &Path, backfill_legacy: bo
             ON material_aliases(alias_normalized);
         CREATE INDEX IF NOT EXISTS idx_material_evidence_material
             ON material_evidence(material_id, review_status);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_cod_record_one_primary_target
+            ON material_evidence(json_extract(claim_json, '$.value.cod_id'))
+            WHERE claim_scope = 'properties.cod_record_link'
+              AND json_extract(claim_json, '$.value.primary_assignment') = 1;
         CREATE INDEX IF NOT EXISTS idx_offers_material_active
             ON offers(material_id, active, stock_status, verification_status);
         CREATE INDEX IF NOT EXISTS idx_offers_provider_active

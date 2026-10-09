@@ -150,19 +150,18 @@ hashes, compressed streams, and browser worker, deploys only that assembled
 directory, then waits until the live files match the pushed commit. There is no
 deployment branch and no manual GitHub Release archive.
 
-To review a new catalog snapshot from the private administration machine, build
-the exporter and write a fresh temporary release:
+To review a new catalog snapshot, use the existing managed admin container:
 
-```bash
-cargo build --locked --release -p minerals-public-catalog --bin export-public
-./target/release/export-public \
-  --data-root ./data \
-  --output ./public-releases/review-1 \
-  --app-root ./public-app
+```powershell
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh public-export
 ```
 
+Use the printed host review folder, as documented in the
+[Pages guide](docs/GITHUB_PAGES.md). Keep project commands inside the container.
 Review that fresh output, then update only `public-catalog/catalog-manifest.json`
-and its three matching files under `public-catalog/data/`. Before committing,
+and its matching Brotli/gzip files under `public-catalog/data/`. The raw SQLite
+file is optional in this source package and retained in the reviewed export.
+Before committing,
 assemble the tracked sources exactly as Pages will:
 
 ```bash
@@ -179,9 +178,10 @@ from the checked-in source. The boundary check also scans public SQLite text
 for high-confidence credential formats and uses Node.js's built-in Brotli and
 gzip decoders to prove the staged sidecars contain that same sanitized database.
 Because Git history is public and permanent, review evidence, licenses, offers,
-and descriptive text before committing a snapshot. A future raw snapshot
-approaching GitHub's 100 MiB single-file limit needs a different data
-distribution method.
+and descriptive text before committing a snapshot. Compressed source packages
+keep large raw snapshots out of Git's single-file limit; assembly reconstructs
+and validates the complete database without dropping data. Both compressed
+representations must match the manifest's raw database hash and size.
 
 Serve static releases over HTTPS; `file:` URLs cannot run module workers,
 WebAssembly, Web Crypto, or `fetch()`. Hash routes such as `/#/minerals` work on

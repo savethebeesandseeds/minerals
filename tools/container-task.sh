@@ -92,6 +92,16 @@ case "${1:-}" in
     (( $# == 1 )) || fail 'contracts takes no arguments'
     contracts
     ;;
+  pilot-test)
+    (( $# == 1 )) || fail 'pilot-test takes no arguments'
+    contracts
+    open_cache
+    run_builder cargo fmt --all -- --check
+    run_builder cargo test --locked -p minerals-cod-pilot
+    run_builder cargo clippy --locked -p minerals-cod-pilot --all-targets -- -D warnings
+    run_builder cargo build --locked -p minerals-cod-pilot --bin cod-pilot
+    seal_cache
+    ;;
   validate)
     (( $# == 1 )) || fail 'validate takes no arguments'
     contracts
@@ -112,7 +122,40 @@ case "${1:-}" in
     seal_cache
     printf 'Container validation passed. Reviewed release: %s\n' "$task_release_parent/release"
     ;;
-  pilot-verify|pilot-fetch|pilot-recover-transport)
+  public-export)
+    (( $# == 1 )) || fail 'public-export takes no arguments'
+    open_cache
+    run_builder cargo build --locked --release -p minerals-public-catalog --bin export-public
+    chmod 0555 "$TASK_TARGET/release/export-public"
+    seal_cache
+    task_public_parent=$(mktemp -d /tmp/minerals-public-export.XXXXXXXX)
+    chown "$task_private_uid:$task_private_gid" "$task_public_parent"
+    run_private "$TASK_TARGET/release/export-public" --data-root /app/data \
+      --output "$task_public_parent/release" --app-root public-app
+    run_private "$TASK_TARGET/release/export-public" --validate-release "$task_public_parent/release" \
+      --app-root public-app
+    task_public_archive="/app/data/backups/public-exports/${task_public_parent##*/}"
+    run_private python3 -B -c \
+      'import pathlib, shutil, sys; target=pathlib.Path(sys.argv[2]); target.parent.mkdir(parents=True, exist_ok=True); shutil.copytree(sys.argv[1], target)' \
+      "$task_public_parent/release" "$task_public_archive"
+    printf 'Reviewed public export: %s\n' "$task_public_parent/release"
+    printf 'Preserved host review folder: data/backups/public-exports/%s\n' "${task_public_parent##*/}"
+    ;;
+  public-assemble)
+    (( $# == 1 )) || fail 'public-assemble takes no arguments'
+    open_cache
+    run_builder cargo build --locked --release -p minerals-public-catalog --bin export-public
+    chmod 0555 "$TASK_TARGET/release/export-public"
+    task_release_parent=$(mktemp -d /tmp/minerals-public-assembly.XXXXXXXX)
+    chown 10001:10001 "$task_release_parent"
+    run_builder "$TASK_TARGET/release/export-public" --assemble-catalog public-catalog \
+      --output "$task_release_parent/release" --app-root public-app
+    run_builder env WAAJACU_CATALOG_SMOKE_DIR="$task_release_parent/release" \
+      node --test public-app/tests.mjs
+    seal_cache
+    printf 'Public assembly and browser-worker validation passed: %s\n' "$task_release_parent/release"
+    ;;
+  pilot-verify|pilot-fetch|pilot-recover-transport|pilot-match|pilot-verify-matching)
     task_command=$1
     shift
     task_extra=()
@@ -124,12 +167,17 @@ case "${1:-}" in
       [[ "$2" =~ ^[1-9][0-9]{0,3}$ ]] && (( 10#$2 <= 1000 )) || fail 'request bound must be 1–1000'
       task_extra=(--max-new-requests "$2")
     elif (( $# != 0 )); then
-      fail 'pilot-fetch accepts only --max-new-requests N; pilot-verify takes no arguments'
+      fail 'pilot-fetch accepts only --max-new-requests N; offline pilot commands take no arguments'
     fi
     open_cache
     run_builder cargo build --locked -p minerals-cod-pilot --bin cod-pilot
     seal_cache
-    if [[ "$task_command" == pilot-recover-transport ]]; then
+    if [[ "$task_command" == pilot-match || "$task_command" == pilot-verify-matching ]]; then
+      task_matching_command=match-metadata
+      if [[ "$task_command" == pilot-verify-matching ]]; then task_matching_command=verify-matching; fi
+      run_private "$TASK_TARGET/debug/cod-pilot" "$task_matching_command" --repo-root . \
+        --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT"
+    elif [[ "$task_command" == pilot-recover-transport ]]; then
       run_private "$TASK_TARGET/debug/cod-pilot" recover-transport --repo-root . \
         --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT" "${task_extra[@]}"
     elif [[ "$task_command" == pilot-verify ]]; then
@@ -144,5 +192,5 @@ case "${1:-}" in
         --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT"
     fi
     ;;
-  *) fail 'expected image-queue, image-queue-test, contracts, validate, record-research, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
+  *) fail 'expected image-queue, image-queue-test, contracts, validate, public-export, public-assemble, record-research, pilot-test, pilot-match, pilot-verify-matching, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
 esac

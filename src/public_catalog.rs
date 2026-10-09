@@ -11,6 +11,7 @@ use getrandom::getrandom;
 use ring::digest::{Context as DigestContext, SHA256};
 use rusqlite::{params, Connection, OpenFlags, Transaction, TransactionBehavior};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 const LIVE_DATABASE_FILE: &str = "minerals.db";
 const COMPRESSION_BUFFER_BYTES: usize = 64 * 1024;
@@ -223,6 +224,40 @@ pub fn export_public_catalog(data_root: &Path, output: &Path) -> Result<PublicCa
 /// validated manifest only after every public-catalog invariant has passed.
 pub fn validate_public_catalog_release(output: &Path) -> Result<PublicCatalogManifest> {
     let output = require_real_directory(output, "public catalog release")?;
+    let manifest = read_public_catalog_manifest(&output)?;
+
+    let digest = manifest
+        .database
+        .sha256
+        .strip_prefix("sha256:")
+        .context("public catalog database digest must start with 'sha256:'")?;
+    let data_directory =
+        require_real_directory(&output.join("data"), "public catalog data directory")?;
+    let database_path = data_directory.join(format!("catalog-{digest}.sqlite3"));
+    let brotli_path = data_directory.join(format!("catalog-{digest}.sqlite3.br"));
+    let gzip_path = data_directory.join(format!("catalog-{digest}.sqlite3.gz"));
+    validate_exact_data_artifacts(&data_directory, [&database_path, &brotli_path, &gzip_path])?;
+
+    let (actual_digest, actual_bytes) = hash_file(&database_path)?;
+    if actual_digest != digest || actual_bytes != manifest.database.bytes {
+        bail!(
+            "public catalog database does not match the manifest digest and size: found sha256:{actual_digest} and {actual_bytes} bytes"
+        );
+    }
+    verify_precompressed(
+        &brotli_path,
+        CompressionEncoding::Brotli,
+        digest,
+        actual_bytes,
+    )?;
+    verify_precompressed(&gzip_path, CompressionEncoding::Gzip, digest, actual_bytes)?;
+
+    validate_public_catalog_database(&database_path, &manifest)?;
+    validate_exact_data_artifacts(&data_directory, [&database_path, &brotli_path, &gzip_path])?;
+    Ok(manifest)
+}
+
+fn read_public_catalog_manifest(output: &Path) -> Result<PublicCatalogManifest> {
     let manifest_path = output.join(PUBLIC_CATALOG_MANIFEST_FILE);
     require_regular_non_symlink_file(&manifest_path, "public catalog manifest")?;
     let manifest_bytes = fs::metadata(&manifest_path)
@@ -258,29 +293,21 @@ pub fn validate_public_catalog_release(output: &Path) -> Result<PublicCatalogMan
     if manifest.database.path != database_relative.to_string_lossy() {
         bail!("public catalog manifest database path does not match its SHA-256 digest");
     }
-    let data_directory = output.join("data");
-    let data_directory = require_real_directory(&data_directory, "public catalog data directory")?;
-    let database_path = data_directory.join(format!("catalog-{digest}.sqlite3"));
-    let brotli_path = data_directory.join(format!("catalog-{digest}.sqlite3.br"));
-    let gzip_path = data_directory.join(format!("catalog-{digest}.sqlite3.gz"));
-    validate_exact_data_artifacts(&data_directory, [&database_path, &brotli_path, &gzip_path])?;
+    Ok(manifest)
+}
 
-    let (actual_digest, actual_bytes) = hash_file(&database_path)?;
-    if actual_digest != digest || actual_bytes != manifest.database.bytes {
-        bail!(
-            "public catalog database does not match the manifest digest and size: found sha256:{actual_digest} and {actual_bytes} bytes"
-        );
-    }
-    verify_precompressed(
-        &brotli_path,
-        CompressionEncoding::Brotli,
-        digest,
-        actual_bytes,
-    )?;
-    verify_precompressed(&gzip_path, CompressionEncoding::Gzip, digest, actual_bytes)?;
+fn validate_public_catalog_database(
+    database_path: &Path,
+    manifest: &PublicCatalogManifest,
+) -> Result<()> {
+    let digest = manifest
+        .database
+        .sha256
+        .strip_prefix("sha256:")
+        .context("public catalog database digest must start with 'sha256:'")?;
 
     let database = Connection::open_with_flags(
-        &database_path,
+        database_path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
     .with_context(|| {
@@ -299,12 +326,12 @@ pub fn validate_public_catalog_release(output: &Path) -> Result<PublicCatalogMan
         .context("failed to configure public catalog validation connection")?;
     validate_public_schema(&database)?;
     validate_public_database_invariants(&database, manifest.mineral_count)?;
-    validate_public_metadata(&database, &manifest)?;
+    validate_public_metadata(&database, manifest)?;
     validate_public_query_invariants(&database)?;
     drop(database);
 
     let validation_copy =
-        TemporaryValidationDatabase::create(&database_path, digest, manifest.database.bytes)?;
+        TemporaryValidationDatabase::create(database_path, digest, manifest.database.bytes)?;
     let copied_database = Connection::open_with_flags(
         validation_copy.path(),
         OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -316,11 +343,127 @@ pub fn validate_public_catalog_release(output: &Path) -> Result<PublicCatalogMan
     validate_public_database_integrity(&copied_database)?;
     drop(copied_database);
 
-    let (final_digest, final_bytes) = hash_file(&database_path)?;
+    let (final_digest, final_bytes) = hash_file(database_path)?;
     if final_digest != digest || final_bytes != manifest.database.bytes {
         bail!("public catalog database changed during release validation");
     }
-    validate_exact_data_artifacts(&data_directory, [&database_path, &brotli_path, &gzip_path])?;
+    Ok(())
+}
+
+/// Copies an exact committed catalog into an owned release staging directory.
+/// Source snapshots may omit the raw database when both compressed files are
+/// present. The completed destination always has raw SQLite, Brotli and gzip.
+pub fn copy_public_catalog_source(source: &Path, output: &Path) -> Result<PublicCatalogManifest> {
+    let source = require_real_directory(source, "catalog-only source")?;
+    let output = require_real_directory(output, "catalog staging directory")?;
+    if source.starts_with(&output) || output.starts_with(&source) {
+        bail!("catalog source and staging directory must be separate and non-nested");
+    }
+    let manifest = read_public_catalog_manifest(&source)?;
+    let digest = manifest
+        .database
+        .sha256
+        .strip_prefix("sha256:")
+        .context("public catalog database digest must start with 'sha256:'")?;
+    let source_data = require_real_directory(&source.join("data"), "catalog source data")?;
+    let raw = source.join(&manifest.database.path);
+    let brotli = source.join(format!("{}.br", manifest.database.path));
+    let gzip = source.join(format!("{}.gz", manifest.database.path));
+    let raw_present = match fs::symlink_metadata(&raw) {
+        Ok(_) => {
+            require_regular_non_symlink_file(&raw, "catalog source database")?;
+            true
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => false,
+        Err(error) => return Err(error).context("failed to inspect catalog source database"),
+    };
+    if raw_present {
+        validate_exact_data_artifacts(&source_data, [&raw, &brotli, &gzip])?;
+        if fs::metadata(&raw)?.len() != manifest.database.bytes {
+            bail!("catalog source raw database size differs from the manifest");
+        }
+    } else {
+        validate_exact_data_artifacts(&source_data, [&brotli, &gzip])?;
+    }
+    verify_precompressed(
+        &brotli,
+        CompressionEncoding::Brotli,
+        digest,
+        manifest.database.bytes,
+    )?;
+    verify_precompressed(
+        &gzip,
+        CompressionEncoding::Gzip,
+        digest,
+        manifest.database.bytes,
+    )?;
+    let mut files = vec![source.join(PUBLIC_CATALOG_MANIFEST_FILE), brotli, gzip];
+    if raw_present {
+        files.push(raw);
+    }
+    let before = files
+        .iter()
+        .map(|path| hash_file(path))
+        .collect::<Result<Vec<_>>>()?;
+    fs::create_dir(output.join("data")).context("catalog staging data directory must be fresh")?;
+    for (path, expected) in files.iter().zip(&before) {
+        let relative = path
+            .strip_prefix(&source)
+            .context("catalog source file escaped its root")?;
+        let destination = output.join(relative);
+        let mut input = File::open(path)?.take(expected.1.saturating_add(1));
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&destination)?;
+        let copied = io::copy(&mut input, &mut file)?;
+        file.sync_all()?;
+        if copied != expected.1 || hash_file(&destination)? != *expected {
+            bail!("catalog source changed while being copied");
+        }
+    }
+    if !raw_present {
+        let gzip_path = output.join(format!("{}.gz", manifest.database.path));
+        let raw_path = output.join(&manifest.database.path);
+        let mut decoder = flate2::read::GzDecoder::new(File::open(&gzip_path)?)
+            .take(manifest.database.bytes.saturating_add(1));
+        let mut database = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&raw_path)?;
+        let decoded = io::copy(&mut decoder, &mut database)?;
+        database.sync_all()?;
+        if decoded != manifest.database.bytes {
+            bail!("reconstructed catalog size differs from the manifest");
+        }
+    }
+    let actual = validate_public_catalog_release(&output)?;
+    if actual != manifest {
+        bail!("copied catalog manifest differs from the validated source");
+    }
+    for (path, expected) in files.iter().zip(&before) {
+        if hash_file(path)? != *expected {
+            bail!("catalog source changed during assembly");
+        }
+    }
+    if raw_present {
+        validate_exact_data_artifacts(
+            &source_data,
+            [
+                &source.join(&manifest.database.path),
+                &source.join(format!("{}.br", manifest.database.path)),
+                &source.join(format!("{}.gz", manifest.database.path)),
+            ],
+        )?;
+    } else {
+        validate_exact_data_artifacts(
+            &source_data,
+            [
+                &source.join(format!("{}.br", manifest.database.path)),
+                &source.join(format!("{}.gz", manifest.database.path)),
+            ],
+        )?;
+    }
     Ok(manifest)
 }
 
@@ -1033,6 +1176,526 @@ fn copy_public_snapshot(
     Ok(mineral_count)
 }
 
+// A published mineral identity does not itself publish its operational research.
+// Keep drafts, rejected candidates and local source archives in the live registry.
+fn explicitly_private(value: &Value) -> bool {
+    let Some(object) = value.as_object() else {
+        return false;
+    };
+    ["private_research", "private", "draft", "is_draft"]
+        .iter()
+        .any(|key| {
+            object
+                .get(*key)
+                .is_some_and(|flag| flag == &Value::Bool(true))
+        })
+        || object
+            .get("publication_status")
+            .and_then(Value::as_str)
+            .is_some_and(|status| status != "published")
+        || matches!(
+            object.get("review_status").and_then(Value::as_str),
+            Some("draft" | "private" | "rejected")
+        )
+        || matches!(
+            object.get("visibility").and_then(Value::as_str),
+            Some("private" | "internal" | "draft")
+        )
+}
+
+fn is_internal_path(value: &str) -> bool {
+    let normalized = value.trim().replace('\\', "/").to_ascii_lowercase();
+    normalized.starts_with("/app/")
+        || normalized.starts_with("/workspace/")
+        || normalized.starts_with("/tmp/")
+        || normalized.starts_with("/home/")
+        || normalized.starts_with("/root/")
+        || normalized.starts_with("/build/")
+        || normalized.starts_with("file:")
+        || normalized.contains("project-file:")
+        || normalized.contains("library-file:")
+        || normalized.contains("file://")
+        || normalized.contains("data/pilots/")
+        || normalized.contains("data/backups/")
+        || normalized.contains("/app/")
+        || normalized.contains("/workspace/")
+        || normalized.contains("127.0.0.1")
+        || normalized.contains("localhost")
+        || normalized
+            .as_bytes()
+            .windows(3)
+            .enumerate()
+            .any(|(position, bytes)| {
+                bytes[0].is_ascii_alphabetic()
+                    && bytes[1] == b':'
+                    && bytes[2] == b'/'
+                    && (position == 0 || !normalized.as_bytes()[position - 1].is_ascii_alphabetic())
+            })
+}
+
+fn is_internal_research_key(key: &str) -> bool {
+    let normalized = key.to_ascii_lowercase();
+    let raw_adp_table = (normalized.contains("anisotropic") || normalized.starts_with("adp"))
+        && ["columns", "rows", "table"]
+            .iter()
+            .any(|suffix| normalized.ends_with(suffix));
+    let original_atomic_table = ["origatomic", "orig_atom", "original_atom"]
+        .iter()
+        .any(|prefix| normalized.starts_with(prefix))
+        && ["columns", "rows", "table", "sites", "positions", "model"]
+            .iter()
+            .any(|suffix| normalized.ends_with(suffix));
+    raw_adp_table
+        || original_atomic_table
+        || normalized.starts_with("atomic_sites_")
+        || normalized.ends_with("_symmetry_operations")
+        || matches!(
+            key,
+            "private_research"
+                | "private"
+                | "draft"
+                | "is_draft"
+                | "review_batch"
+                | "review_artifact"
+                | "review_artifact_sha256"
+                | "reviewer"
+                | "source_access"
+                | "archive_path"
+                | "artifact_path"
+                | "local_path"
+                | "raw_path"
+                | "raw_archive_path"
+                | "raw_json_pointer"
+                | "row_pointer"
+                | "frozen_metadata"
+                | "raw_transport"
+                | "raw_cif"
+                | "model_loops"
+                | "atomic_model"
+                | "symmetry_loop"
+                | "source_atom_site_loop"
+                | "source_anisotropic_loop"
+                | "atom_sites"
+                | "atomic_sites"
+                | "anisotropic_displacement_parameters"
+                | "symmetry_operations"
+                | "source_loops"
+                | "assignment_history"
+        )
+}
+
+fn is_raw_cif_label(text: &str) -> bool {
+    let text = text.trim_start();
+    text.starts_with("_atom_site_")
+        || text.starts_with("_symmetry_equiv_")
+        || text.starts_with("_space_group_symop")
+}
+
+fn is_raw_cif_text(text: &str) -> bool {
+    text.contains('\n')
+        && text.lines().any(is_raw_cif_label)
+        && text.lines().any(|line| {
+            let line = line.trim_start();
+            line.starts_with("data_") || line.starts_with("loop_")
+        })
+}
+
+fn raw_cif_columns(value: &Value) -> bool {
+    value.as_array().is_some_and(|columns| {
+        let labels = columns
+            .iter()
+            .filter_map(Value::as_str)
+            .map(|label| label.trim().to_ascii_lowercase())
+            .collect::<Vec<_>>();
+        labels.iter().any(|label| is_raw_cif_label(label))
+            || (["x", "y", "z"]
+                .iter()
+                .all(|axis| labels.iter().any(|label| label == axis))
+                && labels
+                    .iter()
+                    .any(|label| label == "site" || label.starts_with("atom")))
+    })
+}
+
+fn raw_coordinate_object(value: &Value) -> bool {
+    let Some(object) = value.as_object() else {
+        return false;
+    };
+    (object.contains_key("atom") || object.contains_key("site"))
+        && object
+            .get("xyz")
+            .and_then(Value::as_array)
+            .is_some_and(|xyz| xyz.len() == 3)
+        && ["occupancy", "Uiso", "wyckoff"]
+            .iter()
+            .any(|key| object.contains_key(*key))
+}
+
+fn raw_coordinate_triplet(key: &str, value: &Value) -> bool {
+    key == "xyz" && value.as_array().is_some_and(|xyz| xyz.len() == 3)
+}
+
+fn contains_raw_cif_model(value: &Value) -> bool {
+    if raw_coordinate_object(value) {
+        return true;
+    }
+    match value {
+        Value::String(text) => is_raw_cif_label(text) || is_raw_cif_text(text),
+        Value::Array(items) => items.iter().any(contains_raw_cif_model),
+        Value::Object(items) => items.iter().any(|(key, item)| {
+            is_internal_research_key(key)
+                || raw_coordinate_triplet(key, item)
+                || (key.to_ascii_lowercase().ends_with("columns") && raw_cif_columns(item))
+                || contains_raw_cif_model(item)
+        }),
+        _ => false,
+    }
+}
+
+fn empty_public_value(value: &Value) -> bool {
+    matches!(value, Value::Null)
+        || value
+            .as_object()
+            .is_some_and(|object| object.values().all(empty_public_value))
+        || value
+            .as_array()
+            .is_some_and(|array| array.iter().all(empty_public_value))
+        || value.as_str().is_some_and(|text| text.trim().is_empty())
+}
+
+fn sanitize_public_value(value: &Value, filter_research_keys: bool) -> Option<Value> {
+    if explicitly_private(value) || raw_coordinate_object(value) {
+        return None;
+    }
+    match value {
+        Value::String(text)
+            if is_internal_path(text) || is_raw_cif_label(text) || is_raw_cif_text(text) =>
+        {
+            None
+        }
+        Value::Array(values) => Some(Value::Array(
+            values
+                .iter()
+                .filter_map(|item| sanitize_public_value(item, filter_research_keys))
+                .collect(),
+        )),
+        Value::Object(values) => {
+            let mut public = serde_json::Map::new();
+            let raw_prefixes = values
+                .iter()
+                .filter_map(|(key, item)| {
+                    let normalized = key.to_ascii_lowercase();
+                    normalized
+                        .strip_suffix("columns")
+                        .filter(|_| raw_cif_columns(item))
+                        .map(str::to_string)
+                })
+                .collect::<Vec<_>>();
+            for (key, item) in values {
+                let normalized = key.to_ascii_lowercase();
+                let raw_table_pair = raw_prefixes.iter().any(|prefix| {
+                    normalized == format!("{prefix}columns")
+                        || normalized == format!("{prefix}rows")
+                });
+                let raw_site_array = item
+                    .as_array()
+                    .is_some_and(|rows| !rows.is_empty() && rows.iter().all(raw_coordinate_object));
+                let private_research_key = key.starts_with("cod_")
+                    || matches!(
+                        key.as_str(),
+                        "publication_observations"
+                            | "publication_review_history"
+                            | "publication_observation_corrections"
+                            | "research_draft_descriptions"
+                            | "public_research"
+                    );
+                if raw_table_pair
+                    || raw_site_array
+                    || raw_coordinate_triplet(key, item)
+                    || is_internal_research_key(key)
+                    || (filter_research_keys && private_research_key)
+                {
+                    continue;
+                }
+                // A CIF field name is a valid source locator; it is not a raw model.
+                if matches!(key.as_str(), "source_locator" | "locator" | "source_field") {
+                    if let Value::String(text) = item {
+                        if is_raw_cif_label(text)
+                            && !is_raw_cif_text(text)
+                            && !is_internal_path(text)
+                        {
+                            public.insert(key.clone(), item.clone());
+                            continue;
+                        }
+                    }
+                }
+                if let Some(item) = sanitize_public_value(item, filter_research_keys) {
+                    public.insert(key.clone(), item);
+                }
+            }
+            Some(Value::Object(public))
+        }
+        _ => Some(value.clone()),
+    }
+}
+
+fn project_public_properties(raw: &str) -> Result<Value> {
+    let properties: Value = serde_json::from_str(raw).context("invalid mineral properties JSON")?;
+    if explicitly_private(&properties) {
+        return Ok(serde_json::json!({}));
+    }
+    let mut projected =
+        sanitize_public_value(&properties, true).unwrap_or_else(|| serde_json::json!({}));
+    if let Some(research) = properties.get("public_research") {
+        let approved = research.get("publication_status").and_then(Value::as_str)
+            == Some("published")
+            && matches!(
+                research.get("review_status").and_then(Value::as_str),
+                Some("reviewed" | "verified")
+            );
+        if approved {
+            if let (Some(object), Some(research)) = (
+                projected.as_object_mut(),
+                sanitize_public_research(research),
+            ) {
+                object.insert("public_research".to_string(), research);
+            }
+        }
+    }
+    Ok(projected)
+}
+
+fn sanitize_public_research(research: &Value) -> Option<Value> {
+    let mut public = sanitize_public_value(research, false)?;
+    if let Some(observations) = research.get("observations").and_then(Value::as_array) {
+        let observations = observations
+            .iter()
+            .filter_map(|observation| {
+                let public = sanitize_public_value(observation, false)?;
+                let raw_model_removed =
+                    observation.get("value").is_some_and(contains_raw_cif_model)
+                        && public.get("value").is_none_or(empty_public_value);
+                (!raw_model_removed).then_some(public)
+            })
+            .collect();
+        public
+            .as_object_mut()?
+            .insert("observations".to_string(), Value::Array(observations));
+    }
+    Some(public)
+}
+
+fn contains_publication_observation(value: &Value) -> bool {
+    match value {
+        Value::String(text) => text == "reported_publication_observation",
+        Value::Array(items) => items.iter().any(contains_publication_observation),
+        Value::Object(items) => items.iter().any(|(key, item)| {
+            key == "reported_publication_observation" || contains_publication_observation(item)
+        }),
+        _ => false,
+    }
+}
+
+struct ProjectedPublicClaim {
+    value: Value,
+    license_override: Option<String>,
+    attribution_override: Option<[String; 7]>,
+}
+
+fn approved_public_license(license: &str) -> bool {
+    matches!(
+        license,
+        "CC0-1.0"
+            | "CC-BY-4.0"
+            | "CC-BY-SA-4.0"
+            | "CC-BY-3.0"
+            | "CC-BY-SA-3.0"
+            | "PDDL-1.0"
+            | "Public-Domain"
+    )
+}
+
+fn compatible_output_license(source: &str, output: &str) -> bool {
+    match source {
+        "CC-BY-SA-3.0" | "CC-BY-SA-4.0" => source == output,
+        "CC-BY-4.0" => matches!(output, "CC-BY-4.0" | "CC-BY-SA-4.0"),
+        "CC-BY-3.0" => matches!(
+            output,
+            "CC-BY-3.0" | "CC-BY-4.0" | "CC-BY-SA-3.0" | "CC-BY-SA-4.0"
+        ),
+        "CC0-1.0" | "PDDL-1.0" | "Public-Domain" => approved_public_license(output),
+        _ => false,
+    }
+}
+
+fn public_attribution_url(url: &str) -> bool {
+    if is_internal_path(url)
+        || url.chars().any(|c| c.is_whitespace() || c.is_control())
+        || url.contains('\\')
+    {
+        return false;
+    }
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return false;
+    };
+    if !matches!(scheme, "https" | "http") {
+        return false;
+    }
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    if authority.contains('@') || authority.starts_with('[') {
+        return false;
+    }
+    let host = if let Some((host, port)) = authority.rsplit_once(':') {
+        if port.parse::<u16>().is_err() || port == "0" {
+            return false;
+        }
+        host
+    } else {
+        authority
+    };
+    let host = host.to_ascii_lowercase();
+    if host.parse::<std::net::IpAddr>().is_ok()
+        || host.ends_with(".local")
+        || host.ends_with(".localhost")
+        || !host.contains('.')
+    {
+        return false;
+    }
+    host.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    })
+}
+
+fn curated_public_attribution(
+    raw: Option<&Value>,
+    license: Option<&str>,
+) -> Result<Option<[String; 7]>> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let Some(license) = license else {
+        bail!("curated public attribution requires an explicit approved public license");
+    };
+    if !raw.is_object() || explicitly_private(raw) {
+        bail!("curated public attribution must be a complete public object");
+    }
+    let fields = [
+        "attribution_party",
+        "work_title",
+        "work_url",
+        "license_url",
+        "changes_notice",
+        "no_endorsement_notice",
+        "derived_output_license_spdx",
+    ];
+    let mut attribution = std::array::from_fn::<String, 7, _>(|_| String::new());
+    for (index, field) in fields.iter().enumerate() {
+        let Some(value) = raw.get(*field).and_then(Value::as_str) else {
+            bail!("curated public attribution is missing field '{field}'");
+        };
+        if value.trim().is_empty() || is_internal_path(value) || value.chars().any(char::is_control)
+        {
+            bail!("curated public attribution has an invalid field '{field}'");
+        }
+        attribution[index] = value.trim().to_string();
+    }
+    if !public_attribution_url(&attribution[2]) || !public_attribution_url(&attribution[3]) {
+        bail!("curated public attribution requires public HTTP(S) work and license URLs");
+    }
+    if !approved_public_license(&attribution[6])
+        || !compatible_output_license(license, &attribution[6])
+    {
+        bail!("curated public attribution has an incompatible output license");
+    }
+    Ok(Some(attribution))
+}
+
+fn project_public_claim(
+    scope: &str,
+    dataset: Option<&str>,
+    raw: &str,
+) -> Result<Option<ProjectedPublicClaim>> {
+    let claim: Value = serde_json::from_str(raw).context("invalid evidence claim JSON")?;
+    if explicitly_private(&claim) {
+        return Ok(None);
+    }
+    let research = scope.starts_with("properties.cod_")
+        || dataset
+            .is_some_and(|key| key.starts_with("cod") || key.starts_with("mineral-evidence-"))
+        || contains_publication_observation(&claim);
+    if research && claim.get("publication_status").and_then(Value::as_str) != Some("published") {
+        return Ok(None);
+    }
+    if let Some(public_claim) = claim.get("public_claim") {
+        if claim.get("publication_status").and_then(Value::as_str) != Some("published") {
+            return Ok(None);
+        }
+        if explicitly_private(public_claim) {
+            return Ok(None);
+        }
+        let mut projected = sanitize_public_value(public_claim, false);
+        let license = projected
+            .as_ref()
+            .and_then(|claim| claim.get("license_spdx"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        if let Some(license) = license.as_deref() {
+            if !approved_public_license(license) {
+                bail!("curated public claim has an unsupported publication license");
+            }
+        }
+        let attribution =
+            curated_public_attribution(public_claim.get("attribution"), license.as_deref())?;
+        if let Some(object) = projected.as_mut().and_then(Value::as_object_mut) {
+            object.remove("attribution");
+        }
+        return Ok(projected.map(|value| ProjectedPublicClaim {
+            value,
+            license_override: license,
+            attribution_override: attribution,
+        }));
+    }
+    Ok(
+        sanitize_public_value(&claim, false).map(|value| ProjectedPublicClaim {
+            value,
+            license_override: None,
+            attribution_override: None,
+        }),
+    )
+}
+
+fn append_public_search_value(value: &Value, text: &mut String) {
+    match value {
+        Value::String(value) => {
+            text.push(' ');
+            text.push_str(value);
+        }
+        Value::Number(value) => {
+            text.push(' ');
+            text.push_str(&value.to_string());
+        }
+        Value::Array(values) => {
+            for value in values {
+                append_public_search_value(value, text);
+            }
+        }
+        Value::Object(values) => {
+            for (key, value) in values {
+                text.push(' ');
+                text.push_str(key);
+                append_public_search_value(value, text);
+            }
+        }
+        _ => {}
+    }
+}
+
 fn copy_minerals(
     source: &Transaction<'_>,
     destination: &Transaction<'_>,
@@ -1083,7 +1746,7 @@ fn copy_minerals(
                     WHERE f.material_id = m.id AND f.fact_key = 'source_status'
                     LIMIT 1
                 ), ''),
-                (SELECT COUNT(*) FROM material_evidence me WHERE me.material_id = m.id),
+                0,
                 (
                     SELECT COUNT(*)
                     FROM offers o
@@ -1093,8 +1756,7 @@ fn copy_minerals(
                       AND p.active = 1
                       AND p.verification_status <> 'suspended'
                       AND (o.expires_at IS NULL OR datetime(o.expires_at) > datetime(?1))
-                ),
-                m.search_text
+                )
             FROM materials m
             WHERE m.publication_status = 'published'
               AND m.record_type = 'mineral'
@@ -1139,13 +1801,41 @@ fn copy_minerals(
         let canonical_name = row.get::<_, String>(2)?;
         let formula = row.get::<_, String>(3)?;
         let mineral_family = row.get::<_, String>(5)?;
+        let properties = project_public_properties(&row.get::<_, String>(13)?)?;
+        let identifiers: Value = serde_json::from_str(&row.get::<_, String>(12)?)
+            .context("invalid mineral identifiers JSON")?;
+        let identifiers =
+            sanitize_public_value(&identifiers, true).unwrap_or_else(|| serde_json::json!({}));
+        let safety: Value = serde_json::from_str(&row.get::<_, String>(14)?)
+            .context("invalid mineral safety JSON")?;
+        let safety = sanitize_public_value(&safety, true).unwrap_or_else(|| serde_json::json!({}));
+        let mut description: String = row.get(4)?;
+        if description.trim().is_empty() {
+            if let Some(text) = properties
+                .pointer("/public_research/description/text")
+                .and_then(Value::as_str)
+            {
+                description = text.to_string();
+            }
+        }
+        let mut search_text = format!(
+            "{} {} {} {} {}",
+            row.get::<_, String>(1)?,
+            canonical_name,
+            formula,
+            mineral_family,
+            description
+        );
+        append_public_search_value(&identifiers, &mut search_text);
+        append_public_search_value(&properties, &mut search_text);
+        append_public_search_value(&safety, &mut search_text);
         insert_mineral
             .execute(params![
                 slug,
                 row.get::<_, String>(1)?,
                 canonical_name,
                 formula,
-                row.get::<_, String>(4)?,
+                description,
                 mineral_family,
                 row.get::<_, String>(6)?,
                 row.get::<_, String>(7)?,
@@ -1153,9 +1843,9 @@ fn copy_minerals(
                 row.get::<_, String>(9)?,
                 row.get::<_, String>(10)?,
                 row.get::<_, Option<String>>(11)?,
-                row.get::<_, String>(12)?,
-                row.get::<_, String>(13)?,
-                row.get::<_, String>(14)?,
+                serde_json::to_string(&identifiers)?,
+                serde_json::to_string(&properties)?,
+                serde_json::to_string(&safety)?,
                 row.get::<_, String>(15)?,
                 row.get::<_, String>(16)?,
                 row.get::<_, String>(17)?,
@@ -1170,7 +1860,7 @@ fn copy_minerals(
                 canonical_name,
                 formula,
                 mineral_family,
-                row.get::<_, String>(21)?,
+                search_text,
             ])
             .with_context(|| format!("failed to index public mineral '{slug}'"))?;
         count += 1;
@@ -1194,7 +1884,7 @@ fn copy_evidence(source: &Transaction<'_>, destination: &Transaction<'_>) -> Res
                 me.source_attribution_party, me.source_work_title,
                 me.source_work_url, me.source_license_url,
                 me.source_changes_notice, me.source_no_endorsement_notice,
-                me.source_derived_output_license_spdx
+                me.source_derived_output_license_spdx, me.dataset_key
             FROM material_evidence me
             JOIN evidence_sources es ON es.id = me.source_id
             JOIN materials m ON m.id = me.material_id
@@ -1238,13 +1928,29 @@ fn copy_evidence(source: &Transaction<'_>, destination: &Transaction<'_>) -> Res
     let mut position = 0_i64;
     while let Some(row) = rows.next().context("failed to read public evidence")? {
         let slug = row.get::<_, String>(0)?;
+        let scope: String = row.get(5)?;
+        let Some(projected) = project_public_claim(
+            &scope,
+            row.get::<_, Option<String>>(18)?.as_deref(),
+            &row.get::<_, String>(6)?,
+        )?
+        else {
+            continue;
+        };
+        let license = projected
+            .license_override
+            .unwrap_or(row.get::<_, String>(4)?);
         if slug != current_slug {
             current_slug.clone_from(&slug);
             position = 0;
         }
-        let attribution = (11..=17)
-            .map(|index| row.get::<_, Option<String>>(index))
-            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let attribution = if let Some(override_fields) = projected.attribution_override {
+            override_fields.into_iter().map(Some).collect::<Vec<_>>()
+        } else {
+            (11..=17)
+                .map(|index| row.get::<_, Option<String>>(index))
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        };
         let has_attribution = attribution.iter().any(Option::is_some);
         if has_attribution
             && attribution
@@ -1260,9 +1966,9 @@ fn copy_evidence(source: &Transaction<'_>, destination: &Transaction<'_>) -> Res
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
                 row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, String>(5)?,
-                row.get::<_, String>(6)?,
+                license,
+                scope,
+                serde_json::to_string(&projected.value)?,
                 row.get::<_, f64>(7)?,
                 row.get::<_, String>(8)?,
                 row.get::<_, String>(9)?,
@@ -1278,6 +1984,10 @@ fn copy_evidence(source: &Transaction<'_>, destination: &Transaction<'_>) -> Res
             .with_context(|| format!("failed to export evidence for mineral '{slug}'"))?;
         position += 1;
     }
+    destination.execute(
+        "UPDATE minerals SET evidence_count = (SELECT COUNT(*) FROM evidence WHERE evidence.mineral_slug = minerals.slug)",
+        [],
+    )?;
     Ok(())
 }
 
@@ -2174,10 +2884,19 @@ mod tests {
 
         let fts_slug: String = public.query_row(
             "SELECT slug FROM mineral_search WHERE mineral_search MATCH ?1",
-            params!["sentinel*"],
+            params!["quartz*"],
             |row| row.get(0),
         )?;
         assert_eq!(fts_slug, "public-quartz");
+        assert_eq!(
+            public.query_row(
+                "SELECT COUNT(*) FROM mineral_search WHERE mineral_search MATCH 'sentinel*'",
+                [],
+                |row| row.get::<_, i64>(0)
+            )?,
+            0,
+            "private operational search text must not become public FTS content"
+        );
         let journal_mode: String = public.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
         assert_eq!(journal_mode.to_ascii_lowercase(), "delete");
         let page_size: i64 = public.query_row("PRAGMA page_size", [], |row| row.get(0))?;
@@ -2521,6 +3240,530 @@ mod tests {
         assert_eq!(metadata.get("mineral_count").map(String::as_str), Some("1"));
         assert_eq!(metadata.get("release_id"), Some(&manifest.release_id));
         assert_eq!(metadata.get("generated_at"), Some(&manifest.generated_at));
+        Ok(())
+    }
+
+    #[test]
+    fn research_publication_requires_approval_and_preserves_source_qualifications() -> Result<()> {
+        let raw = serde_json::json!({
+            "hardness": {"min": 6, "max": 7},
+            "cod_records": [{"cod_id": "123"}],
+            "publication_observations": [{"value": "operational"}],
+            "research_draft_descriptions": [{"text": "draft"}],
+            "legacy_nested": {"safe": "visible", "hidden": {"private_research": true, "text": "private"}},
+            "public_research": {
+                "publication_status": "published", "review_status": "reviewed",
+                "description": {"text": "Approved description", "source_urls": ["https://primary.example/paper"]},
+                "observations": [
+                    {"value": 1.71, "unit": "g/cm3", "source_scope": "synthetic_specimen",
+                     "qualification": "Laboratory-grown counterpart; not measured on a natural specimen.",
+                     "locator": "Table 2", "source_url": "https://primary.example/paper"},
+                    {"private_research": true, "value": "private"},
+                    {"draft": true, "value": "draft"},
+                    {"publication_status": "draft", "value": "draft status"}
+                ],
+                "cod_records": [{"cod_id": "123", "status": "counterpart", "primary_assignment": false}],
+                "structures": [{"cod_id": "123", "cell": {"a": 7.8},
+                    "raw_cif": "raw model", "source_access": "internal workflow",
+                    "archive_path": "C:\\Work\\Minerals\\data\\pilots\\private"}]
+            }
+        });
+        let public = project_public_properties(&raw.to_string())?;
+        assert_eq!(public["hardness"]["min"], 6);
+        assert!(public.get("cod_records").is_none());
+        assert!(public.get("publication_observations").is_none());
+        assert!(public.get("research_draft_descriptions").is_none());
+        assert_eq!(
+            public["legacy_nested"],
+            serde_json::json!({"safe": "visible"})
+        );
+        let research = &public["public_research"];
+        assert_eq!(research["observations"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            research["observations"][0]["source_scope"],
+            "synthetic_specimen"
+        );
+        assert_eq!(research["observations"][0]["locator"], "Table 2");
+        assert_eq!(
+            research["description"]["source_urls"][0],
+            "https://primary.example/paper"
+        );
+        assert_eq!(research["cod_records"][0]["primary_assignment"], false);
+        assert_eq!(
+            research["structures"][0],
+            serde_json::json!({"cod_id": "123", "cell": {"a": 7.8}})
+        );
+        for marker in [serde_json::json!("draft"), serde_json::json!("unreviewed")] {
+            let mut draft = raw.clone();
+            draft["public_research"]["review_status"] = marker;
+            assert!(project_public_properties(&draft.to_string())?
+                .get("public_research")
+                .is_none());
+        }
+        let mut private = raw.clone();
+        private["public_research"]["private_research"] = Value::Bool(true);
+        assert!(project_public_properties(&private.to_string())?
+            .get("public_research")
+            .is_none());
+        private = raw.clone();
+        private["private_research"] = Value::Bool(true);
+        assert_eq!(
+            project_public_properties(&private.to_string())?,
+            serde_json::json!({})
+        );
+        assert!(sanitize_public_value(
+            &serde_json::json!({"review_status": "draft", "text": "hidden"}),
+            false
+        )
+        .is_none());
+        assert!(sanitize_public_value(
+            &serde_json::json!({"note": "Stored under /app/data/private"}),
+            false
+        )
+        .unwrap()
+        .get("note")
+        .is_none());
+        assert!(
+            sanitize_public_value(&serde_json::json!({"path": "data/pilots/private"}), false)
+                .unwrap()
+                .get("path")
+                .is_none()
+        );
+        let curated = serde_json::json!({"publication_status": "published",
+            "value": {"raw_model": "must stay private"},
+            "public_claim": {"value": 1.71, "unit": "g/cm3", "license_spdx": "CC0-1.0",
+                "note": "Synthetic specimen", "source_locator": "Table 2"}});
+        let projected = project_public_claim(
+            "properties.cod_structure_observation",
+            None,
+            &curated.to_string(),
+        )?
+        .unwrap();
+        let claim = projected.value;
+        assert_eq!(claim["value"], 1.71);
+        assert_eq!(claim["source_locator"], "Table 2");
+        assert!(!claim.to_string().contains("must stay private"));
+        assert_eq!(projected.license_override.as_deref(), Some("CC0-1.0"));
+        let mut invalid = curated.clone();
+        invalid["public_claim"]["license_spdx"] = Value::String("NOASSERTION".to_string());
+        assert!(project_public_claim(
+            "properties.cod_structure_observation",
+            None,
+            &invalid.to_string()
+        )
+        .is_err());
+        let mut private = curated;
+        private["private_research"] = Value::Bool(true);
+        assert!(project_public_claim(
+            "properties.cod_structure_observation",
+            None,
+            &private.to_string()
+        )?
+        .is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn curated_attribution_overrides_partial_history_only_with_complete_public_approval(
+    ) -> Result<()> {
+        let data_root = TempDir::new()?;
+        prepare_registry(data_root.path())?;
+        seed_live_registry(data_root.path())?;
+        let live_path = data_root.path().join(LIVE_DATABASE_FILE);
+        let connection = Connection::open(&live_path)?;
+        connection.execute(
+            "UPDATE material_evidence SET source_work_title = NULL WHERE material_id = 1",
+            [],
+        )?;
+        let historical = file_snapshot(&live_path)?;
+        let failed = TempDir::new()?;
+        let error = export_public_catalog(data_root.path(), failed.path()).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("attribution snapshot is incomplete"));
+        assert_eq!(file_snapshot(&live_path)?, historical);
+        assert!(!failed.path().join(PUBLIC_CATALOG_MANIFEST_FILE).exists());
+
+        let attribution = serde_json::json!({
+            "attribution_party": "Primary authors and database contributors",
+            "work_title": "Original scientific study",
+            "work_url": "https://primary.example/article",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
+            "changes_notice": "Selected factual observations summarized with source qualifications.",
+            "no_endorsement_notice": "No endorsement by the original authors or source is implied.",
+            "derived_output_license_spdx": "CC-BY-4.0"
+        });
+        let mut approved = serde_json::json!({"publication_status": "published",
+            "value": "private historical model",
+            "public_claim": {"value": 1.71, "unit": "g/cm3", "license_spdx": "CC-BY-4.0",
+                "note": "Synthetic specimen", "attribution": attribution}});
+        connection.execute(
+            "UPDATE material_evidence SET claim_json = ?1 WHERE material_id = 1",
+            [approved.to_string()],
+        )?;
+        let before = file_snapshot(&live_path)?;
+        let output = TempDir::new()?;
+        let manifest = export_public_catalog(data_root.path(), output.path())?;
+        assert_eq!(file_snapshot(&live_path)?, before);
+        let public = Connection::open_with_flags(
+            output.path().join(&manifest.database.path),
+            OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )?;
+        let (license, title, work_url, output_license, raw): (String, String, String, String, String) = public.query_row(
+            "SELECT license_spdx, work_title, work_url, derived_output_license_spdx, claim_json FROM evidence",
+            [], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        )?;
+        assert_eq!(license, "CC-BY-4.0");
+        assert_eq!(title, "Original scientific study");
+        assert_eq!(work_url, "https://primary.example/article");
+        assert_eq!(output_license, "CC-BY-4.0");
+        let claim: Value = serde_json::from_str(&raw)?;
+        assert_eq!(claim["value"], 1.71);
+        assert!(claim.get("attribution").is_none());
+        let original_title: Option<String> = connection.query_row(
+            "SELECT source_work_title FROM material_evidence WHERE material_id = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        assert!(
+            original_title.is_none(),
+            "historical snapshot must remain untouched"
+        );
+
+        approved["public_claim"]["attribution"]
+            .as_object_mut()
+            .unwrap()
+            .remove("license_url");
+        connection.execute(
+            "UPDATE material_evidence SET claim_json = ?1 WHERE material_id = 1",
+            [approved.to_string()],
+        )?;
+        let before = file_snapshot(&live_path)?;
+        let incomplete = TempDir::new()?;
+        assert!(export_public_catalog(data_root.path(), incomplete.path()).is_err());
+        assert_eq!(file_snapshot(&live_path)?, before);
+        assert!(!incomplete
+            .path()
+            .join(PUBLIC_CATALOG_MANIFEST_FILE)
+            .exists());
+
+        approved
+            .as_object_mut()
+            .unwrap()
+            .remove("publication_status");
+        connection.execute(
+            "UPDATE material_evidence SET claim_json = ?1 WHERE material_id = 1",
+            [approved.to_string()],
+        )?;
+        let before = file_snapshot(&live_path)?;
+        let unapproved = TempDir::new()?;
+        let manifest = export_public_catalog(data_root.path(), unapproved.path())?;
+        assert_eq!(file_snapshot(&live_path)?, before);
+        let public = Connection::open_with_flags(
+            unapproved.path().join(&manifest.database.path),
+            OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )?;
+        assert_eq!(
+            public.query_row("SELECT COUNT(*) FROM evidence", [], |row| row
+                .get::<_, i64>(0))?,
+            0
+        );
+        assert!(project_public_claim("identity", None, &approved.to_string())?.is_none());
+        for url in [
+            "https://127.0.0.1/license",
+            "https://10.0.0.1/license",
+            "https://localhost/license",
+            "https://primary.example@localhost/license",
+            "file:///private/license",
+            "https://primary.example:bad/license",
+        ] {
+            assert!(
+                !public_attribution_url(url),
+                "internal or malformed public URL accepted: {url}"
+            );
+        }
+        let mut invalid_license = attribution;
+        invalid_license["derived_output_license_spdx"] = serde_json::json!("CC0-1.0");
+        assert!(curated_public_attribution(Some(&invalid_license), Some("CC-BY-4.0")).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn raw_cif_aliases_are_removed_without_losing_measurements_or_field_locators() -> Result<()> {
+        let raw = serde_json::json!({"public_research": {
+            "publication_status": "published", "review_status": "reviewed",
+            "observations": [
+                {"question_key": "physical.density", "value": 1.71,
+                    "source_field": "_atom_site_occupancy", "locator": "_symmetry_equiv_pos_as_xyz"},
+                {"question_key": "structure.mixed", "value": {
+                    "original_columns": ["_atom_site_label", "_atom_site_fract_x"],
+                    "original_rows": [["Ca1", 0.1]], "density_g_cm3": 1.71}},
+                {"question_key": "structure.raw_atoms", "value": {
+                    "original_columns": ["_atom_site_label", "_atom_site_fract_x"],
+                    "original_rows": [["Ca1", 0.1]]}},
+                {"question_key": "structure.raw_symmetry", "value": {"nested": {
+                    "operations_columns": ["_space_group_symop_operation_xyz"],
+                    "operations_rows": [["x,y,z"]]}}},
+                {"question_key": "chemistry.analysis", "value": {
+                    "original_columns": ["element", "weight_fraction"],
+                    "original_rows": [["Ca", 0.18]]}},
+                {"question_key": "powder.diffraction", "value": {
+                    "columns": ["d_A", "intensity"], "rows": [[3.2, 100]]}},
+                {"question_key": "structure.jonlarsenite_model", "value": {
+                    "atomic_sites_from_synthetic_1978": [{"atom": "Mn1", "wyckoff": "4a", "xyz": ["0.1", "0.2", "0.3"]}]}},
+                {"question_key": "structure.amgaite_model", "value": {
+                    "atom_columns": ["site", "x", "y", "z", "Biso"], "atom_rows": [["Ca1", 0.1, 0.2, 0.3, 0.01]],
+                    "density_g_cm3": 2.7}},
+                {"question_key": "structure.katayamalite_model", "value": {
+                    "general_symmetry_operations": ["x,y,z", "1/2+x,1/2+y,z", "-x,-y,-z"], "temperature_K": 293}},
+                {"question_key": "structure.graulichite_model", "value": {
+                    "site_model": [{"site": "La1", "proxy": "Ce", "xyz": [0.1, 0.2, 0.3], "occupancy": 1, "Uiso": 0.01}]}},
+                {"question_key": "structure.wodegongjieite_occupancy", "value": {
+                    "sixfold_site6f": {"Ca1": "0.75", "Sr1": "0.035(3)", "xyz": [0.5, 0, 0.25]},
+                    "twofold_site2a": {"K1": "0.5796", "Sr2": "0.155(8)", "xyz": [0, 0, 0.25]}}}
+            ],
+            "structures": [{"cod_id": "123", "cell": {"a": 7.8},
+                "original_columns": ["_symmetry_equiv_pos_as_xyz"],
+                "original_rows": [["x,y,z"]],
+                "anisotropic_table": [["Ca1", 0.01]],
+                "ADP_rows": [["Ca1", 0.01]],
+                "original_atomic_positions": [["Ca1", 0.1]],
+                "raw_text": "data_model\nloop_\n_atom_site_label\n_atom_site_fract_x\nCa1 0.1",
+                "source_locator": "_atom_site_fract_x",
+                "ADP_positive_definiteness_checks": [{"label": "Ca1", "determinant": 0.001, "positive": true}]}]
+        }});
+        let public = project_public_properties(&raw.to_string())?;
+        let research = &public["public_research"];
+        let observations = research["observations"].as_array().unwrap();
+        assert_eq!(observations.len(), 7);
+        assert_eq!(observations[0]["source_field"], "_atom_site_occupancy");
+        assert_eq!(observations[0]["locator"], "_symmetry_equiv_pos_as_xyz");
+        assert_eq!(
+            observations[1]["value"],
+            serde_json::json!({"density_g_cm3": 1.71})
+        );
+        assert_eq!(
+            observations[2]["value"]["original_rows"],
+            serde_json::json!([["Ca", 0.18]])
+        );
+        assert_eq!(
+            observations[3]["value"]["rows"],
+            serde_json::json!([[3.2, 100]])
+        );
+        assert_eq!(
+            observations[4]["value"],
+            serde_json::json!({"density_g_cm3": 2.7})
+        );
+        assert_eq!(
+            observations[5]["value"],
+            serde_json::json!({"temperature_K": 293})
+        );
+        assert_eq!(
+            observations[6]["value"],
+            serde_json::json!({
+            "sixfold_site6f": {"Ca1": "0.75", "Sr1": "0.035(3)"},
+            "twofold_site2a": {"K1": "0.5796", "Sr2": "0.155(8)"}})
+        );
+        let projected = project_public_claim("properties.cod_structure_observation", None,
+            &serde_json::json!({"publication_status": "published", "public_claim": {
+                "license_spdx": "CC0-1.0", "value": {
+                    "atomic_sites_from_synthetic_1978": [{"atom": "Mn1", "wyckoff": "4a", "xyz": [0.1, 0.2, 0.3]}],
+                    "site_model": [{"site": "La1", "xyz": [0.1, 0.2, 0.3], "occupancy": 1}],
+                    "atom_columns": ["site", "x", "y", "z", "Biso"], "atom_rows": [["Ca1", 0.1, 0.2, 0.3, 0.01]],
+                    "general_symmetry_operations": ["x,y,z"], "density_g_cm3": 2.7},
+                "source_locator": "Table 2", "qualification": "Synthetic model; source geometry retained privately."
+            }}).to_string())?.unwrap();
+        assert_eq!(
+            projected.value["value"],
+            serde_json::json!({"density_g_cm3": 2.7})
+        );
+        assert_eq!(projected.value["source_locator"], "Table 2");
+        assert_eq!(
+            projected.value["qualification"],
+            "Synthetic model; source geometry retained privately."
+        );
+        let structure = &research["structures"][0];
+        assert_eq!(structure["cell"]["a"], 7.8);
+        assert_eq!(structure["source_locator"], "_atom_site_fract_x");
+        assert_eq!(
+            structure["ADP_positive_definiteness_checks"][0]["determinant"],
+            0.001
+        );
+        for removed in [
+            "original_columns",
+            "original_rows",
+            "anisotropic_table",
+            "ADP_rows",
+            "original_atomic_positions",
+            "raw_text",
+        ] {
+            assert!(
+                structure.get(removed).is_none(),
+                "raw model alias leaked: {removed}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn export_projects_approved_research_counts_and_search_without_private_payloads() -> Result<()>
+    {
+        let data_root = TempDir::new()?;
+        let output = TempDir::new()?;
+        prepare_registry(data_root.path())?;
+        seed_live_registry(data_root.path())?;
+        let live_path = data_root.path().join(LIVE_DATABASE_FILE);
+        let connection = Connection::open(&live_path)?;
+        let properties = serde_json::json!({
+            "hardness": 7,
+            "cod_records": [{"value": "privatecodsentinel"}],
+            "cod_source_details": [{"value": "privatemodelsentinel"}],
+            "publication_observations": [{"value": "privateobservationsentinel"}],
+            "research_draft_descriptions": [{"text": "privatedraftsentinel"}],
+            "nested": {"keep": "legacypropertysentinel", "secret": {"draft": true, "value": "nesteddraftsentinel"}},
+            "public_research": {"publication_status": "published", "review_status": "reviewed",
+                "description": {"text": "Approved descriptionsentinel", "source_urls": ["https://primary.example/article"]},
+                "observations": [{"question_key": "physical.density", "value": 1.71,
+                    "qualification": "synthetic counterpart", "source_url": "https://primary.example/article",
+                    "locator": "Table 2", "source_scope": "reported_publication_observation"}],
+                "hidden": {"private_research": true, "value": "nestedprivatesentinel"}}
+        });
+        connection.execute(
+            "UPDATE materials SET description = '', properties_json = ?1, search_text = 'privatesearchsentinel' WHERE id = 1",
+            params![properties.to_string()],
+        )?;
+        let claims = [
+            (
+                "properties.cod_record_link",
+                None,
+                serde_json::json!({"value": "unapprovedcodsentinel"}),
+            ),
+            (
+                "properties.cod_record_link",
+                None,
+                serde_json::json!({"publication_status": "published",
+                "value": {"cod_id": "123", "status": "counterpart", "qualifiers": ["synthetic specimen"]},
+                "review_batch": "privatebatchsentinel", "raw_cif": "rawcifsentinel",
+                "archive_path": "/app/data/pilots/localarchivesentinel",
+                "note": "Observed phase agrees; specimen is synthetic."}),
+            ),
+            (
+                "properties.cod_record_link",
+                None,
+                serde_json::json!({"publication_status": "published", "private_research": true, "value": "privateapprovedsentinel"}),
+            ),
+            (
+                "properties.density",
+                None,
+                serde_json::json!({"value": "unapprovedpublicationsentinel", "source_scope": "reported_publication_observation"}),
+            ),
+            (
+                "properties.density",
+                None,
+                serde_json::json!({"publication_status": "published", "value": 1.71,
+                "source_scope": "reported_publication_observation", "locator": "Table 2", "qualification": "synthetic specimen"}),
+            ),
+            (
+                "properties.color",
+                Some("mineral-evidence-test"),
+                serde_json::json!({"publication_status": "published", "value": "publishedcolorsentinel"}),
+            ),
+            (
+                "properties.color",
+                Some("mineral-evidence-test"),
+                serde_json::json!({"value": "unapproveddatasetsentinel"}),
+            ),
+            (
+                "properties.legacy",
+                None,
+                serde_json::json!({"private_research": true, "value": "privatelegacysentinel"}),
+            ),
+            (
+                "properties.legacy",
+                None,
+                serde_json::json!({"value": "legacyevidencesentinel"}),
+            ),
+            (
+                "properties.cod_record_link",
+                None,
+                serde_json::json!({"publication_status": "published", "draft": true, "value": "draftapprovedsentinel"}),
+            ),
+        ];
+        for (index, (scope, dataset, claim)) in claims.into_iter().enumerate() {
+            let source_id = 100 + index as i64;
+            connection.execute(
+                "INSERT INTO evidence_sources(id, canonical_url, title, publisher, license_spdx, retrieved_at, content_hash) VALUES (?1, ?2, 'Test research', 'Primary publisher', 'CC0-1.0', '2026-01-01T00:00:00Z', 'test-source-hash')",
+                params![source_id, format!("https://primary.example/research/{index}")],
+            )?;
+            connection.execute(
+                "INSERT INTO material_evidence(material_id, source_id, claim_scope, claim_json, confidence, review_status, dataset_key) VALUES (1, ?1, ?2, ?3, 0.9, 'unreviewed', ?4)",
+                params![source_id, scope, claim.to_string(), dataset],
+            )?;
+        }
+        drop(connection);
+        let before = file_snapshot(&live_path)?;
+        let manifest = export_public_catalog(data_root.path(), output.path())?;
+        assert_eq!(file_snapshot(&live_path)?, before);
+        let public_path = output.path().join(&manifest.database.path);
+        let public = Connection::open_with_flags(&public_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let (description, raw, count): (String, String, i64) = public.query_row(
+            "SELECT description, properties_json, evidence_count FROM minerals WHERE slug = 'public-quartz'",
+            [], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        assert_eq!(description, "Approved descriptionsentinel");
+        let public_properties: Value = serde_json::from_str(&raw)?;
+        assert_eq!(public_properties["hardness"], 7);
+        assert_eq!(
+            public_properties["public_research"]["observations"][0]["value"],
+            1.71
+        );
+        assert_eq!(count, 5);
+        assert_eq!(
+            public.query_row("SELECT COUNT(*) FROM evidence", [], |row| row
+                .get::<_, i64>(0))?,
+            count
+        );
+        let positions = public
+            .prepare("SELECT position FROM evidence ORDER BY position")?
+            .query_map([], |row| row.get::<_, i64>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        assert_eq!(positions, vec![0, 1, 2, 3, 4]);
+        for term in ["descriptionsentinel", "legacypropertysentinel", "private*"] {
+            let matches = public.query_row(
+                "SELECT COUNT(*) FROM mineral_search WHERE mineral_search MATCH ?1",
+                [term],
+                |row| row.get::<_, i64>(0),
+            )?;
+            assert_eq!(matches, i64::from(term != "private*"), "FTS term {term}");
+        }
+        let bytes = fs::read(&public_path)?;
+        let text = String::from_utf8_lossy(&bytes);
+        for forbidden in [
+            "privatecodsentinel",
+            "privatemodelsentinel",
+            "privateobservationsentinel",
+            "privatedraftsentinel",
+            "nesteddraftsentinel",
+            "nestedprivatesentinel",
+            "privatesearchsentinel",
+            "unapprovedcodsentinel",
+            "privatebatchsentinel",
+            "rawcifsentinel",
+            "localarchivesentinel",
+            "privateapprovedsentinel",
+            "unapprovedpublicationsentinel",
+            "unapproveddatasetsentinel",
+            "privatelegacysentinel",
+            "draftapprovedsentinel",
+        ] {
+            assert!(
+                !text.contains(forbidden),
+                "private payload leaked: {forbidden}"
+            );
+        }
+        assert!(text.contains("legacyevidencesentinel"));
+        assert!(text.contains("reported_publication_observation"));
+        validate_public_catalog_release(output.path())?;
         Ok(())
     }
 

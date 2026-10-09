@@ -4,6 +4,14 @@ Status: **draft decisions for pilot validation**
 
 Reviewed: **2026-08-28**
 
+An individually reviewed public research snapshot was authorized on 8 October
+2026. Its bounded source admission and retained qualifications are recorded in
+[the public research release note](PUBLIC_RESEARCH_RELEASE_2026_10_08.md).
+That release selects specific licensed observations and COD references; it
+does not promote the general pilot adapters or change the fixed IMA identity
+population. The pilot and module decisions below continue to govern automatic
+ingestion.
+
 Questionnaire: [mineral record questionnaire v1](MINERAL_RECORD_QUESTIONNAIRE_V1.md)
 
 Normative matrix:

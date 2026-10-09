@@ -1,6 +1,6 @@
 # COD crystallography adapter pilot v1
 
-Status: **private pilot; metadata retrieval complete and verified; mineral matching pending**
+Status: **private pilot; resumed by the user on 8 October 2026 and saved through checkpoint 96 / run 102. Current totals: 694 distinct minerals enriched, 20,957 added evidence rows and 17,578 source-qualified observations on 570 minerals. Useful COD relationships cover 4,233 minerals; 65 publication-supported primary targets / 76 primary COD entries; 2,614 qualified COD structure observations. Broader one-at-a-time publication research has started with Aliettite. All 138 formula cases and all completed reviews are saved; zero conflicting primary assignments. The earlier twelve-hour window is closed and its scheduled continuation remains paused.**
 
 Source decision: **`pilot_only`**
 
@@ -18,8 +18,9 @@ Source admission decision:
 
 The metadata retrieval has already run successfully. **Do not restart the
 1,000-request scrape for the next stage.** Continue offline from the preserved
-snapshot. Work is left here for the user's next session; no automatic
-continuation or scheduled monitor remains.
+snapshot. That handoff left work for the user's next session. The subsequently
+authorized 6–7 October parallel review used a same-chat scheduled continuation,
+now paused. Its historical results and the 8 October resumed review appear below.
 
 Completed:
 
@@ -67,6 +68,714 @@ This folder migration has not started; the evidence paths above are current.
 by this retrieval.** The public catalog remains unchanged and COD remains
 `pilot_only`. The image dispatcher and black-background image instructions are
 ready for a separate continuation; image generation does not block matching.
+
+## Offline candidate report — 6 October 2026
+
+The Rust matcher completed its first full pass over the preserved metadata
+snapshot. Every one of the 535,005 source rows is inventoried, including
+520,953 rows without a proposed link. Coverage reports include all 6,226
+existing minerals. Offline replay reproduced all four artifact hashes and the
+manifest exactly. Container validation passed 40 contract tests, 34 Rust
+tests, formatting, and Clippy checks.
+
+- 12,775 source rows give literal exact-name candidates for 3,465 minerals.
+- 1,277 additional source rows have exploratory leads only. Exploratory leads
+  cover 847 minerals overall, of which 389 have no exact-name candidate.
+- 2,372 minerals have no name link yet; this is a research gap, not an absence
+  claim.
+- The unreviewed review queue contains 14,052 source rows. No literal exact
+  name mapped to multiple population IDs in this snapshot; ambiguity in
+  broader hints and scientific identity still requires investigation.
+
+Current private report directory:
+`data/pilots/cod-crystallography-v1/candidate-matching-v1/`, child
+`0b2c6bac83cfd4f1f6fb6d20634eb02d3415320f29f21c5f58d38ebe0cccb69e`.
+
+The original snapshot is unchanged. No crosswalks have been accepted, no CIFs
+have been retrieved by matching, and no crystallographic values have been
+normalized or published. Next: review the proposed links and source evidence,
+prepare reviewed challenge eligibility, and freeze the 96-record selection.
+The [matching workflow](#offline-mineral-matching-and-coverage) describes the
+artifacts and offline verification command.
+
+## Direct record review — 6 October 2026
+
+Review of our frozen records, preserved COD metadata, and published mineral
+descriptions identified the following corresponding entries among minerals
+previously reported without an exact-name candidate. These are concrete
+identification proposals based on source review, not accepted pilot crosswalks
+or ingested crystallographic values. Revision-pinned CIF contents have
+not yet been inspected for this batch.
+
+| Our mineral | COD ID / saved revision | Identification evidence |
+|---|---|---|
+| Auerbakhite | `1566214` / `272367` | Blank COD mineral-name field; the [description paper](https://www.jgeosci.org/detail/jgeosci.321/abstract/) matches the title, DOI, formula and reported cell. |
+| Bouškaite | `1566236` / `272392` | Blank name field; [the paper](https://www.jgeosci.org/detail/jgeosci.287) matches the DOI, composition and cell. |
+| Bavsiite | `1557166` / `247283` | Blank mineral-name field; [the paper](https://doi.org/10.1180/mgm.2019.59) matches the DOI, formula, cell and symmetry. |
+| Gladkovskyite | `1566237` / `272393` | Blank name field; [the paper](https://www.jgeosci.org/detail/jgeosci.290) matches the DOI, formula and cell. |
+| Babánekite | `1566254` / `272417` | Blank name field; [the description](https://www.jgeosci.org/content/jgeosci.248_plasil.pdf) matches the DOI and cell. Keep the COD refinement formula distinct from the ideal and microprobe formulas. |
+| Horákite | `1566251` / `272414` | Blank name field; [the paper](https://www.jgeosci.org/detail/jgeosci.267) matches the DOI, cell and symmetry. Preserve the sample's As/P occupancies separately from the ideal formula. |
+| Ježekite | `1566261` / `272424` | Blank name field; [the paper](https://www.jgeosci.org/detail/jgeosci.203) matches the DOI, cell and symmetry. COD's summary formula omits H; do not replace the registry's hydrated formula with it. |
+| Sofiite | `9011798` / `291877` | COD uses `Sophiite`; [the structure paper](https://doi.org/10.1180/minmag.1992.056.383.11) matches our reference, chemistry and cell. |
+| Mosandrite-(Ce) | `1519938` / `176429` | COD uses `mosandrite`; our registry cites the same 2013 paper and its formula agrees. The [2017 nomenclature paper](https://rruff.info/uploads/MM81_1457.pdf) explicitly records the change to `mosandrite-(Ce)`. |
+
+These findings demonstrate why no exact-name candidate cannot be interpreted
+as absence from COD. They do not establish revised coverage for the entire
+catalog. The preliminary broader search preserved leads for further direct
+review, including related-mineral mentions and chemical analogues; its counts
+must not be reported as confirmed matches.
+
+Useful evidence also needs its correct scope:
+
+- Majindeite has a formula-compatible COD lead (`1563738` / `266736`) from a
+  study of `T2Mo3O8` compounds. The [nolanite-supergroup paper](https://ejm.copernicus.org/articles/37/133/2025/ejm-37-133-2025.html)
+  describes majindeite as a natural analogue of synthetic `Mg2Mo3O8`. Retain
+  the lead as analogue research; a natural-mineral determination is not yet
+  established.
+- Aplowite's lead (`9007885` / `291455`) is explicitly deuterated and synthetic
+  in the saved metadata. Keep those qualifiers with the evidence.
+- The Berezanskite hit (`9010641` / `283960`) actually identifies **Faizievite**.
+  Its title discusses berezanskite structural blocks. Retain it as a related
+  structure reference, not a Berezanskite determination.
+
+The user requested direct review rather than another scraper or script. The
+additional research/capture scripts and their launcher commands were removed;
+the preserved metadata, earlier matcher and useful private research evidence
+remain. Continue direct review of unresolved records and their references.
+
+## Formula-guided review — 6 October 2026
+
+The user requested chemical comparison before considering embeddings. A
+one-off inspection inside the existing admin container compared all 535,005
+saved COD summaries against the catalog formulas, targeting the 2,761 minerals
+without literal exact-name candidates. No new scraper, project command,
+embedding pipeline, or database mutation was added.
+
+Original formulas are retained. The comparison expands brackets and hydrate
+components, removes explicit positive oxidation-state notation, and compares
+exact rational atom proportions independent of element order or formula-unit
+scale. Vacancies and zero occupancies remain diagnostic context. For example,
+`Mg2Mo4+3O8` becomes `Mg2 Mo3 O8`, while `(Ta2/3Mn2+1/3)O2` has the proportions
+`Mn Ta2 O6`. Hydrogen omission, deuteration, and elemental substitution-site
+compatibility remain distinct qualified clues. A compatible mixed-site formula
+does not establish dominant elements, structural ordering or mineral identity.
+
+Across all 6,226 minerals, 5,350 formulas have fixed atom compositions and 389
+have comparable elemental substitution sites. The remaining 487 formulas are
+retained with unresolved notation, ranges, compound substitutions or malformed
+brackets. Of the 2,761 target minerals, those counts are 2,305, 189 and 267.
+The pass parsed 534,401 COD formulas; the 604 unresolved source rows remain in
+the preserved snapshot. These counts describe this comparison's capabilities,
+not judgments that unresolved formulas or records lack value.
+
+| Best formula clue per target mineral | Minerals |
+|---|---:|
+| Same elemental proportions | 521 |
+| Compatible variable substitution sites | 53 |
+| Matching non-H proportions; source omits hydrogen | 18 |
+| Deuterated counterpart only | 8 |
+| **Total with formula clues** | **600** |
+
+The categories above do not overlap. The 4,690 candidate pairs include new
+pairs for 127 minerals compared with the previous equal-formula pass; 52
+minerals previously recorded with no research lead gained a chemistry clue.
+These are not confirmed assignments. Broad compatibility can identify related
+species, synthetic counterparts, or misleading coincidences. In particular,
+removing hydrogen from an organic formula can leave only carbon; such bare
+element comparisons are retained as uninformative clues rather than useful
+species identifications.
+
+Publication review supports nine additional mineral-identification proposals,
+bringing the documented total to 18 minerals and 19 COD records. None is an
+accepted pilot crosswalk; pinned CIFs have not yet been inspected.
+
+| Our mineral | COD ID / saved revision | Identification evidence and qualification |
+|---|---|---|
+| Heimite | `1571002`, `1572359` / `295836` | The [description](https://ejm.copernicus.org/articles/36/153/2024/) matches the DOI, locality, composition and cell within quoted uncertainty. Both IDs appear to describe the same dataset; retain both and count one mineral identification. |
+| Richardsite | `1558193` / `252944` | Blank mineral-name field; the [description](https://www.mdpi.com/2075-163X/10/5/467) matches the DOI, `Zn2CuGaS4`, cell and space-group number 121. |
+| Riesite | `1557789` / `250752` | Our `TiTiO4` and COD's `TiO2` have the same proportions. The [description](https://www.mdpi.com/2075-163X/10/1/78), cell and space-group number 13 distinguish riesite from other `TiO2` minerals. |
+| Eliopoulosite | `1557744` / `250387` | The [description](https://www.mdpi.com/2075-163X/10/3/245) matches the lowercase label, DOI, `V7S8`, cell and symmetry. An earlier entry, `1557233`, instead cites a grammatikopoulosite paper; retain that publication mismatch separately. |
+| Vandermeerscheite | `1566238` / `272394` | Blank name field; the [description](https://www.jgeosci.org/detail/jgeosci.288), DOI, cell and symmetry agree. COD omits H; retain the mineral's hydrated formula. |
+| Alumoåkermanite | `9017542` / `292100` | The [description](https://www.cambridge.org/core/journals/mineralogical-magazine/article/abs/alumoakermanite-cana2almgfe2si2o7-a-new-mineral-from-the-active-carbonatitenephelinitephonolite-volcano-oldoinyo-lengai-northern-tanzania/467E93B3ED56275968523132099DE241), locality, reference and cell agree. Observed Ca/Na and Al/Mg/Fe totals satisfy the two substitution sites. |
+| Hodgesmithite | `2108521` / `227861` | The [description](https://onlinelibrary.wiley.com/doi/full/10.1107/S205252061901343X), DOI, cell and `P3` agree. Keep COD's nominal and calculated formulas distinct from the microprobe composition. |
+| Siidraite | `1561470` / `263553` | The [2016 unnamed natural phase](https://www.sciencedirect.com/science/article/abs/pii/S0022459616300792) matches our second reference, formula and cell. The [2017 naming paper](https://publications.diamond.ac.uk/pubman/viewpublication?publicationId=8259) identifies siidraite on the same NHM specimen, BM84642. |
+| Krupičkaite | `1566215` / `272368` | The [description's Table 3](https://www.jgeosci.org/content/jgeosci.318_Steciuk.pdf) explains the different cell and `P21/n` as a low-temperature electron-diffraction structure. The paper reports 100 K while COD says 293 K; retain that unresolved conflict and the partial-H/refined-water composition. |
+
+Three more reviewed leads are useful **synthetic analogues**: Griffinite
+(`2206495` / `176774`), Verneite (`1000236` / `130149`), and Fluoro-tremolite
+(`9000375` / `291269`). The corresponding natural-mineral descriptions or
+structure paper explicitly identify the laboratory counterpart. Preserve this
+evidence with its sample origin. Fluoro-tremolite previously had no research
+lead. Formula-compatible records identified as normandite remain related
+references for Låvenite, rather than Låvenite assignments.
+
+Private results are under
+`data/pilots/cod-crystallography-v1/formula-research-v1/2026-10-06/`:
+`report.md`, `formula-candidates.jsonl`, `mineral-formula-review.jsonl`,
+`record-review.jsonl`, `analysis-summary.json`, `priority-candidates.json`, and
+`research-manifest.json`. Every candidate retains a COD ID, revision, original
+formula and hashed metadata locator. The review ledger records identity,
+analogue and non-identity judgments separately. Supported proposals are unique
+by COD ID in that ledger, but remain inactive. An enforced final assignment
+register is not yet implemented; it must permit at most one active mineral
+target per source determination and preserve decision history. Ambiguous
+candidate lists may contain several mineral targets without assigning any.
+
+## Record review continuation — 6 October 2026
+
+This continuation inspected 149 mineral cases: the 139 strongest remaining
+formula candidates with name/title/reference evidence, plus ten cases found
+under official former names. The private review records 163 individual COD
+judgments, including displaced choices and additional historical datasets.
+
+| Best outcome for each mineral in this batch | Minerals |
+|---|---:|
+| Provisional mineral association | 97 |
+| Synthetic structural counterpart | 34 |
+| Deuterated counterpart | 3 |
+| Related structure or different hydrate | 7 |
+| Theoretical structure only | 2 |
+| Identity still unresolved | 7 |
+| Specific variety/sample relation | 1 |
+| **Reviewed cases** | **149** |
+
+The cumulative ledger contains primary association proposals for **115
+minerals and 116 COD IDs**, including the two retained Heimite records. Only
+**24 minerals** have direct primary-publication comparisons so far. The other
+associations are supported at the saved-metadata or naming-authority level;
+they are not full article/CIF validations. Sample origin remains unspecified
+where it cannot be established. Forty minerals have useful synthetic or isotope
+counterparts in the cumulative review, kept separately from primary mineral
+associations. No proposal is accepted or active.
+
+Six additional direct publication comparisons:
+
+| Mineral | COD ID / saved revision | Evidence and remaining qualification |
+|---|---|---|
+| Balićžunićite | `9017701` / `292100` | Natural La Fossa sample; formula and all cell parameters match the [primary abstract](https://doi.org/10.1180/minmag.2015.079.3.06). |
+| Bukovskýite | `9014967` / `283658` | Description reference, locality and formula agree. COD c=10.904 differs from 10.914(2) in the [primary abstract](https://www.jstage.jst.go.jp/article/jmps/107/3/107_110930/_article); preserve the discrepancy. |
+| Molybdophyllite | `9014752` / `201816` | Formula, C2 and cell match the monoclinic polytype in the [primary abstract](https://doi.org/10.1180/minmag.2012.076.3.04). |
+| Delchiaroite | `1577029` / `305453` | Natural La Piana sample, formula, Pmmn and cell match the [2026 description](https://ejm.copernicus.org/articles/38/153/2026/). |
+| Hibbingite | `8104545` / `250400` | Natural Norilsk sample, Pnma and cell match the [primary abstract](https://doi.org/10.1515/zkri-2018-2124). |
+| Vyacheslavite | `7232933` / `216509` | The [primary article](https://pmc.ncbi.nlm.nih.gov/articles/PMC9065332/) combines natural-crystal PEDT with DFT. Preserve the 100 K paper versus 293 K COD conflict and determine the specific CIF model. |
+
+The [2022 CNMNC naming notice](https://ejm.copernicus.org/articles/34/463/2022/)
+explains specific former names, including alpha/beta uranophane, Nováčekite
+I/II, Andorite IV/VI, beta fergusonite, Ice VII and beta sulfur. These phase and
+hydration qualifiers must stay attached to the aliases. The
+[2013 guidelines](https://cnmnc.units.it/cnmnc_booklet/2013%20Hatert%20et%20al_%20guidelines%20suffixes-prefixes%20historical%20name.pdf)
+explain natroapophyllite to fluorapophyllite-(Na), and the
+[2025 notice](https://ejm.copernicus.org/articles/37/75/2025/) explains
+svornostite to svornostite-(K). These are research associations; the catalog
+names and formulas have not been edited.
+
+Specific cleanup findings:
+
+- The original autunite-sheet and zippeite-group papers identify synthetic
+  crystals even where the COD origin field is blank. Hydronováčekite,
+  Nováčekite, cobaltzippeite, natrozippeite and zinczippeite are useful
+  laboratory counterparts in the selected datasets.
+- Synthetic M-prime YTaO4, COD `9011071`, is a published structural analogue
+  of iwashiroite-(Y), although its saved mineral label says Formanite-(Y).
+- For Fowlerite, COD `9003691` preserves sample 15-4041, explicitly called
+  fowlerite in the [primary paper](https://www.rruff.net/doclib/am/vol90/AM90_969.pdf).
+  Its cell agrees. Retain a variety/sample relation to rhodonite; a shared
+  paper title does not establish that every rhodonite sample is fowlerite.
+- The Symplesite candidates identify parasymplesite; the Brockite candidate
+  identifies rhabdophane-(Ce). Earlandite's candidate is explicitly a different
+  synthetic polymorph. Preserve these relations without forcing identities.
+- Metauranocircite's former-name record is a synthetic seven-water compound;
+  the catalog formula has six waters. Mertieite and paralomonosovite also have
+  unresolved source/catalog composition differences. Keep the evidence and
+  the questions together.
+
+Private artifacts are in
+`data/pilots/cod-crystallography-v1/record-review-v1/2026-10-06-continuation/`:
+`report.md`, `reviewed-records.jsonl`, `mineral-review-status.jsonl`,
+`cumulative-review-ledger.jsonl`, `proposed-primary-associations.jsonl`,
+`specific-review-issues.jsonl`, `remaining-formula-review.jsonl`, and the
+hashed `research-manifest.json`. Every reviewed record retains its original
+metadata locator and revision. The proposed-primary index checks one target
+per COD ID and preserves review history; it is not a database assignment
+register. Variety relations and analogues do not reserve a second primary
+mineral target.
+
+All 4,690 formula proposals remain retained. Of the 600 mineral cases with
+formula leads, 435 still need a first record review. Continue with those cases
+and the selected revision-pinned CIFs. No persistent research script, embedding
+pipeline, or additional COD retrieval was added in this continuation.
+
+## Record review continuation 2 — 6 October 2026
+
+This batch reviewed **52 additional mineral cases**, recording **72 COD
+judgments**, including an appended correction to an earlier review note.
+
+| Best outcome per mineral in this batch | Minerals |
+|---|---:|
+| Provisional mineral association | 12 |
+| Synthetic structural counterpart | 21 |
+| Deuterated counterpart | 2 |
+| Structural counterpart; sample origin unresolved | 2 |
+| Related structure or different mineral | 12 |
+| Identity still unresolved | 3 |
+| **Reviewed cases** | **52** |
+
+Six additional primary-publication comparisons identify specific historical
+datasets:
+
+| Mineral | COD ID / saved revision | Evidence and qualification |
+|---|---|---|
+| Branchite | `9016769` / `292100` | The [renaming paper](https://www.cambridge.org/core/journals/mineralogical-magazine/article/hartite-renamed-branchite/39015ED92557ED31925A5D3278EA0F94) identifies the 1998 Bílina Hartite dataset and reproduces its P1 cell. |
+| Calciocatapleiite | `9004867` / `303136` | The [original paper](https://www.rruff.net/doclib/cm/vol42/CM42_1037.pdf) identifies natural calcium-dominant catapleiite and the saved Pbnn cell. |
+| Ferroberaunite | `9015106` / `303136` | The [description](https://www.cambridge.org/core/journals/mineralogical-magazine/article/ferroberaunite-fe2fe35po44oh56h2o-a-mixedvalence-iron-member-of-the-beraunite-series-from-the-gravel-hill-mine-perranzabuloe-cornwall-england/D8C3CD0261018C56C07D34A8E677FAA7) reidentifies the 1992 Mullica Hill Beraunite sample as mixed-valence ferroberaunite. The old red Giessen model is retained separately. |
+| Kenotobermorite | `9002246` / `283658` | The [later polytype comparison, Table 6](https://pureportal.spbu.ru/files/99728370/2022_Paratobermorite.pdf) assigns the exact historical B11m cell to kenotobermorite-2M. Keep the order-disorder/polytype context. |
+| Lobanovite | `9013161` / `287555` | The [description manuscript](https://iris.unito.it/retrieve/handle/2318/1557068/143177/1261-sokolova_1455976949670.pdf) identifies Shi et al.'s 1998 sample 3086 as lobanovite. Its A2 refinement was superseded; identification does not approve the historical symmetry/site model. |
+| Stangersite | `9005509` / `291351` | The [description, sections 6–7 and Table 7](https://www.jgeosci.org/content/jgeosci.306_Sejkora.pdf) names the 2001 natural SnGeS3 dataset and reproduces its single-crystal cell, separately from powder and synthetic measurements. |
+
+Six further associations rely on inspected metadata and/or official naming
+definitions: Gismondine-Ca, Gerhardtite, Sørensenite, Columbite-(Mn),
+Bixbyite-(Fe) and Bixbyite-(Mn). The Fe/Mn suffixes use each row's composition;
+a paper title listing several specimens cannot identify every row. The
+additional Pcab bixbyite-(Mn) dataset is retained under the current definition.
+Unreported sample origin remains unknown.
+
+Useful cleanup results:
+
+- Anthracene/Freitalite and phenanthrene/Ravatite share `C14H10` but are
+  different molecules. Their records remain useful with the correct relation.
+- The Pnnm CuSe2 record labelled Krutaite is a synthetic Petříčekite
+  counterpart; cubic Pa-3 CuSe2 is the Krut'aite structure. The DFT model is
+  retained separately from experimental datasets.
+- Synthetic M-prime YTaO4 remains an Iwashiroite-(Y) counterpart. The
+  Takanawaite-(Y) lead is a different M-type structure and is not established
+  by that record.
+- Elpidite versus Hydroterskite illustrates water/hydroxyl and topology
+  differences hidden by atom totals. The sulfite dimorphs, Millsite/Teineite,
+  and Goslarite/Zincmelanterite also require their structural distinctions.
+- Uramphite and Metauramphite share normalized trihydrate proportions and a
+  deuterated candidate. The lead remains unresolved for both. Another row's
+  fully deuterated title conflicts with its mixed H/D formula; preserve that
+  source discrepancy.
+- The earlier Achávalite review note said 1932, while the saved publication
+  year is 1925. The correction is appended to the ledger, preserving history.
+
+The cumulative review covers **222 minerals** and **259 record judgments**.
+Primary association proposals cover **127 minerals and 129 COD IDs**; **30
+minerals** have direct primary-publication comparisons. All proposals remain
+inactive and require the relevant article/sample/CIF validation. The register
+checks one primary target per COD ID; shared analogue and unresolved links do
+not create competing primary assignments. Final database enforcement remains
+pending.
+
+Private artifacts are in
+`data/pilots/cod-crystallography-v1/record-review-v1/2026-10-06-continuation-2/`:
+`report.md`, `manual-review-decisions.json`, `reviewed-records.jsonl`,
+`mineral-review-status.jsonl`, `cumulative-review-ledger.jsonl`,
+`proposed-primary-associations.jsonl`, `specific-review-issues.jsonl`,
+`remaining-formula-review.jsonl`, `review-summary.json`, `verification.json`
+and `research-manifest.json`. The JSON decision sheet records the manual
+judgments; no persistent research script or new scraper was added.
+
+All **259 judgments** were verified against their original hashed responses:
+28 objects and 326,428,911 bytes. Previous review artifacts, the source
+execution index and frozen catalog retain their hashes. All **4,690 formula
+candidates** remain available; **383 of the 600 formula-lead cases** still need
+a first record review. Continue those reviews and resolve the selected
+pinned-CIF model questions independently.
+
+## Reviewed evidence committed to mineral records — 6 October 2026
+
+Following the user's direction to commit useful findings into the records,
+the reviewed relationships are now stored on **222 actual mineral records** in
+`data/minerals.db`. The existing import/review workflow recorded and approved
+the exact record updates, preserving their previous identity, description,
+verification state, official evidence and other existing fields.
+
+Each mineral now has a `cod_records` collection, a readable
+`cod_review_summary`, and source evidence under `properties.cod_record_link`.
+The **258 links** carry their COD ID, saved revision, citation, relationship,
+evidence level, sample origin, qualifications and review note:
+
+| Recorded relationship status | Links |
+|---|---:|
+| Identified from primary-publication comparison | 31 |
+| Candidate from metadata and/or naming authority | 98 |
+| Qualified structural counterpart | 84 |
+| Related mineral or structure | 34 |
+| Identity unresolved | 11 |
+| **Total attached evidence links** | **258** |
+
+The 31 identified links cover **30 minerals**, with two retained Heimite COD
+records. They are primary source associations now. The 98 candidate links
+cover **97 minerals**, including two Bixbyite-(Mn) datasets; they preserve
+their uncertainties without reserving a primary assignment. The record label
+is more specific than the legacy numeric confidence field, which retains its
+default value and is not a calibrated probability.
+
+`idx_cod_record_one_primary_target` enforces one primary mineral target per
+COD ID across these evidence rows. It permits multiple candidate/related
+links, so shared evidence is retained. A database-copy check rejected a
+conflicting primary assignment and allowed non-primary relations.
+
+Reference identification is committed independently of detailed crystal
+measurements. No unit-cell or space-group observation is asserted by this
+record update; those require validation of the specific revision and model.
+The older immutable research snapshots retain their proposal states. Current
+reference assignments are the database evidence rows, while the broader COD
+adapter remains a private pilot. The exported browsing catalog is a separate
+release and has not been replaced here.
+
+The commitment artifacts are under
+`data/pilots/cod-crystallography-v1/record-commit-v1/2026-10-06/`:
+`record-updates.json`, `before-records.json`, `preparation-summary.json`,
+`stage-receipt.json`, `commit-receipt.json`, and `report.md`. The receipt
+identifies the database backup, approved review IDs and verification results.
+Continue writing completed reviews into the records instead of accumulating
+only side reports.
+
+## Exact-name references and structure observations committed — 6 October 2026
+
+Following the record commitment above, the user's next instruction authorized
+attaching the saved exact-name references, recording the publication-linked
+crystal observations, and continuing direct formula-lead review.
+
+| Committed extension | Mineral records | COD references/observations |
+|---|---:|---:|
+| Literal-name references, identity and structure unchecked | 3,465 | 12,775 links |
+| Publication-linked space-group and six-parameter cells | 30 | 31 structure observations |
+| Further direct formula-lead review | 35 | 35 links |
+
+The exact-name extension retains every source entry, including 646 for Spinel.
+Three source labels conflict with an already reviewed identification:
+`9002246` Tobermorite/Kenotobermorite, `9004867`
+Catapleiite/Calciocatapleiite, and `9015106` Beraunite/Ferroberaunite.
+These links are `name_conflict`; the other literal-name references are
+`name_matched`. All are non-primary. Name agreement attaches a useful reference
+without asserting specimen identity or validated crystal properties.
+
+The 31 `properties.cod_structure_observation` claims contain **186 unit-cell
+values**, space-group symbols/numbers, and **20 reported temperatures**, with
+units, raw lexical values, COD IDs/revisions, archived metadata locators and
+publication references. They describe source specimens and models. Missing
+temperatures and pressures remain explicitly unreported. The existing ideal
+formulas were preserved alongside the separate nominal/calculated COD formulas.
+The raw metadata was checked against all nine corresponding archived responses;
+the observations are extracted from metadata, not from newly read CIF files.
+
+Krupičkaite and Vyacheslavite retain the 293 K metadata versus 100 K publication
+conflicts. Bukovskýite retains COD `c = 10.904 Å` and publication
+`10.914(2) Å` separately. Lobanovite's A2 model is explicitly historical and
+superseded. Kenotobermorite retains its 2M order-disorder context, and Heimite's
+two COD entries retain an apparent repeated-dataset relationship. Saving these
+qualified observations does not require assigning one universal value to the
+species or resolving every CIF/model question first.
+
+The next 35 single-candidate formula cases were manually inspected. Their
+recorded outcomes are 15 synthetic analogues, 11 structure counterparts with
+origin unresolved, seven related structures, and two unresolved identities.
+Publication comparison distinguishes the synthetic hexagonal ebnerite lead
+from the related monoclinic epiebnerite mineral, and distinguishes the ideal
+PtBi model from the approved driekopite determination. No new primary
+identification was assigned by this batch.
+
+At the end of these extensions, administration totals were **3,722 mineral records, 13,068 mineral–COD
+relationships and 13,031 distinct COD IDs**. The 31 primary associations then
+covered 30 publication-compared minerals. The unique primary-assignment guard
+continues to reject conflicting primary targets; non-primary reference sharing
+is allowed. Direct review then covered **257 minerals / 294 judgments**, with
+**348 formula-lead minerals awaiting a first review**. The two unresolved and
+other qualified cases also retain their stated further-research questions.
+
+The extensions used atomic SQLite transactions with a full database backup,
+complete before-record snapshots, payload hashes, ingestion audit entries and
+commitment receipts. They preserved previous source evidence, record identity,
+images, aliases, offers and existing publication/review events. No approval
+events were fabricated for these bulk evidence extensions. Integrity and
+foreign-key checks passed. The frozen public catalog and original COD snapshot
+remain unchanged.
+
+Private artifacts below `data/pilots/cod-crystallography-v1/`:
+
+- `record-commit-v1/2026-10-06-name-matches/`;
+- `record-commit-v1/2026-10-06-structure-values/`;
+- `record-review-v1/2026-10-06-continuation-3/`.
+
+## Direct record review continuation 4 — 6 October 2026
+
+The user's instruction to proceed authorized direct inspection and commitment
+of the remaining existing leads. This batch reviewed **all 218 name-only gap
+cases and 124 single-candidate formula gap cases**, plus the existing Prehnite
+record. These are 342 additional gap cases and 343 updated mineral records.
+The reviews used the saved COD snapshot and original publications. No new
+scraper or embeddings were introduced.
+
+| Private-record result after continuation 4 | Mineral records | Mineral–COD relationships |
+|---|---:|---:|
+| Exact-name references, identity/structure unchecked | 3,465 | 12,775 |
+| Publication-supported specimen identifications | 39 | 41 |
+| Identity candidates | 203 | 242 |
+| Counterpart, related or unresolved evidence | Overlapping categories | 361 |
+| **All records with useful COD relationships** | **3,993** | **13,419** |
+
+The relationships use **13,326 distinct COD IDs**. The batch saved 686
+individual judgments: ten identified, 144 candidate, 77 counterpart, 77
+related, 43 unresolved and 335 rejected identity hints. Rejected hints remain
+in the records' review evidence and do not count as useful COD relationships.
+No original source record or formula candidate was deleted. **271 previously
+unlinked minerals gained useful relationships**; 71 had only rejected hints.
+
+Eight gap minerals gained publication-supported specimen identifications:
+Asagiite, Bohuslavite, Carmeltazite, Ciriottiite, Eveslogite, Ferriprehnite,
+Gunmaite and Plášilite. The existing Prehnite record gained two identified
+comparison specimens. COD entries `1564253` and `1564254` are labelled
+ferriprehnite in COD but are prehnite specimens in the original paper; their
+primary assignments now belong to Prehnite. Ferriprehnite retains related
+comparison links and the identified Fe-dominant entry `1564252`. The unique
+primary-assignment guard remains active; **conflicting primary assignments
+remain zero**.
+
+Ten additional specimen-scoped structure observations bring the total to
+**41 observations on 39 minerals and 246 unit-cell numbers**. Source formulas,
+conditions, revision/response provenance and model qualifications are retained.
+Bohuslavite's identification uses the publisher's original abstract, with full
+model review pending. The two Prehnite specimens are identified from labels
+and site chemistry; numerical comparison of the publication cell table remains
+pending. Asagiite retains COD 298 K versus publication 293 K; Plášilite retains
+COD 293 K versus publication 298(2) K. Carmeltazite's COD O12 title typo is
+preserved alongside the publication's O11 correction. These identifications
+do not assert that every associated model or numerical observation is validated.
+
+Cumulative direct review then covered **600 mineral records / 980 historical
+judgments**. There are **2,233 minerals without a useful COD relationship**:
+224 multiple-candidate formula cases awaiting a first review, 71 cases with
+only rejected inspected hints, and 1,938 with neither initial name nor formula
+leads. Already-reviewed candidate and unresolved cases also retain their
+further research questions. An absent useful lead does not establish absence
+from COD.
+
+The atomic transaction saved 696 evidence claims across 343 material records,
+with a full backup, before-record snapshots, payload hash, ingestion run 5 and
+commitment receipt. Integrity and foreign-key checks passed. Previous identity,
+non-COD fields, source evidence, images, aliases, offers and publication/review
+history were preserved. The frozen 6,226-mineral public catalog matches its
+unchanged database hash, and the original COD execution index is unchanged.
+The 41 archived response bodies used in this batch were checked before commit.
+
+Private artifacts are under
+`data/pilots/cod-crystallography-v1/record-review-v1/2026-10-06-continuation-4/`.
+The [review report](../data/pilots/cod-crystallography-v1/record-review-v1/2026-10-06-continuation-4/report.md)
+contains the specimen table and primary references. The cumulative review
+ledger, 224-case remaining formula queue, 2,233-case gap list, commitment
+receipt and final verification are saved alongside it.
+
+At this point **224 multiple-candidate formula cases** still awaited a first
+review. Source observations, specimen identification, CIF/model validation
+and public-catalog release remain separately recorded decisions.
+
+## Direct record review continuation 5 — 6 October 2026
+
+The next batch reviewed **all 86 gap minerals with exactly two formula
+candidates**, plus the existing Whewellite record. All results were committed
+directly: 173 judgments and three qualified structure observations, saved as
+176 evidence claims across 87 mineral records. **82 previously unlinked
+minerals gained useful COD relationships**. Four had only rejected hints:
+Daubréeite, Fuchunite, Jimkrieghite and Manganarsite. All 11 rejected individual
+identity hints remain in the review evidence; source data was preserved.
+
+| Current private-record result | Mineral records | Mineral–COD relationships |
+|---|---:|---:|
+| Exact-name references, identity/structure unchecked | 3,465 | 12,775 |
+| Publication-supported specimen identifications | 41 | 44 |
+| Identity candidates | 206 | 245 |
+| Counterpart, related or unresolved evidence | Overlapping categories | 517 |
+| **All records with useful COD relationships** | **4,075** | **13,581** |
+
+The relationships use **13,450 distinct COD IDs**. Direct review covers **687
+mineral records / 1,153 historical judgments**. There are **44 specimen/model
+observations on 41 minerals, containing 264 unit-cell numbers**. The unique
+primary-assignment guard remains active, with **zero conflicting assignments**.
+Distinct primary COD IDs can still describe apparent repeated datasets; these
+are explicitly qualified rather than counted as independent measurements.
+
+Selenopolybasite gained two identified entries: `2100629` / revision `277836`
+and `9011318` / revision `293658`. The original mineral description connects
+the natural De Lamar type specimen with the older Se-rich antimonpearceite
+study. The original 2006 Table 2, compared through indexed article text,
+matches the 120 K composition and P21/c cell. Both entries retain the
+low-temperature ordered-phase scope and apparent repeated-dataset relationship;
+the room-temperature trigonal model remains separate.
+
+Whewellite gained identified entry `8000051` / revision `208205`. The
+author-uploaded original proof describes a natural agave calcium-oxalate
+monohydrate raphide and the same P21/a cell. Its COD nominal formula omits
+oxygen and creates a false Formicaite hint; that hint was rejected on
+Formicaite while the specimen was assigned to Whewellite. Nominal/calculated
+formulas, biogenic origin, hydrogen/water model limitations and relatively high
+residuals are retained. Final publisher-PDF and pinned-CIF comparison remain
+pending. The proof's −73.2 °C and its explicitly normalized 199.95 K are stored
+alongside COD 200 K; the conversion is not a separate measurement.
+
+The other judgments are three candidates, 76 counterparts, 51 related
+structures and 29 unresolved leads. The 76 counterparts comprise 59 with
+sample origin unestablished, 15 explicit laboratory compounds and two DFT
+Saddlebackite models. Raw 0 K conditions on the DFT entries are calculation
+context, not experimental specimen temperature. Lianbinite retains a useful
+ammonium glycolate/glycolic-acid laboratory counterpart; a paper title about
+pharmaceutical cocrystals did not justify discarding that structure.
+Niasite/Johanngeorgenstadtite, Ellinaite and Cadvanite reviews distinguish
+same-composition polymorphs. The shared Ni2P leads for Orishchinite and
+Transjordanite remain unresolved rather than assigned by formula alone.
+
+**138 formula-lead minerals await a first review**, each with at least three
+candidates; the next group has 28 three-candidate cases. **2,151 minerals
+remain without useful COD relationships**: these 138, 75 cases with only
+rejected inspected hints, and 1,938 with neither initial name nor formula lead.
+Already-reviewed candidates and unresolved links also retain further work.
+
+Ingestion run 6 used a full backup, before-record snapshots, payload hash and
+atomic commit. Integrity and foreign-key checks passed. Existing mineral
+identity, ideal formulas, non-COD fields, source evidence, images, aliases,
+offers and publication/review history were preserved. The frozen public
+catalog and original COD metadata execution index are unchanged. All 37
+archived response bodies used by this batch were checked before commitment.
+No scraper, embeddings or new persistent program were added.
+
+The [review report](../data/pilots/cod-crystallography-v1/record-review-v1/2026-10-06-continuation-5/report.md)
+contains all 87 record-level outcomes and primary references. The cumulative
+ledger, remaining queues, commitment receipt and final verification are saved
+under `data/pilots/cod-crystallography-v1/record-review-v1/2026-10-06-continuation-5/`.
+Continue direct review with the **138 remaining first-review cases** and save
+each useful finding in its mineral record.
+
+## Resumed direct review — 8 October 2026
+
+Checkpoint 93 / run 99 saved three manually compared name leads directly into
+the private records. Amicite gained two primary COD entries, explicitly
+duplicates of one natural experiment. Aluminite and Artinite gained one each:
+actual composition and model comparisons, supported by later original studies,
+resolve the phase targets while the older specimens' origins remain unreported.
+Later localities and temperatures are not transferred to those older models.
+
+The batch added 50 evidence rows, 44 individual source observations and four
+complete COD models. Water/H and angle conflicts, disordered occupancies and
+imported displacement defects remain preserved. This batch strengthened
+existing relationships; the 1,993 relationship gaps remain.
+
+Checkpoint 94 / run 100 saved Aikinite (9007524 and 9008200) and Aerugite
+(9007677), adding 52 evidence rows, 46 source observations and three complete
+COD models. The two Aikinite studies share Pnma phase identity with small
+cell/coordinate differences and symmetry-equivalent relabelled sites. The
+original 1971 first page confirms natural Beresovsk crystals, Harvard 82490,
+and reports measured density separately from calculated density. The altered
+Pb/Cu displacement values and invalid deposited Pb tensor remain qualified.
+Aerugite's Ni8.499 is rounded 5/6 site occupancy; As5+ is a charge annotation.
+Its rhombohedral Z1 and conventional hexagonal Z3 cells are equivalent.
+The 2022 primary study adds four-spot chemistry and Raman details without
+transferring its museum provenance to the 1989 CIF. Mining-fire formation
+remains a hypothesis. At checkpoint 94, primary coverage was 64 minerals /
+75 COD entries, and 3,457 minerals retained name-only leads. Those two checkpoints total five newly
+confirmed minerals, seven COD entries, 102 evidence rows and 90 observations.
+
+Checkpoint 95 / run 101 saved Antarcticite (1001770, 9007715), Aphthitalite
+(1011019, 9007639) and Arcanite (9007569), adding 76 evidence rows, 66 source
+observations and five complete COD models. Both Antarcticite studies used
+laboratory-grown CaCl2·6H2O crystals. Their source coordinates, hydrogen models
+and the 1986 deposited a/b discrepancy remain separate. Aphthitalite's 1980
+K3Na(SO4)2 model is verified synthetic; its 1928 Glaserite model is retained
+with a deposited sulfate-geometry warning, pending the original article.
+Arcanite's actual Pnam model agrees with the original 1972 cell and S–O
+geometry; its phase is confirmed while specimen origin remains unreported.
+Preparation temperatures, diffraction conditions, different compounds in
+the same paper and hypothetical force-model charges remain correctly scoped.
+
+Current primary coverage is 65 minerals / 76 COD entries; 3,454 minerals
+retain name-only leads. Through checkpoint 95, the resumed session saved eight records, twelve
+complete COD models, 178 evidence rows and 156 source observations. Six new
+primary mineral targets and eight primary COD entries were added. The 1,993
+relationship gaps remain research tasks; enrichment is partial record progress.
+
+The user then authorized broader publication reading, one mineral at a time,
+with source attribution and intention to cover the population. Checkpoint 96 /
+run 102 saved Aliettite with 23 source observations and review notes from three
+publications, plus one private editorial draft tied to observation IDs. Its
+definition, condition-dependent basal diffraction/hydration, occurrences and
+qualified geological interpretations are retained. No COD assignment is
+required for these additions. Source access, original page/section locators,
+specimen/occurrence scope and remaining gaps remain explicit.
+
+Within the 1,993 records without attached COD relationships, 519 now have
+publication observations and 1,474 have none. The new broader first-pass
+checklist has one reviewed record and 1,992 pending; earlier partial research
+is preserved. The resumed session totals nine records, 201 evidence rows and
+179 source observations, with the same twelve COD models. Public approval
+and exhaustive profile completion are separate from this research progress.
+
+The [resumed report](../data/pilots/cod-crystallography-v1/parallel-review-v1/2026-10-06-12h/resumed-2026-10-08/report.md)
+records exact sources, saved IDs, backup, receipt and next queue. Preservation,
+SQLite integrity and foreign-key checks passed; zero conflicting primary
+targets and the public catalogue unchanged. Continue broader reading with
+Allophane, then Aluminocerite-(CeCa) and Aluminocopiapite, excluding saved
+records. The earlier COD-only queue for Adelite, Allactite and Augelite remains
+parked in progress.json. No new automation was requested.
+
+## Parallel direct review — 6–7 October 2026
+
+The user authorized twelve hours of direct reading and record enrichment,
+ending **7 October 2026 at 08:41:32 Budapest**. Three reviewers own disjoint
+packets of 46 formula cases each (138 minerals / 3,009 candidate comparisons).
+The coordinator checks conclusions and is the sole database writer. A
+same-chat scheduled continuation resumed this effort every 30 minutes, with
+a final reporting run after the review deadline; it is now paused. Local execution requires
+the computer, Codex app and existing managed containers to remain available.
+
+Reviewers read original descriptions and compare composition, hydration,
+crystal form, specimen origin and measurements. Small commands retrieve,
+format and validate evidence; no scraper, embeddings or new matching program
+has been added. Useful laboratory and related structures retain their source
+conditions. Original-publication details can enrich a record without a COD
+assignment. The three disjoint main publication queues contain 553 completed
+reviews. Focused and coordinator reviews bring publication coverage to 561
+distinct minerals. All completed reviews are committed; the continuation is paused.
+
+| Final twelve-hour result through checkpoint 92 | At dispatch | Final |
+|---|---:|---:|
+| Minerals with useful COD relationships | 4,075 | 4,233 |
+| Publication-supported identified minerals | 41 | 59 |
+| Primary COD assignments | 44 | 68 |
+| Formula cases awaiting first review | 138 | 0 |
+| Qualified structure observations | 44 | 2,602 |
+| Conflicting primary assignments | 0 | 0 |
+
+The 92 saved checkpoints enriched **685 distinct mineral records / 20,756 evidence entries**:
+All 138 formula cases have a saved first review. Further records gained publication details and qualified structure references. Lithiotantite,
+Håleniusite-(La), Iseite, Goldschmidtite, Kaliophilite, Hemleyite and Karwowskiite gained natural specimen assignments,
+confirmed against original papers and revision-specific COD files.
+561 minerals gained 17,399 source-qualified publication observations.
+Wadalite, historical Allende Louisfuchsite, Katayamalite and Serpierite also
+gained verified natural primary assignments. Historical names, symmetry
+corrections, specimen substitutions and model defects remain preserved.
+The [final progress report](../data/pilots/cod-crystallography-v1/parallel-review-v1/2026-10-06-12h/final-report.md)
+records exact counts and remaining research; 1,993 registry minerals still
+lack a useful COD relationship in this saved review.
+Original natural Åsgruvanite-(Ce) and Akasakaite-(Ce) CIFs and published
+Bergbauerite and Arzamastsevite atomic-coordinate tables were compared and saved.
+Piilonenite-(Nd) retains its verified original natural CIF, with model composition,
+missing hydrogen coordinates and conflicting reported refinement details preserved.
+Maohokite retains both its original natural diffraction interpretation and the
+subsequent competing structural proposal. These enrichments do not imply primary
+COD identities. Lechatelierite retains explicitly qualified silica comparison
+models; periodic proxy cells are not asserted as a universal glass lattice.
+Hokkaidoite has two actual
+benzo[ghi]perylene crystal counterparts and 80 preserved rejected hints.
+Reference-cell measurements for
+laboratory counterparts remain distinct from the target mineral's geometry.
+
+Backups and atomic preservation checks passed. The public catalog and prior
+evidence remain intact. All completed agent findings are saved; broader
+research remains queued. The
+[progress report](../data/pilots/cod-crystallography-v1/parallel-review-v1/2026-10-06-12h/report.md),
+protocol, dispatch manifest, coordinator status, reviewer notes and receipts
+are under `data/pilots/cod-crystallography-v1/parallel-review-v1/2026-10-06-12h/`.
 
 ## Purpose and decision boundary
 
@@ -220,10 +929,15 @@ An accepted decision must satisfy all of these rules:
 4. A person reviews the pinned CIF and supporting identity evidence and records
    the acceptance. **Every accepted crosswalk is manually reviewed.**
 
-Fuzzy matching is forbidden. Machine candidate generation uses only an exact
+Fuzzy matching is forbidden for pilot crosswalk candidates. Machine candidate
+generation uses only an exact
 authority-accepted name or exact admitted authority alias. Formula is retained
 as a diagnostic and cannot create or accept a candidate; an explicit mineral
 identification in the primary publication may be added only through review.
+The offline research report may separately preserve case, diacritic,
+punctuation, and spelling hints. These are unreviewed leads, not pilot
+candidates or accepted crosswalks, and do not enter the frozen sample or
+useful-yield count merely because their names resemble a mineral.
 A missing identifier, polymorph/polytype ambiguity,
 group/end-member ambiguity, synthetic analogue, renamed species, conflicting
 publication identity, or more than one plausible `public_id` routes the item to
@@ -528,6 +1242,55 @@ Neither successful preparation nor successful retrieval is a crosswalk,
 scientific answer, ingestion batch, or publication decision. Challenge
 eligibility is separately reviewed and frozen before normalized adapter output
 may be inspected.
+
+### Offline mineral matching and coverage
+
+Run matching inside the existing managed admin container:
+
+```powershell
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh pilot-test
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh pilot-match
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh pilot-verify-matching
+```
+
+`pilot-match` verifies the saved preparation, execution index, recovery history,
+and raw response hashes, then processes every metadata row offline. Literal
+case-sensitive `mineral` labels are compared with frozen canonical names. The
+current frozen population has no reviewed authority-alias artifact; this
+limitation is reported rather than filled with inferred aliases.
+
+Separate exploratory leads use case/diacritic/punctuation folding and at most
+one insertion, deletion, or substitution for folded names 5–96 characters long.
+The metadata `mineral`, `commonname`, and `chemname` fields can supply these
+leads. They never establish mineral identity or become accepted crosswalks.
+Formula, source status, duplicate/optimal relations, synthetic/theoretical
+labels, and publication metadata remain raw diagnostic context.
+
+Reports live in ignored private state under
+`data/pilots/cod-crystallography-v1/candidate-matching-v1/<input-fingerprint>/`:
+
+- `source-inventory.jsonl`: every original metadata row, its COD ID/revision,
+  hashed source-body locator and JSON row pointer, raw diagnostic fields,
+  proposed links, and review flags; unmatched and repeated rows are retained;
+- `review-queue.jsonl`: rows with exact candidates or exploratory leads, all
+  explicitly unreviewed;
+- `mineral-coverage.jsonl`: all 6,226 minerals, candidate/lead counts, and
+  further-research states; these are discovery metrics, not questionnaire
+  coverage or assertions of absence;
+- `report.md`: readable counts, limitations, and the next review task; and
+- `matching-manifest.json`: frozen input, matcher-code, policy, and output
+  hashes and byte counts.
+
+Identical inputs reproduce the same artifact bytes. A repeat `pilot-match`
+verifies and reuses the existing report; `pilot-verify-matching` reproduces its
+hashes without writing a new report. Changed inputs or matcher code produce a
+new report directory. Failed writes retain their staging directory. Original
+responses and earlier reports are never overwritten or removed.
+
+Matching retrieves no CIFs, normalizes no crystallographic values, changes no
+mineral identities, and writes no database. Review the proposed links and their
+source publications before preparing challenge eligibility and freezing the
+96-record pilot selection.
 
 ### Reviewed connection recovery (execution index v2)
 

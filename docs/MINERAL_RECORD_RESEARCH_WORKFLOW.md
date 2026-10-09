@@ -15,6 +15,50 @@ source locator. Research drafts may be written before source admission and
 module implementation, but remain private proposals and never become approved
 claims simply because a model wrote or checked them.
 
+## Current broader reading — 8 October 2026
+
+The user authorized direct reading and enrichment one mineral at a time,
+with source attribution and intention to cover the population. The current
+priority checklist contains all 1,993 records without attached COD
+relationships. A COD assignment is not required to save useful publication
+findings. Previously saved partial research remains available and does not
+automatically count as a complete profile or completed broader review.
+
+Aliettite was saved at checkpoint 96 / ingestion run 102: 23 source observations
+and review notes from three primary publications, plus one readable private
+editorial draft supported by observation IDs. Individual observations retain
+source URLs, exact locators, specimen/occurrence scope, conditions,
+qualifications and review state. Source metadata retains title, publisher,
+retrieval/access information, licensing status and actual source-byte hashes
+where available. An access/challenge response is not hashed as article content.
+
+The findings are saved directly in the private administration database's
+existing evidence schema and additive publication observations, with backups
+and preservation checks. The public catalogue and source admission remain
+unchanged. Unestablished fields stay explicit gaps; no scalar measurement,
+natural provenance or COD absence is inferred from missing information.
+
+Read the [current report and checklist](../data/pilots/cod-crystallography-v1/parallel-review-v1/2026-10-06-12h/resumed-2026-10-08/report.md).
+The checklist has one newly reviewed record and 1,992 awaiting that first pass.
+Of the priority records, 519 have publication observations and 1,474 have none.
+Next: Allophane, then Aluminocerite-(CeCa) and Aluminocopiapite. The earlier
+twelve-hour automation was paused at that checkpoint.
+
+## Overnight continuation — 9–10 October 2026
+
+The user authorized further overnight reading and enrichment through 08:00
+Dubai time on 10 October. The existing heartbeat resumes with this scope and
+the saved broader queue. Up to three reviewers read disjoint individual
+records and primary sources; the coordinator verifies and saves additive
+findings in backed-up atomic transactions. New research stays private until a
+separate public selection. Progress and source receipts are preserved in
+`overnight-2026-10-09` beside the existing review checkpoints.
+
+The separately reviewed public research interface release is documented in
+[the release note](PUBLIC_RESEARCH_RELEASE_2026_10_08.md). It preserves the
+page style and historical private evidence; it does not mean the broader
+record-by-record queue is complete.
+
 ## Private workbench
 
 `data/pilots/mineral-record-research-v1/` holds manually researched batches,
@@ -22,6 +66,11 @@ immutable source HTML, retrieval receipts, a queue containing every existing
 public ID, and a readable progress report. This mutable research state is
 ignored by Git and is not an importer input. Preserve it with the data-root
 backup procedure.
+
+This initial workbench queue measures its own draft batches. Its historical
+`not_started` states do not describe later scientific evidence already saved
+directly to the mineral records; use the current checkpoint reports for that
+progress. Preserve the original workbench batches and their source receipts.
 
 The first batch covers Quartz, Calcite, Gypsum, Fluorite, and Talc. NPS
 educational pages supply starting evidence; their scientific source-class fit

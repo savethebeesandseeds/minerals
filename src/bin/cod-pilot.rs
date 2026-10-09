@@ -1,6 +1,7 @@
 use std::{env, ffi::OsString, path::PathBuf, process::ExitCode};
 
 use anyhow::{bail, Context, Result};
+use minerals_cod_pilot::cod_matching::{match_metadata, verify_matching};
 use minerals_cod_pilot::{fetch, prepare, recover_transport, verify, verify_execution};
 
 #[tokio::main]
@@ -37,6 +38,16 @@ async fn run(arguments: Vec<OsString>) -> Result<()> {
             prepared,
             pilot_root,
         } => serde_json::to_value(verify_execution(&repo_root, &prepared, &pilot_root)?)?,
+        Options::MatchMetadata {
+            repo_root,
+            prepared,
+            pilot_root,
+            verify_only,
+        } => serde_json::to_value(if verify_only {
+            verify_matching(&repo_root, &prepared, &pilot_root)?
+        } else {
+            match_metadata(&repo_root, &prepared, &pilot_root)?
+        })?,
         Options::RecoverTransport {
             repo_root,
             prepared,
@@ -78,6 +89,12 @@ enum Options {
         prepared: PathBuf,
         pilot_root: PathBuf,
     },
+    MatchMetadata {
+        repo_root: PathBuf,
+        prepared: PathBuf,
+        pilot_root: PathBuf,
+        verify_only: bool,
+    },
     RecoverTransport {
         repo_root: PathBuf,
         prepared: PathBuf,
@@ -99,7 +116,7 @@ impl Options {
         let mut arguments = arguments.into_iter();
         let command = arguments
             .next()
-            .context("missing command; expected prepare, verify, fetch, or verify-execution")?;
+            .context("missing command; use --help for commands")?;
         let command = command.to_str().context("command must be valid Unicode")?;
         if ![
             "prepare",
@@ -107,12 +124,12 @@ impl Options {
             "fetch",
             "verify-execution",
             "recover-transport",
+            "match-metadata",
+            "verify-matching",
         ]
         .contains(&command)
         {
-            bail!(
-                "unknown command '{command}'; expected prepare, verify, fetch, verify-execution, or recover-transport"
-            );
+            bail!("unknown command '{command}'; use --help for commands");
         }
 
         let mut repo_root = None;
@@ -173,12 +190,26 @@ impl Options {
                 "--output" if command == "prepare" => &mut artifact_path,
                 "--input" if command == "verify" => &mut artifact_path,
                 "--prepared"
-                    if ["fetch", "verify-execution", "recover-transport"].contains(&command) =>
+                    if [
+                        "fetch",
+                        "verify-execution",
+                        "recover-transport",
+                        "match-metadata",
+                        "verify-matching",
+                    ]
+                    .contains(&command) =>
                 {
                     &mut artifact_path
                 }
                 "--pilot-root"
-                    if ["fetch", "verify-execution", "recover-transport"].contains(&command) =>
+                    if [
+                        "fetch",
+                        "verify-execution",
+                        "recover-transport",
+                        "match-metadata",
+                        "verify-matching",
+                    ]
+                    .contains(&command) =>
                 {
                     &mut pilot_root
                 }
@@ -221,6 +252,12 @@ impl Options {
                 prepared: artifact_path,
                 pilot_root: pilot_root.context("missing required --pilot-root PATH")?,
             },
+            "match-metadata" | "verify-matching" => Self::MatchMetadata {
+                repo_root,
+                prepared: artifact_path,
+                pilot_root: pilot_root.context("missing required --pilot-root PATH")?,
+                verify_only: command == "verify-matching",
+            },
             "recover-transport" => Self::RecoverTransport {
                 repo_root,
                 prepared: artifact_path,
@@ -243,13 +280,16 @@ fn ensure_command(actual: &str, expected: &str, option: &str) -> Result<()> {
 
 fn print_help() {
     println!(
-        "Prepare, verify, or explicitly fetch the private COD pilot\n\n\
+        "Prepare, verify, match offline, or explicitly fetch the private COD pilot\n\n\
          Usage:\n  cod-pilot prepare --repo-root PATH --output NEW_DIRECTORY\n  \
          cod-pilot verify --repo-root PATH --input PREPARED_DIRECTORY\n  \
          cod-pilot fetch --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1 [--max-new-requests N]\n  \
          cod-pilot verify-execution --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1\n\n\
+         cod-pilot match-metadata --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1\n  \
+         cod-pilot verify-matching --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1\n\n\
          cod-pilot recover-transport --repo-root PATH --prepared PREPARED_DIRECTORY --pilot-root data/pilots/cod-crystallography-v1 --reviewer TEXT --reason TEXT [--failure-log PRIVATE_RUN_LOG]\n\n\
-         Prepare, verify, and verify-execution perform no network requests. Fetch is\n\
+         Only fetch performs network requests. Matching preserves all metadata rows\n\
+         and emits unreviewed private candidates, leads, and coverage. Fetch is\n\
          sequential and writes only immutable raw bodies plus its execution index;\n\
          no command opens data/minerals.db or writes any database."
     );
@@ -258,6 +298,33 @@ fn print_help() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn matching_commands_are_offline_and_reject_fetch_and_review_options() -> Result<()> {
+        for (command, verify_only) in [("match-metadata", false), ("verify-matching", true)] {
+            let args: Vec<OsString> = [
+                command,
+                "--repo-root",
+                ".",
+                "--prepared",
+                "prepared",
+                "--pilot-root",
+                "pilot",
+            ]
+            .into_iter()
+            .map(OsString::from)
+            .collect();
+            assert!(
+                matches!(Options::parse(args.clone())?, Some(Options::MatchMetadata { verify_only: actual, .. }) if actual == verify_only)
+            );
+            for extra in ["--max-new-requests", "--reviewer", "--output"] {
+                let mut invalid = args.clone();
+                invalid.extend([extra, "value"].into_iter().map(OsString::from));
+                assert!(Options::parse(invalid).is_err());
+            }
+        }
+        Ok(())
+    }
 
     #[test]
     fn recovery_requires_explicit_review_and_rejects_fetch_options() -> Result<()> {

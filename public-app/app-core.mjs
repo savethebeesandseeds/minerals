@@ -99,6 +99,62 @@ export function isOfferActiveAt(expiresAt, now = Date.now()) {
   return Number.isFinite(expires) && expires > now;
 }
 
+// Public research is an explicit release projection, separate from working notes.
+export function publishedResearchProfile(rawProperties) {
+  let properties = rawProperties;
+  if (typeof properties === "string") {
+    try { properties = JSON.parse(properties); } catch { properties = {}; }
+  }
+  if (!isRecord(properties)) properties = {};
+  const { public_research: candidate, ...otherProperties } = properties;
+  const publicItem = (item) => isRecord(item)
+    && item.private_research !== true
+    && !["draft", "private", "rejected"].includes(item.publication_status)
+    && !["draft", "rejected"].includes(item.review_status);
+  if (!publicItem(candidate) || candidate.publication_status !== "published"
+    || !["reviewed", "verified"].includes(candidate.review_status)) {
+    return { properties: otherProperties, research: null };
+  }
+  const collection = (key) => Array.isArray(candidate[key]) ? candidate[key].filter(publicItem) : [];
+  return {
+    properties: otherProperties,
+    research: {
+      description: publicItem(candidate.description) && typeof candidate.description.text === "string"
+        ? { ...candidate.description, source_urls: Array.isArray(candidate.description.source_urls) ? candidate.description.source_urls.filter((url) => typeof url === "string") : [] }
+        : null,
+      observations: collection("observations"),
+      cod_records: collection("cod_records"),
+      structures: collection("structures"),
+    },
+  };
+}
+
+export function codRelationshipLabel(status) {
+  const labels = {
+    name_matched: "Name lead · scientific comparison pending",
+    identified: "Identified phase relationship",
+    counterpart: "Counterpart relationship",
+    related: "Related structure or historical model",
+    candidate: "Candidate · scientific comparison pending",
+    unresolved: "Unresolved relationship",
+    name_conflict: "Name conflict · relationship not confirmed",
+  };
+  return labels[status] ?? "Relationship not classified";
+}
+
+export function groupEvidenceBySource(items) {
+  const groups = new Map();
+  for (const [index, item] of items.entries()) {
+    const source = item.canonical_url || item.work_url;
+    const key = source
+      ? JSON.stringify([source, item.publisher, item.attribution_party, item.license_spdx])
+      : `unlinked:${index}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return [...groups.values()];
+}
+
 function routeSource(url) {
   if (url.hash.startsWith("#/")) {
     return { source: "hash", routeUrl: new URL(url.hash.slice(1), url.origin) };
