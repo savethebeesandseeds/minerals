@@ -1010,6 +1010,7 @@ button { color: inherit; }
 .research-item > p { font-size: 0.82rem; line-height: 1.5; }
 .research-source { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.4rem 1rem; margin-top: 0.8rem; }
 .research-source p { margin: 0; overflow-wrap: anywhere; font-size: 0.72rem; }
+.record-hero .research-source .muted { color: var(--cream); opacity: 0.75; }
 .research-item .notice { margin-bottom: 0; }
 .record-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; }
 .record-facts .record-fact { min-height: 6.3rem; padding: 1rem; border-top: 1px solid var(--line-paper); border-right: 1px solid var(--line-paper); }
