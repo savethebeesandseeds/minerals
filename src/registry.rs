@@ -2253,9 +2253,14 @@ pub fn registry_is_ready(data_root: &Path) -> Result<()> {
             }
         }
     }
+    // Count through the narrow indexes. The public-id index omits NULLs,
+    // so subtract its population to preserve the NULL check without reading
+    // every mineral's potentially large research payload.
     let missing_public_ids: i64 = conn
         .query_row(
-            "SELECT COUNT(*) FROM materials WHERE public_id IS NULL OR public_id = ''",
+            "SELECT (SELECT COUNT(*) FROM materials) \
+             - (SELECT COUNT(*) FROM materials WHERE public_id IS NOT NULL) \
+             + (SELECT COUNT(*) FROM materials WHERE public_id = '')",
             [],
             |row| row.get(0),
         )
@@ -2293,9 +2298,12 @@ pub fn registry_is_ready(data_root: &Path) -> Result<()> {
     if authority_violations != 0 {
         bail!("approved IMA history is not covered by the immutable authority binding");
     }
-    conn.query_row("SELECT COUNT(*) FROM material_search", [], |row| {
+    // Availability does not require counting every external-content row.
+    // A valid empty registry must pass this check as well.
+    conn.query_row("SELECT rowid FROM material_search LIMIT 1", [], |row| {
         row.get::<_, i64>(0)
     })
+    .optional()
     .context("material full-text index is unavailable")?;
 
     probe_data_root_writable(data_root)?;
@@ -10778,6 +10786,34 @@ mod tests {
         assert!(get_material_detail(root.path(), "mineral.missing-two")
             .expect("detail")
             .is_some());
+    }
+
+    #[test]
+    fn readiness_rejects_null_and_empty_public_ids() {
+        let root = prepare_data_root();
+        init_registry_database(root.path()).expect("registry init");
+        registry_is_ready(root.path()).expect("empty registry ready");
+        let conn = open_connection(root.path(), true).expect("writer connection");
+        for invalid in [None, Some("")] {
+            conn.execute(
+                "INSERT INTO materials(slug, record_type, canonical_name, public_id) \
+                 VALUES ('readiness-fixture', 'mineral', 'Readiness fixture', ?1)",
+                params![invalid],
+            )
+            .expect("fixture missing public id");
+            let error = registry_is_ready(root.path()).expect_err("missing public id must fail");
+            assert!(error.to_string().contains("without immutable public ids"));
+            conn.execute("DELETE FROM materials WHERE slug = 'readiness-fixture'", [])
+                .expect("remove invalid fixture material");
+        }
+        conn.execute(
+            "INSERT INTO materials(slug, record_type, canonical_name, public_id) \
+             VALUES ('readiness-fixture', 'mineral', 'Readiness fixture', \
+                     'mat_00000000000000000000000000000001')",
+            [],
+        )
+        .expect("valid fixture material");
+        registry_is_ready(root.path()).expect("populated registry ready");
     }
 
     #[test]

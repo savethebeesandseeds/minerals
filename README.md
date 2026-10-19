@@ -75,8 +75,21 @@ curl --fail http://127.0.0.1:7979/readyz
 There is no project image build or Dockerfile. On first start, `setup.sh` runs
 inside the digest-pinned Rust container, installs its explicit package profile,
 and builds the locked Rust targets there. Later starts reuse named Cargo and
-runtime volumes. Setup or runtime failures receive at most three automatic
-retries (`on-failure:3`) instead of looping indefinitely.
+runtime volumes. Both services use `restart: "no"`: opening Docker Desktop
+does not start them, and setup or runtime failures leave them stopped until
+an explicit start.
+
+For ordinary use, start and stop the existing containers without recreating
+them or removing their state:
+
+```bash
+docker compose start
+docker compose stop
+```
+
+You can also use the Start and Stop controls for the Minerals stack in Docker
+Desktop. Use `docker compose up -d --no-build` for the initial creation;
+subsequent ordinary launches use `docker compose start`.
 
 If `ADMIN_PASSWORD` is absent or shorter than 12 characters, the `admin`
 service generates a strong local password and stores it in the private

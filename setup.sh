@@ -75,14 +75,15 @@ install_dependencies() {
   if [[ "$MINERALS_MODE" == web ]]; then
     packages+=(nginx)
   else
-    packages+=(python3 xz-utils)
+    packages+=(python3 xz-utils poppler-utils)
   fi
 
   if command -v curl >/dev/null 2>&1 &&
      command -v setpriv >/dev/null 2>&1 &&
      { [[ "$MINERALS_MODE" != web ]] || command -v nginx >/dev/null 2>&1; } &&
      { [[ "$MINERALS_MODE" != admin ]] ||
-       { command -v python3 >/dev/null 2>&1 && command -v xz >/dev/null 2>&1; }; }; then
+       { command -v python3 >/dev/null 2>&1 && command -v xz >/dev/null 2>&1 &&
+         command -v pdftotext >/dev/null 2>&1 && command -v pdftoppm >/dev/null 2>&1; }; }; then
     return
   fi
 

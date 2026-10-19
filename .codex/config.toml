@@ -1,0 +1,3 @@
+# Mineral research: requested high effort and normal speed.
+model_reasoning_effort = "high"
+service_tier = "default"

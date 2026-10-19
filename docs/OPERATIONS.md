@@ -185,8 +185,10 @@ The shared `minerals-cargo-registry`, `minerals-cargo-git`, and
 `minerals-cargo-target` named volumes serialize and retain build work;
 `minerals-admin-runtime` retains the executable and generated local password,
 while `minerals-web-runtime` retains the validated static atlas release. The
-services use `restart: on-failure:3`, so setup or runtime failures stop after
-three automatic retries rather than entering an unbounded install/build loop.
+services use `restart: "no"`. Opening Docker Desktop does not start them, and
+setup or runtime failures leave them stopped until an explicit start. After
+initial creation, use `docker compose start` to launch the existing containers
+or use their Start controls in Docker Desktop.
 
 Update the Rust image pin deliberately by changing the matching audited digest
 in both `compose.yaml` and `setup.sh`, then validate and rehearse the stack. The
@@ -398,6 +400,28 @@ before public writes, and retains the newest ten local activation snapshots.
 Those local files share the deployment's failure domain and are not an off-host
 backup.
 
+Private content-research saves use a separate, bounded checkpoint policy:
+one shared database checkpoint per 24 hours, retaining the newest two under
+`data/pilots/mineral-content-queue-v1/database-checkpoints`. Saves reuse the
+checkpoint across workers rather than copying the database for each batch.
+Checkpoint publication includes database integrity, foreign-key, FTS and COD
+audits, SHA-256 and durable atomic metadata; a failed publication aborts the save
+and preserves prior checkpoints. An unchanged checkpoint is reused using its
+recorded file size and modification time; changed metadata triggers SHA-256
+verification before reuse.
+Only files in the helper's new managed checkpoint directories expire, after a
+verified checkpoint is available. Legacy backup files are left in place.
+Every batch retains its accepted reviews and commit receipt independently of
+checkpoint expiry. SQLite transactions handle rollback, and committed-save
+reconciliation checks the receipt against the live ingestion and findings.
+Routine saves restrict SQL writes and verify changed mineral rows, new sources,
+evidence links and actual search matches. COD conflict queries run only for
+incoming primary assignments. They do not hash all application rows, repeat
+full audits or count global research totals. Version 2 receipts identify the
+changed-record checks and the separate dated checkpoint audit; older full-audit
+receipts remain supported.
+These periodic checkpoints are not per-batch undo images or off-host backups.
+
 Before browser approval, create an additional consistent operator snapshot
 while the service is running:
 
@@ -527,12 +551,19 @@ bind-mounted database; restore the matching data snapshot if a migration is not
 backward compatible.
 
 ```bash
-docker compose down
+docker compose stop
+docker compose start
 ```
 
-`down` removes the two containers and their separate networks, but retains the
-named runtime/Cargo volumes and the host-bound `./data` directory. To reset only
-the containers later, run the same `docker compose up -d --no-build` command.
+Use `stop` for ordinary shutdown and `start` when the services are next needed.
+These commands preserve the existing containers, networks, named runtime/Cargo
+volumes, and the host-bound `./data` directory. The services remain stopped
+when Docker Desktop opens because automatic restarts are disabled.
+
+Only when container removal is explicitly intended, `docker compose down`
+removes the two containers and their separate networks, while retaining the
+named volumes and `./data`. Creating containers again requires the initial
+`docker compose up -d --no-build` command.
 
 ```bash
 docker compose down -v

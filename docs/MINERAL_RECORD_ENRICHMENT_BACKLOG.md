@@ -15,6 +15,68 @@ tracks the whole fixed population and preserves source-linked private drafts.
 Codex owns this research and draft-writing effort while source pilots proceed.
 Research progress is reported separately from reviewed and published content.
 
+## Continue content research with the shared queue
+
+**Completed first pass — 19 October 2026:** all 1,993 broader sparse-record
+minerals have been reviewed and saved privately, with no pending, active or
+submitted assignments remaining in this group. The final round completed 342
+minerals and added 1,832 cited observations across 45 save receipts. Closing
+checks verified receipt and source-capture hashes, saved claims and citations,
+preserved prior records, database integrity, foreign keys and zero conflicting
+primary COD assignments. The private audit and remaining-gap ledger are under
+`data/pilots/mineral-content-queue-v1/final-sparse-2026-10-19/`.
+This is first-pass research coverage, not exhaustive properties or public
+publication. The separate 4,233 catalogue assignments remain pending.
+
+The current phase covers the 1,993 minerals in the broader sparse-record group;
+the other 4,233 catalogue records remain outside this phase. Report
+`priority_groups.broader_sparse` from `content-queue status`, rather than the
+whole-catalogue pending count. The longer-term objective is a useful,
+source-supported profile for every mineral. Use the
+shared content dispatcher to obtain one unfinished record at a time; separate
+sessions use stable, unique worker IDs:
+
+```powershell
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh content-queue next --worker content-session-1 --compact --priority-group broader_sparse
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh content-queue status
+```
+
+`next` reserves a record atomically and returns its current details, existing
+evidence, gaps and claim token. Repeating it with the same worker ID resumes the
+assignment. Different workers receive disjoint records. The dispatcher
+reconciles saved first-pass history and prioritizes the existing sparse-record
+queue; do not select records from an old report, reviewer packet or the initial
+workbench's `not_started` list.
+
+Follow the [content research workflow](MINERAL_RECORD_RESEARCH_WORKFLOW.md) for
+source reading, scientific verification and receipt-backed completion.
+Each independent session submits and saves its own verified findings through
+the common `content-save` command. The script serializes backed-up atomic
+database writes and completes queue items, so routine coordinator handoffs
+are unnecessary. Queue coordination does not decide scientific facts or
+publish private work.
+
+For new assignments, the accepted review keeps the queue claim token and
+submission hash; completion checks the transaction receipt against that
+accepted payload and the saved record. The workflow describes this handoff.
+
+Finish a bounded first pass by adding useful supported details, a readable
+private draft and explicit remaining gaps. Preserve uncertain leads and rights
+questions for follow-up instead of letting them block all further records.
+Completion means a verified first review has been saved; it does not assert
+that every question has a known answer. Report this coverage separately from
+individual observation counts and public release coverage.
+
+The dated sections below preserve earlier decisions and checkpoint counts.
+They are historical context, not current assignment instructions. Use
+`content-queue status` for live queue progress.
+
+The [17 October concurrent pilot](../data/pilots/mineral-content-queue-v1/pilot-2026-10-17/report.md)
+completed six private profiles and saved 147 sourced observations through this
+workflow. Three reviewers and one coordinator finished the pilot without
+duplicate assignments. Its checkpoint is 64 completed first passes and 6,162
+pending; the shared queue supplies subsequent counts and assignments.
+
 ## Working direction — 6 October 2026
 
 Preserve useful evidence and keep research moving. The questionnaire defines
@@ -31,7 +93,7 @@ mineral match rejects that association, not the source record. If source
 material cannot be captured or reused, retain the reference and the outstanding
 access or reuse question.
 
-### Current result and immediate next task
+### Historical result and next task — 8 October 2026
 
 The user also authorized publishing the reviewed enrichment with readable
 source sections while retaining the existing visual style. The bounded
@@ -48,8 +110,8 @@ Its definition, treatment-dependent layer behaviour, occurrences, specimen
 context and qualified geological interpretations now accompany the record.
 Unestablished physical/optical measurements remain explicit research gaps.
 
-The priority checklist tracks all **1,993 records without attached COD
-relationships**. Before this broader pass, 518 already had publication
+At that checkpoint, the priority checklist tracked all **1,993 records without
+attached COD relationships**. Before this broader pass, 518 already had publication
 observations and 1,475 had none. After Aliettite, those counts are **519 and
 1,474**. One record has received this new first pass; 1,992 await it. Prior
 partial research and a completed first pass do not establish exhaustive
@@ -77,13 +139,15 @@ assignment does not establish natural specimen provenance. The earlier five
 resumed records—Amicite, Aluminite, Artinite, Aikinite and Aerugite—remain saved
 with their qualifications.
 
-Current totals are **694 enriched minerals, 20,957 added evidence rows,
-17,578 source observations on 570 minerals, and 65 primary mineral targets /
+Totals at that checkpoint were **694 enriched minerals, 20,957 added evidence
+rows, 17,578 source observations on 570 minerals, and 65 primary mineral targets /
 76 COD entries**. Useful relationships still cover 4,233 minerals; 1,993
 remain research gaps. Integrity and preservation checks passed, with zero
 conflicting primary targets and an unchanged public catalogue. Read the
 [resumed review and next queue](../data/pilots/cod-crystallography-v1/parallel-review-v1/2026-10-06-12h/resumed-2026-10-08/report.md).
-Next broader review: Allophane, then Aluminocerite-(CeCa) and Aluminocopiapite.
+Its historical next records were Allophane, Aluminocerite-(CeCa) and
+Aluminocopiapite; later reviews have already saved those records. Obtain new
+assignments from the shared content queue.
 The COD leads for Adelite (9012798), Allactite (9000164) and Augelite (9000172)
 remain saved as a separate queue. The earlier
 twelve-hour automation remains paused; all completed reviews are saved.
@@ -284,7 +348,7 @@ cumulative review ledger, remaining queues and commitment/verification
 receipts are under
 `data/pilots/cod-crystallography-v1/record-review-v1/2026-10-06-continuation-4/`.
 
-### Current result after direct-review continuation 5
+### Historical result after direct-review continuation 5
 
 Reviewed **all 86 gap minerals with two formula candidates**, plus the existing
 Whewellite record. Saved 173 judgments and three qualified structure
@@ -360,7 +424,7 @@ to finish first. Resolve source access and reuse for the material being handled,
 and scientific review and public-field readiness for the claims being promoted.
 An unresolved issue holds the affected item while independent work continues.
 
-### Active twelve-hour review — 6–7 October 2026
+### Historical twelve-hour review — 6–7 October 2026
 
 The user authorized three reviewing agents and a coordinator to continue until
 **7 October 2026, 08:41:32 Budapest**. They read original publications,
@@ -403,7 +467,7 @@ The
 and [pilot progress](COD_CRYSTALLOGRAPHY_PILOT_V1.md#parallel-direct-review--67-october-2026)
 record the saved state, sources and remaining tasks. No completed reviews await saving.
 
-## Resume note — 7 October 2026
+## Historical resume note — 7 October 2026
 
 The overnight work is saved through **checkpoint 92 / ingestion run 98**.
 There are no completed scientific reviews waiting to be written. The scheduled
@@ -423,7 +487,8 @@ remaining queues, source qualifications and transaction receipts are in
 `data/pilots/cod-crystallography-v1/parallel-review-v1/2026-10-06-12h/`.
 Read `final-progress.json`, `coordinator-status.json`, `remaining-tasks.md`
 and `checkpoint-92/commit-receipt.json` before dispatching more work. Keep the
-coordinator as the sole database writer and use the existing managed admin
+coordinator as the sole database writer for that historical COD review; current
+content sessions use the shared serialized save command in the managed admin
 container. Preserve prior evidence and one primary target per COD entry.
 
 Specific open source questions include the 1991 Alfredopetrovite synthetic

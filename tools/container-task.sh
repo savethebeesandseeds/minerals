@@ -76,6 +76,26 @@ contracts() {
 }
 
 case "${1:-}" in
+  content-queue)
+    shift
+    run_private python3 -B tools/mineral-content-queue.py "$@"
+    ;;
+  content-queue-test)
+    (( $# == 1 )) || fail 'content-queue-test takes no arguments'
+    run_private python3 -B -m unittest tools/test_mineral_content_queue.py
+    ;;
+  content-save)
+    shift
+    run_private python3 -B tools/mineral-content-save.py "$@"
+    ;;
+  content-python)
+    (( $# == 1 )) || fail 'content-python reads a Python script from stdin and takes no arguments'
+    run_private python3 -B -
+    ;;
+  content-save-test)
+    (( $# == 1 )) || fail 'content-save-test takes no arguments'
+    run_private python3 -B -m unittest tools/test_mineral_content_save.py
+    ;;
   image-queue)
     shift
     run_private python3 -B tools/mineral-image-queue.py "$@"
@@ -192,5 +212,5 @@ case "${1:-}" in
         --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT"
     fi
     ;;
-  *) fail 'expected image-queue, image-queue-test, contracts, validate, public-export, public-assemble, record-research, pilot-test, pilot-match, pilot-verify-matching, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
+  *) fail 'expected content-queue, content-queue-test, image-queue, image-queue-test, contracts, validate, public-export, public-assemble, record-research, pilot-test, pilot-match, pilot-verify-matching, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
 esac

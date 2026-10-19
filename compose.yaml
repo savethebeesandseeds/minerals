@@ -4,9 +4,9 @@ x-minerals-base: &minerals-base
   image: rust:1.96-bookworm@sha256:a339861ae23e9abb272cea45dfafde21760d2ce6577a70f8a926153677902663
   pull_policy: if_not_present
   init: true
-  # Setup and runtime failures receive three automatic retries, then stop
-  # instead of entering an unbounded package-install or rebuild loop.
-  restart: "on-failure:3"
+  # Start only on an explicit operator request; Docker startup and service
+  # failures must not automatically start or retry either service.
+  restart: "no"
   user: "0:0"
   working_dir: /workspace
   entrypoint:
