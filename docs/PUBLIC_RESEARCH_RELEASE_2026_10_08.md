@@ -117,3 +117,63 @@ Raw database: `217,604,096` bytes,
 The byte-equivalent Brotli and gzip source files are respectively `12,713,937`
 and `18,794,700` bytes. Independent reconstruction and public SQLite content
 scanning found no private-data or credential violations.
+
+## Follow-up selection — 19 October 2026
+
+The completed sparse-record review supplies 1,992 additional original editorial
+descriptions, preserving the previously published Aliettite description. All
+1,993 minerals in that review group therefore have a selected cited summary.
+The selection also adds 2,959 qualified source observations on 426 minerals.
+Previously published observations, COD relationships and models are retained.
+
+Editorial summaries and source extracts have separate publication decisions.
+The descriptions are the project's original factual syntheses of the saved,
+source-reviewed research. Each retains its references and scientific limits.
+CC-BY 4.0 applies to this editorial wording; it does not relicense the cited
+publications. Article files, figures and complete atomic tables are not
+reproduced. Source extracts require their own compatible reuse terms; 29,273
+observations from this first pass remain private under unresolved or restricted
+source terms. Their facts can still inform the separately written summaries.
+
+The selection rechecks the [EJM copyright policy](https://www.european-journal-of-mineralogy.net/policies/licence_and_copyright.html)
+for Copernicus articles from 2020 onward; it does not extend that policy to
+pre-2020 backlist articles. The distinction between factual information and
+original expression is described by the [US Copyright Office](https://www.copyright.gov/help/faq/faq-protect.html).
+Original source-license snapshots are preserved even where this public
+selection records a verified license separately.
+
+Descriptions now show publication titles and source credits instead of only
+numbered links. Structured observations expose their complete credits and reuse
+notices through the existing expansion controls. Colors, layout, artwork,
+production CSP and scientific identity fields are unchanged.
+
+The selection, exact supporting claim IDs, source decisions, consistent backup,
+preservation audit and commit receipt are retained privately under
+`data/pilots/mineral-content-queue-v1/public-release-2026-10-19/`.
+This is publication of the completed research pass, not an assertion that every
+property of every mineral is known.
+
+The verified follow-up snapshot contains:
+
+| Public content | Entries |
+| --- | ---: |
+| Mineral identities and approved research profiles | 6,226 |
+| Cited editorial descriptions | 1,993 |
+| Source observations | 10,209 |
+| Qualified COD references | 16,131 |
+| Reported crystal models | 2,614 |
+| Evidence associations | 33,671 |
+
+All 1,992 added descriptions match the selected text in the exported mineral
+description and search index. Every added observation retains its value, unit,
+locator and scientific qualifications. A whitespace repair in one public
+qualification prevents a false private-host filter match; its original private
+wording and exact amendment receipt are preserved. Previously filtered raw
+atomic payloads remain excluded.
+
+Manifest generation: `2026-10-19T15:57:28.923Z`.
+Release identity: `sha256:43378bf2cb1236dd7706673934ba175cc303c89c260cf629a6f81ab2c8c27332`.
+Raw database: `248,094,720` bytes,
+`sha256:947ef895b9ad7650224b477359bd619a27c0140ea35711f775aa0bc1efd736b6`.
+Its byte-equivalent Brotli and gzip representations are respectively
+`16,081,105` and `23,701,929` bytes.

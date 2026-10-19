@@ -3,8 +3,11 @@
 **19 October 2026 checkpoint:** the sparse-record first pass is complete:
 1,993 reviewed and saved, with zero pending, active or submitted assignments in
 `broader_sparse`. The separate 4,233 catalogue jobs remain pending for a later
-phase. Findings, source access limits and remaining gaps are private; queue
+phase. Working evidence, drafts and review history remain private; queue
 completion does not establish exhaustive knowledge or authorize publication.
+The separately reviewed [19 October publication selection](PUBLIC_RESEARCH_RELEASE_2026_10_08.md#follow-up-selection--19-october-2026)
+adds cited editorial summaries for the completed group and compatible source
+observations while preserving the private originals and their qualifications.
 Use `content-queue status` to check for subsequent changes. Keep the priority
 filter below when resuming this phase so an exhausted queue does not silently
 expand into the catalogue.

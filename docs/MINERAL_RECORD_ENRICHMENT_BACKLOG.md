@@ -28,6 +28,15 @@ primary COD assignments. The private audit and remaining-gap ledger are under
 This is first-pass research coverage, not exhaustive properties or public
 publication. The separate 4,233 catalogue assignments remain pending.
 
+**Public follow-up — 19 October 2026:** the reviewed publication selection adds
+1,992 original cited descriptions and preserves the existing Aliettite text,
+covering all 1,993 minerals from this manual pass. It also selects 2,959 further
+source-qualified observations. Original summaries and licensed source extracts
+have separate rights decisions; the complete private evidence remains intact.
+See the [publication follow-up](PUBLIC_RESEARCH_RELEASE_2026_10_08.md#follow-up-selection--19-october-2026).
+The 4,233 other queue entries describe the later manual-review workflow, not
+4,233 empty mineral records; their existing COD and earlier research remains.
+
 The current phase covers the 1,993 minerals in the broader sparse-record group;
 the other 4,233 catalogue records remain outside this phase. Report
 `priority_groups.broader_sparse` from `content-queue status`, rather than the

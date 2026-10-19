@@ -663,6 +663,9 @@ function researchSource(item) {
     const citation = [typeof authors === "string" ? authors : null, bibliography.year, bibliography.journal].filter((value) => value !== null && value !== undefined && value !== "");
     if (citation.length) source.append(paragraph(citation.join(" · "), "muted"));
   }
+  if (item.attribution && typeof item.attribution === "object") {
+    source.append(lazyDetails("Source credits and reuse", () => structuredData(item.attribution)));
+  }
   return source;
 }
 
@@ -843,8 +846,16 @@ async function renderMineral(route, signal) {
       paragraph(mineral.description || "No public description is available.", "record-description"),
       publishedProfile.research?.description?.source_urls?.length ? element("div", { className: "research-source" }, [
         paragraph("Description sources", "muted"),
-        ...publishedProfile.research.description.source_urls.map((url, index) => externalLink(url, `Source ${index + 1} ↗`)),
+        ...publishedProfile.research.description.source_urls.map((url, index) => {
+          const references = publishedProfile.research.description.references;
+          const reference = Array.isArray(references) ? references.find((item) => item && item.source_url === url) : null;
+          return element("div", {}, [
+            externalLink(url, `${reference?.source_title || `Source ${index + 1}`} ↗`),
+            reference ? paragraph([...new Set([reference.attribution_party, reference.publisher].filter(Boolean))].join(" · "), "muted") : null,
+          ].filter(Boolean));
+        }),
         publishedProfile.research.description.license_spdx ? paragraph(`Description license: ${publishedProfile.research.description.license_spdx}`, "muted") : null,
+        publishedProfile.research.description.license_scope ? paragraph(publishedProfile.research.description.license_scope, "muted") : null,
       ]) : null,
       element("div", { className: "record-formula" }, [element("span", { text: "FORMULA" }), element("bdi", { text: mineral.formula || "—" })]),
     ]),
