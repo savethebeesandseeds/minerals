@@ -68,5 +68,13 @@ separate user chats. Keep one final image per public record ID. Register and
 visibly label AI illustrations when integrating them into the catalog.
 
 All shared state lives in the private `data/images/.image-queue.sqlite3` file.
+Content-only catalog releases automatically refresh the record context after
+verifying the catalog hash and the unchanged mineral IDs, names and formulas.
+Completed images, active and uncertain claims, tokens, failures and queue order
+are preserved. Changes to the mineral population or identity still require
+explicit migration review; never reset the queue to get past that check.
+Compressed catalog databases unpack only in container temporary space on initial
+setup or a release change, and are removed afterward. Routine commands against
+the same release reuse the existing queue without unpacking another database.
 Run `docker compose exec -T --user 0:0 admin bash tools/container-task.sh image-queue-test`
 for the isolated assignment and recovery tests.

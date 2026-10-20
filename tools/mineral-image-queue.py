@@ -5,11 +5,13 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
+import gzip
 import json
 from pathlib import Path
 import re
 import sqlite3
 import struct
+import tempfile
 import time
 import uuid
 import zlib
@@ -19,6 +21,42 @@ ROOT = Path('/workspace')
 DATA = Path('/app/data')
 STATES = ('pending', 'in_progress', 'complete', 'failed', 'uncertain', 'needs_research')
 EXTENSIONS = ('.png', '.jpg', '.jpeg', '.webp')
+
+
+def catalog_records(catalog, manifest):
+    """Read a verified release; compressed catalogs only unpack in temporary space."""
+    source = (catalog / manifest['database']['path']).resolve()
+    require(source.is_relative_to(catalog.resolve()), 'Catalog path outside public-catalog')
+    with tempfile.TemporaryDirectory(prefix='minerals-image-catalog-') as temporary:
+        maximum = min(manifest['database'].get('bytes', 512 * 1024 * 1024), 512 * 1024 * 1024)
+        if not source.is_file():
+            compressed = source.with_suffix(source.suffix + '.gz')
+            require(compressed.is_file() and not compressed.is_symlink(), 'Catalog database or gzip is missing')
+            source = Path(temporary) / 'catalog.sqlite3'
+            total = 0
+            with gzip.open(compressed, 'rb') as archive, source.open('xb') as output:
+                while chunk := archive.read(1024 * 1024):
+                    total += len(chunk)
+                    require(total <= maximum, 'Uncompressed catalog exceeds declared size')
+                    output.write(chunk)
+        require(source.stat().st_size <= maximum, 'Uncompressed catalog exceeds declared size')
+        digest = hashlib.sha256()
+        with source.open('rb') as content:
+            while chunk := content.read(1024 * 1024):
+                digest.update(chunk)
+        require('sha256:' + digest.hexdigest() == manifest['database']['sha256'],
+                'Catalog database hash mismatch')
+        with sqlite3.connect(source.as_uri() + '?mode=ro&immutable=1', uri=True) as db:
+            db.row_factory = sqlite3.Row
+            records = [dict(r) for r in db.execute(
+                'SELECT public_id,canonical_name,formula,description,properties_json FROM minerals')]
+        require(len(records) == manifest['mineral_count'], 'Catalog population mismatch')
+        require(len({r['public_id'] for r in records}) == len(records), 'Duplicate catalog IDs')
+        for record in records:
+            require(re.fullmatch(r'mat_[0-9a-f]{32}', record['public_id']), 'Unsafe public ID')
+            record['context'] = json.dumps({'description': record['description'],
+                                            'properties': json.loads(record['properties_json'])})
+        return records
 
 
 def require(value, message):
@@ -134,20 +172,25 @@ class ImageQueue:
         manifest = json.loads((catalog / 'catalog-manifest.json').read_bytes())
         prior = self.db.execute("SELECT value FROM metadata WHERE key='release_id'").fetchone()
         if prior:
-            require(prior[0] == manifest['release_id'], 'Catalog release changed; review queue migration')
-            require(self.db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()[0]
-                    == '1', 'Unsupported queue schema')
+            schema = self.db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
+            require(schema is not None and schema[0] == '1', 'Unsupported queue schema')
+            if prior[0] == manifest['release_id']:
+                return
+        records = catalog_records(catalog, manifest)
+        if prior:
+            # Content-only releases can refresh context without resetting any image work.
+            existing = {r['public_id']: (r['canonical_name'], r['formula']) for r in
+                        self.db.execute('SELECT public_id,canonical_name,formula FROM jobs')}
+            incoming = {r['public_id']: (r['canonical_name'], r['formula']) for r in records}
+            require(existing == incoming,
+                    'Catalog mineral IDs, names or formulas changed; review queue migration')
+            self.db.executemany('UPDATE jobs SET context=? WHERE public_id=?',
+                                [(r['context'], r['public_id']) for r in records])
+            self.db.execute("UPDATE metadata SET value=? WHERE key='release_id'", (manifest['release_id'],))
+            self.event({'public_id': None, 'worker': None, 'token': None}, 'catalog_refreshed',
+                       json.dumps({'from_release': prior[0], 'to_release': manifest['release_id'],
+                                   'records': len(records)}))
             return
-        source = (catalog / manifest['database']['path']).resolve()
-        require(source.is_relative_to(catalog.resolve()), 'Catalog path outside public-catalog')
-        require('sha256:' + hashlib.sha256(source.read_bytes()).hexdigest()
-                == manifest['database']['sha256'], 'Catalog database hash mismatch')
-        with sqlite3.connect(source.as_uri() + '?mode=ro&immutable=1', uri=True) as db:
-            db.row_factory = sqlite3.Row
-            records = [dict(r) for r in db.execute(
-                'SELECT public_id,canonical_name,formula,description,properties_json FROM minerals')]
-        require(len(records) == manifest['mineral_count'], 'Catalog population mismatch')
-        require(len({r['public_id'] for r in records}) == len(records), 'Duplicate catalog IDs')
         priority = {}
         research = self.root / 'data/pilots/mineral-record-research-v1/research-queue.json'
         if research.exists():
@@ -157,12 +200,9 @@ class ImageQueue:
         records.sort(key=lambda r: (priority.get(r['public_id'], 1000000),
                                     r['canonical_name'].casefold(), r['public_id']))
         for ordinal, record in enumerate(records):
-            require(re.fullmatch(r'mat_[0-9a-f]{32}', record['public_id']), 'Unsafe public ID')
-            context = {'description': record['description'],
-                       'properties': json.loads(record['properties_json'])}
             self.db.execute('INSERT INTO jobs(public_id,canonical_name,formula,context,ordinal) '
                             'VALUES(?,?,?,?,?)', (record['public_id'], record['canonical_name'],
-                                                 record['formula'], json.dumps(context), ordinal))
+                                                 record['formula'], record['context'], ordinal))
         self.db.executemany('INSERT INTO metadata(key,value) VALUES(?,?)',
                             [('schema_version', '1'), ('release_id', manifest['release_id'])])
 
@@ -319,6 +359,7 @@ class ImageQueue:
                 row['stale'] = row['status'] == 'in_progress' and deadline < time.time()
                 row['lease_until_utc'] = stamp(deadline) if deadline is not None else None
             return {'counts': self.counts(), 'jobs_needing_attention_or_active': active,
+                    'release_id': self.db.execute("SELECT value FROM metadata WHERE key='release_id'").fetchone()[0],
                     'state_database': str(self.images / '.image-queue.sqlite3')}
 
 

@@ -2,6 +2,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import gzip
 import importlib.util
 import json
 from pathlib import Path
@@ -11,6 +12,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 import zlib
 
 
@@ -66,6 +68,18 @@ class QueueTests(unittest.TestCase):
         path = images / (public_id + extension)
         path.write_bytes(png_fixture() if content is None else content)
         return path
+
+    def release(self, *, compressed=False):
+        source = self.root / 'public-catalog/catalog.sqlite3'
+        self.manifest['release_id'] = 'fixture-release-2'
+        with sqlite3.connect(source) as db:
+            self.manifest['mineral_count'] = db.execute('SELECT count(*) FROM minerals').fetchone()[0]
+        raw = source.read_bytes()
+        self.manifest['database'].update(sha256='sha256:' + hashlib.sha256(raw).hexdigest(), bytes=len(raw))
+        self.manifest_path.write_text(json.dumps(self.manifest))
+        if compressed:
+            source.with_suffix('.sqlite3.gz').write_bytes(gzip.compress(raw))
+            source.unlink()
 
     def test_concurrent_initialization_and_claims_are_unique(self):
         barrier = threading.Barrier(6)
@@ -209,14 +223,115 @@ class QueueTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'hash mismatch'):
             ImageQueue(self.root, self.data)
 
-    def test_new_catalog_release_does_not_reset_assignments(self):
+    def test_new_catalog_release_refreshes_context_and_preserves_all_work(self):
         queue = self.queue()
         job = queue.next('session-a')
-        self.manifest['release_id'] = 'fixture-release-2'
-        self.manifest_path.write_text(json.dumps(self.manifest))
-        with self.assertRaisesRegex(ValueError, 'Catalog release changed'):
-            ImageQueue(self.root, self.data)
+        self.save(job['public_id'])
+        queue.complete('session-a', job['claim_token'])
+        for state, worker in [('in_progress', 'session-b'), ('uncertain', 'session-c'),
+                              ('failed', 'session-d'), ('needs_research', 'session-e')]:
+            held = queue.next(worker)
+            if state != 'in_progress':
+                queue.fail(worker, held['claim_token'], 'Retained reason', state)
+        before = [dict(r) for r in queue.db.execute('SELECT * FROM jobs ORDER BY public_id')]
+        events_before = [tuple(r) for r in queue.db.execute('SELECT * FROM events ORDER BY id')]
+        with sqlite3.connect(self.root / 'public-catalog/catalog.sqlite3') as db:
+            db.execute("UPDATE minerals SET description='New cited summary',properties_json=?",
+                       (json.dumps({'color': 'white'}),))
+        self.release(compressed=True)
+        updated = self.queue()
+        after = [dict(r) for r in updated.db.execute('SELECT * FROM jobs ORDER BY public_id')]
+        for old, new in zip(before, after):
+            self.assertEqual(json.loads(new.pop('context')),
+                             {'description': 'New cited summary', 'properties': {'color': 'white'}})
+            old.pop('context')
+            self.assertEqual(new, old)
+        self.assertEqual([tuple(r) for r in updated.db.execute('SELECT * FROM events ORDER BY id')][:-1],
+                         events_before)
+        self.assertEqual(updated.status()['release_id'], 'fixture-release-2')
+        resumed = updated.next('session-b')
+        self.assertFalse(resumed['generation_allowed'])
+        self.assertEqual(resumed['record_context']['description'], 'New cited summary')
+        self.assertEqual(updated.next('session-c')['state'], 'uncertain')
+        with mock.patch.object(module, 'catalog_records', side_effect=AssertionError('Unnecessary catalog read')):
+            self.queue().status()
+        self.assertEqual(updated.db.execute("SELECT count(*) FROM events WHERE action='catalog_refreshed'")
+                         .fetchone()[0], 1)
+
+    def test_changed_population_or_identity_requires_review_without_mutation(self):
+        queue = self.queue()
+        job = queue.next('session-a')
+        before = list(queue.db.execute('SELECT * FROM jobs'))
+        source = self.root / 'public-catalog/catalog.sqlite3'
+        for change in ["DELETE FROM minerals WHERE public_id=(SELECT min(public_id) FROM minerals)",
+                       "INSERT INTO minerals VALUES('mat_ffffffffffffffffffffffffffffffff','New','C','','{}')",
+                       "UPDATE minerals SET public_id='mat_ffffffffffffffffffffffffffffffff' WHERE canonical_name='Mineral 00'",
+                       "UPDATE minerals SET canonical_name='Changed' WHERE canonical_name='Mineral 00'",
+                       "UPDATE minerals SET formula='C' WHERE canonical_name='Mineral 00'"]:
+            with self.subTest(change=change):
+                original = source.read_bytes()
+                try:
+                    with sqlite3.connect(source) as db:
+                        db.execute(change)
+                    self.release()
+                    with self.assertRaisesRegex(ValueError, 'review queue migration'):
+                        ImageQueue(self.root, self.data)
+                    self.assertEqual(list(queue.db.execute('SELECT * FROM jobs')), before)
+                    self.assertEqual(queue.db.execute("SELECT value FROM metadata WHERE key='release_id'")
+                                     .fetchone()[0], 'fixture-release-1')
+                finally:
+                    source.write_bytes(original)
         self.assertEqual(queue.next('session-a')['claim_token'], job['claim_token'])
+
+    def test_compressed_catalog_initialization_leaves_no_unpacked_copy(self):
+        self.release(compressed=True)
+        with mock.patch.object(module.tempfile, 'tempdir', str(self.root)):
+            self.assertEqual(self.queue().status()['counts']['total'], len(self.ids))
+        self.assertFalse((self.root / 'public-catalog/catalog.sqlite3').exists())
+        self.assertEqual(list(self.root.glob('minerals-image-catalog-*')), [])
+
+    def test_compressed_migration_hash_failure_rolls_back_and_cleans_up(self):
+        queue = self.queue()
+        job = queue.next('session-a')
+        self.release(compressed=True)
+        self.manifest['database']['sha256'] = 'sha256:incorrect'
+        self.manifest_path.write_text(json.dumps(self.manifest))
+        with mock.patch.object(module.tempfile, 'tempdir', str(self.root)):
+            with self.assertRaisesRegex(ValueError, 'hash mismatch'):
+                ImageQueue(self.root, self.data)
+        self.assertEqual(list(self.root.glob('minerals-image-catalog-*')), [])
+        self.assertEqual(queue.db.execute("SELECT value FROM metadata WHERE key='release_id'").fetchone()[0],
+                         'fixture-release-1')
+        self.assertEqual(queue.next('session-a')['claim_token'], job['claim_token'])
+
+    def test_compressed_catalog_size_limit_is_enforced(self):
+        self.release(compressed=True)
+        self.manifest['database']['bytes'] = 1
+        self.manifest_path.write_text(json.dumps(self.manifest))
+        with self.assertRaisesRegex(ValueError, 'exceeds declared size'):
+            ImageQueue(self.root, self.data)
+
+    def test_concurrent_release_refresh_happens_once_and_claims_stay_unique(self):
+        first = self.queue().next('original-session')
+        self.release(compressed=True)
+        barrier = threading.Barrier(4)
+
+        def claim(index):
+            barrier.wait(timeout=10)
+            queue = ImageQueue(self.root, self.data)
+            try:
+                return queue.next(f'new-session-{index}')
+            finally:
+                queue.close()
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            packets = list(pool.map(claim, range(4)))
+        self.assertEqual(len({p['public_id'] for p in packets}), 4)
+        self.assertNotIn(first['public_id'], {p['public_id'] for p in packets})
+        queue = self.queue()
+        self.assertEqual(queue.next('original-session')['claim_token'], first['claim_token'])
+        self.assertEqual(queue.db.execute("SELECT count(*) FROM events WHERE action='catalog_refreshed'")
+                         .fetchone()[0], 1)
 
     def test_no_pending_records_returns_counts(self):
         queue = self.queue()
