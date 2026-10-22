@@ -99,6 +99,12 @@ export function isOfferActiveAt(expiresAt, now = Date.now()) {
   return Number.isFinite(expires) && expires > now;
 }
 
+function isPublicResearchItem(item) {
+  const nonpublic = new Set(["draft", "private", "rejected", "withdrawn", "withheld"]);
+  return isRecord(item) && Object.prototype.toString.call(item) === "[object Object]" && item.private_research !== true
+    && !nonpublic.has(item.publication_status) && !nonpublic.has(item.review_status);
+}
+
 // Public research is an explicit release projection, separate from working notes.
 export function publishedResearchProfile(rawProperties) {
   let properties = rawProperties;
@@ -107,10 +113,7 @@ export function publishedResearchProfile(rawProperties) {
   }
   if (!isRecord(properties)) properties = {};
   const { public_research: candidate, ...otherProperties } = properties;
-  const publicItem = (item) => isRecord(item)
-    && item.private_research !== true
-    && !["draft", "private", "rejected"].includes(item.publication_status)
-    && !["draft", "rejected"].includes(item.review_status);
+  const publicItem = isPublicResearchItem;
   if (!publicItem(candidate) || candidate.publication_status !== "published"
     || !["reviewed", "verified"].includes(candidate.review_status)) {
     return { properties: otherProperties, research: null };
@@ -127,6 +130,510 @@ export function publishedResearchProfile(rawProperties) {
       structures: collection("structures"),
     },
   };
+}
+
+// Presentation categories describe the question, never the scientific scope of
+// its answer. In particular, a specimen observation is not a species property.
+const OBSERVATION_GROUPS = [
+  ["physical", "Physical properties", ["physical", "phys", "appearance", "morphology", "mechanical", "density", "luminescence", "thermal"]],
+  ["optical", "Optical properties", ["optical", "opt", "optics"]],
+  ["chemistry", "Chemistry", ["chemistry", "chem", "chemical"]],
+  ["crystallography", "Crystallography and structure", ["crystallography", "structure"]],
+  ["geology", "Occurrence and formation", ["geology", "geo", "occurrence", "locality", "formation"]],
+  ["history", "Discovery and history", ["history", "provenance", "type"]],
+  ["identity", "Identity and classification", ["identity", "classification", "identifiers", "names", "relationships", "authority"]],
+  ["diagnostic", "Diagnostic features", ["diagnostic", "diagnostics"]],
+  ["spectroscopy", "Spectroscopy", ["spectroscopy"]],
+  ["safety", "Safety observations", ["safety"]],
+  ["uses", "Uses", ["uses", "use"]],
+  ["significance", "Scientific significance", ["significance"]],
+  ["editorial", "Qualifications and remaining gaps", ["editorial", "curation", "research", "evidence", "sources"]],
+  ["other", "Further observations", []],
+];
+const OBSERVATION_PREFIXES = new Map(OBSERVATION_GROUPS.flatMap(([key, , aliases]) => aliases.map((alias) => [alias, key])));
+const LEGACY_OBSERVATION_GROUPS = new Map([
+  ["physical", ["hardness", "density", "physical_appearance"]],
+  ["optical", ["optical_properties", "optical_source_conflict"]],
+  ["chemistry", ["analytical_method", "chemical_analysis_wt_percent", "formula_basis", "optimized_empirical_site_formula", "iron_valence_limitations", "scattering_proxy_occupancies", "bond_valence_comparison"]],
+  ["crystallography", ["unit_cell", "symmetry", "scxrd_method", "refinement_statistics", "refinement_constraints", "hydrogen_model", "coordination_and_bond_lengths", "powder_pattern_scope"]],
+  ["geology", ["type_locality", "paragenesis", "sample_origin", "genetic_interpretation"]],
+  ["history", ["discovery_and_name", "approved_redefinition"]],
+  ["identity", ["identity_dominant_ree", "related_mineral_comparison"]],
+  ["spectroscopy", ["moessbauer_method", "moessbauer_result", "raman_method", "raman_interpretation"]],
+  ["editorial", ["specimen_scope", "cod_evidence_scope", "source_software_and_f000_conflicts"]],
+].flatMap(([group, keys]) => keys.map((key) => [key, group])));
+const OBSERVATION_LABELS = {
+  hardness_mohs: "Mohs hardness", mohs_hardness: "Mohs hardness",
+  hardness_vickers: "Vickers hardness", vickers_hardness: "Vickers hardness",
+  density_g_cm3: "Density (g/cm³)", density_calculated_g_cm3: "Calculated density (g/cm³)",
+  density_measured_g_cm3: "Measured density (g/cm³)", density_calculated: "Calculated density",
+  density_measured: "Measured density", crystal_system: "Crystal system", unit_cell: "Unit cell",
+  space_group: "Space group", ima_number: "IMA number", ima_identifier: "IMA identifier",
+  ima_symbol: "IMA symbol", "2v": "Optic axial angle (2V)", two_v: "Optic axial angle (2V)",
+  optic_axis_angle_2v: "Optic axial angle (2V)", refractive_indices: "Refractive indices",
+  colour: "Color", lustre: "Luster",
+};
+const OBSERVATION_CONTEXT_FIELDS = [
+  ["subject_scope", "Applies to"], ["source_scope", "Source scope"], ["unit", "Unit"], ["units", "Units"],
+  ["production_kind", "Production kind"], ["conditions", "Conditions"], ["specimen", "Specimen"],
+  ["temperature", "Temperature"], ["pressure", "Pressure"], ["method", "Method"],
+  ["wavelength", "Wavelength"], ["uncertainty", "Uncertainty"],
+];
+const OBSERVATION_QUALIFICATION_FIELDS = [["qualification", "Qualification"], ["scientific_note", "Scientific note"], ["qualifiers", "Qualifiers"]];
+
+function observationLabel(value) {
+  const text = value.replace(/[_-]+/gu, " ").replace(/\s+/gu, " ").trim();
+  return text ? text[0].toUpperCase() + text.slice(1) : "Observation";
+}
+
+function observationGroup(questionKey) {
+  const key = questionKey.toLowerCase();
+  const prefix = key.split(".")[0];
+  if (key.includes(".")) return OBSERVATION_PREFIXES.get(prefix) || "other";
+  return LEGACY_OBSERVATION_GROUPS.get(key)
+    || [...OBSERVATION_PREFIXES].find(([alias]) => key.startsWith(`${alias}_`))?.[1] || "other";
+}
+
+// This adapter consumes an already published profile. It adds display metadata
+// without parsing strings as JSON, inventing absent fields, or altering records.
+export function normalizeMineralObservation(item) {
+  if (!isPublicResearchItem(item)) return null;
+  const questionKey = typeof item.question_key === "string" ? item.question_key.normalize("NFC").trim() : "";
+  const leaf = questionKey.split(".").at(-1);
+  const explicitLabel = [item.question_label, item.display_label, item.label].find((value) => typeof value === "string" && value.trim());
+  const group = observationGroup(questionKey);
+  const groupLabel = OBSERVATION_GROUPS.find(([key]) => key === group)[1];
+  const contextKeys = OBSERVATION_CONTEXT_FIELDS;
+  const qualificationKeys = OBSERVATION_QUALIFICATION_FIELDS;
+  const extract = (keys) => keys.filter(([key]) => Object.hasOwn(item, key)).map(([key, label]) => ({ label, value: item[key] }));
+  const represented = new Set([
+    "question_key", "question_label", "display_label", "label", "value", ...contextKeys.map(([key]) => key), ...qualificationKeys.map(([key]) => key),
+    // These remain attached to the original item and its numbered reference.
+    "source_url", "source_title", "publisher", "locator", "license_spdx", "attribution", "bibliography",
+    "claim_id", "review_status", "publication_status", "private_research", "evidence_level",
+  ]);
+  return {
+    raw: item, questionKey,
+    label: explicitLabel?.trim() || (Object.hasOwn(OBSERVATION_LABELS, leaf.toLowerCase()) ? OBSERVATION_LABELS[leaf.toLowerCase()] : observationLabel(leaf)),
+    group, groupLabel, hasValue: Object.hasOwn(item, "value") && item.value !== undefined, value: item.value,
+    context: extract(contextKeys), qualifications: extract(qualificationKeys),
+    extraFields: Object.fromEntries(Object.entries(item).filter(([key]) => !represented.has(key))),
+  };
+}
+
+export function groupMineralObservations(observations) {
+  if (!Array.isArray(observations)) return [];
+  const groups = new Map();
+  for (const item of observations) {
+    const observation = normalizeMineralObservation(item);
+    if (!observation) continue;
+    if (!groups.has(observation.group)) groups.set(observation.group, []);
+    groups.get(observation.group).push(observation);
+  }
+  return OBSERVATION_GROUPS.flatMap(([key, label]) => groups.has(key) ? [{ key, label, observations: groups.get(key) }] : []);
+}
+
+// A compact rendering plan, not a lossy value conversion. Callers must render
+// `remaining` too; unknown or ambiguous compound values use the generic view.
+export function compactStructuredValue(value) {
+  const scalar = (item) => typeof item === "string" || typeof item === "boolean"
+    || (typeof item === "number" && Number.isFinite(item));
+  if (Array.isArray(value)) {
+    if (!value.length || value.length > 24 || !value.every(scalar)) return null;
+    const text = value.map(String).join(", ");
+    return text.length <= 240 && value.every((item) => typeof item !== "string" || item.trim())
+      ? { kind: "list", text, remaining: {} } : null;
+  }
+  if (!isRecord(value)) return null;
+  const numeric = (item) => (typeof item === "number" && Number.isFinite(item))
+    || (typeof item === "string" && /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/iu.test(item) && Number.isFinite(Number(item)));
+  const ranges = [["min", "max"], ["minimum", "maximum"], ["lower", "upper"]].filter((pair) => pair.every((key) => Object.hasOwn(value, key)));
+  const consumed = new Set();
+  const unitKey = ["unit", "units"].filter((key) => Object.hasOwn(value, key));
+  const unit = unitKey.length === 1 && typeof value[unitKey[0]] === "string" && value[unitKey[0]].trim() ? value[unitKey[0]] : null;
+  let text;
+  let kind;
+  if (ranges.length === 1) {
+    const [minimum, maximum] = ranges[0];
+    if (!numeric(value[minimum]) || !numeric(value[maximum]) || Number(value[minimum]) > Number(value[maximum])) return null;
+    text = `${value[minimum]}–${value[maximum]}`;
+    consumed.add(minimum).add(maximum);
+    kind = "range";
+  } else if (ranges.length === 0 && Object.hasOwn(value, "value") && scalar(value.value)
+    && (Object.hasOwn(value, "unit") || Object.hasOwn(value, "units") || Object.hasOwn(value, "raw_value") || Object.hasOwn(value, "standard_uncertainty"))) {
+    const key = typeof value.raw_value === "string" && value.raw_value.trim() ? "raw_value" : "value";
+    text = String(value[key]);
+    consumed.add(key);
+    kind = "measurement";
+  } else return null;
+  if (unit !== null) {
+    const trimmedText = text.trimEnd();
+    const unitStart = trimmedText.length - unit.trim().length;
+    const exactUnitToken = unitStart >= 0 && trimmedText.slice(unitStart) === unit.trim()
+      && (unitStart === 0 || /\s/u.test(trimmedText[unitStart - 1]));
+    const uncertainNumber = text.match(/^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)\(\d+\)$/iu);
+    const bareNumber = numeric(text) || (uncertainNumber !== null && Number.isFinite(Number(uncertainNumber[1])));
+    if (exactUnitToken) consumed.add(unitKey[0]);
+    else if (kind === "range" || bareNumber) {
+      text += ` ${unit}`;
+      consumed.add(unitKey[0]);
+    }
+    // A suffix such as "m" in "10 mm" is not the same unit token. Keep
+    // conflicting or ambiguous units visible instead of guessing a conversion.
+  }
+  return { kind, text, remaining: Object.fromEntries(Object.entries(value).filter(([key]) => !consumed.has(key))) };
+}
+
+// A source-scoped presentation plan. This never feeds the mineral fact selector.
+export function sourceModelSummary(item) {
+  const present = (value) => value !== null && value !== undefined && value !== "";
+  const scalar = (value) => typeof value === "string" ? value.trim() : typeof value === "number" && Number.isFinite(value) ? String(value) : null;
+  const units = { angstrom: "Å", degree: "°", kelvin: "K", kilopascal: "kPa", angstrom_cubed: "Å³", cubic_angstrom: "Å³" };
+  const measurement = (value, fallbackUnit = "") => {
+    const direct = scalar(value);
+    if (direct !== null) {
+      if (/^(?:[?.]|not reported|unknown)$/iu.test(direct)) return null;
+      return direct && fallbackUnit && /^[+-]?[\d.]+(?:\(\d+\))?$/u.test(direct) ? `${direct} ${fallbackUnit}` : direct;
+    }
+    if (!isRecord(value)) return null;
+    const raw = scalar(value.raw_value) ?? scalar(value.source_value) ?? scalar(value.value);
+    if (!raw || /^(?:[?.]|not reported|unknown)$/iu.test(raw)) return null;
+    const unit = units[value.unit] || value.unit || fallbackUnit;
+    let text = `${raw}${unit ? ` ${unit}` : ""}`;
+    const uncertainty = scalar(value.raw_uncertainty) ?? scalar(value.standard_uncertainty);
+    const inline = /\(\d+\)/u.test(raw);
+    if (uncertainty !== null && (!inline || (present(value.inline_standard_uncertainty) && Number(value.inline_standard_uncertainty) !== Number(value.standard_uncertainty)))) {
+      text += ` (σ ${uncertainty}${unit ? ` ${unit}` : ""})`;
+    }
+    return text;
+  };
+  const rows = [];
+  const add = (label, value) => { const text = measurement(value); if (text) rows.push({ label, value: text }); };
+  add("Deposited formula", item.source_formula);
+  const cell = isRecord(item.cell) ? item.cell : isRecord(item.unit_cell) ? item.unit_cell : {};
+  const cellValues = ["a", "b", "c", "alpha", "beta", "gamma"].flatMap((key, index) => {
+    const value = cell[key] ?? cell[`${key}_${index < 3 ? "angstrom" : "deg"}`] ?? cell[`${key}_A`];
+    const text = measurement(value, index < 3 ? "Å" : "°");
+    return text ? [{ label: ["a", "b", "c", "α", "β", "γ"][index], value: text }] : [];
+  });
+  const symmetry = isRecord(item.symmetry) ? item.symmetry : isRecord(item.space_group) ? item.space_group : {};
+  add("Space group", symmetry.sg ?? symmetry.space_group ?? symmetry.space_group_hm ?? item.space_group);
+  add("Hall symbol", symmetry.sgHall ?? symmetry.hall_symbol ?? symmetry.Hall);
+  add("Space group number", symmetry.sgNumber ?? symmetry.space_group_number ?? symmetry.IT_number);
+  add("Cell volume", item.volume ?? cell.volume ?? cell.V_A3);
+  add("Formula units (Z)", item.formula_units_Z ?? cell.Z);
+  const conditions = isRecord(item.conditions) ? item.conditions : {};
+  for (const [key, label] of [["cell_temperature", "Cell temperature"], ["diffraction_temperature", "Diffraction temperature"], ["cell_pressure", "Cell pressure"], ["diffraction_pressure", "Diffraction pressure"], ["temperature", "Temperature"], ["pressure", "Pressure"], ["thermal_history", "Thermal history"], ["pressure_history", "Pressure history"]]) add(label, conditions[key]);
+  const origin = item.sample_origin ?? item.origin ?? item.specimen_origin ?? conditions.sample_origin ?? conditions.origin;
+  add("Specimen origin", isRecord(origin) ? origin.raw_value ?? origin.value : origin);
+  add("Source mineral name", item.source_mineral_name);
+  add("Source sample description", item.source_sample_description);
+  // Keep source status separate from species facts; the complete source record
+  // remains available to inspect unknown fields and measurement provenance.
+  const qualification = [item.qualification, item.scientific_note, item.qualifiers,
+    ...(Array.isArray(item.source_cautions) ? item.source_cautions : [])].filter(present);
+  return { rows, cell: cellValues, qualification, record: item };
+}
+
+// Summarize only explicit mineral properties. Research observations and deposited
+// models retain their own scope, conditions and provenance elsewhere on the page.
+export function compactMineralFacts(properties) {
+  if (!isRecord(properties)) return [];
+  for (const key of ["subject_scope", "source_scope"]) {
+    if (Object.hasOwn(properties, key) && properties[key] !== "species") return [];
+  }
+  const fields = [
+    { label: "Crystal system", keys: ["crystal_system"] },
+    { label: "Mohs hardness", keys: ["hardness_mohs"] },
+    { label: "Color", keys: ["color", "colour"] },
+    { label: "Streak", keys: ["streak"] },
+    { label: "Luster", keys: ["luster", "lustre"] },
+    { label: "Density", keys: ["density_g_cm3"], unit: "g/cm³" },
+    { label: "Cleavage", keys: ["cleavage"] },
+    { label: "Fracture", keys: ["fracture"] },
+    { label: "Transparency", keys: ["transparency"] },
+  ];
+  const placeholder = /^(?:[-—–?]|n\/?a|unknown|not (?:reported|available)|null|nan|[+-]?infinity)$/iu;
+  const numeric = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/iu;
+  const numericRange = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)\s*(?:[-–—]|to)\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/iu;
+  const scalar = (value) => {
+    if (typeof value === "number") return Number.isFinite(value) ? String(value) : null;
+    if (typeof value !== "string") return null;
+    const text = value.trim();
+    return text && !placeholder.test(text) && (!numeric.test(text) || Number.isFinite(Number(text))) ? text : null;
+  };
+  const withUnit = (text, unit) => unit && (numeric.test(text) || numericRange.test(text)) ? `${text} ${unit}` : text;
+  const displayValue = (value, unit) => {
+    const text = scalar(value);
+    if (text !== null) return withUnit(text, unit);
+    if (Array.isArray(value)) {
+      if (!value.length) return null;
+      const items = value.map(scalar);
+      if (items.some((item) => item === null)) return null;
+      return items.map((item) => withUnit(item, unit)).join(", ");
+    }
+    // Extra fields may carry scope or qualifications, so do not reduce a
+    // measurement object to its numeric part or discard those extra fields.
+    if (!ownKeysAre(value, ["min", "max"])) return null;
+    const minimum = scalar(value.min);
+    const maximum = scalar(value.max);
+    if (minimum === null || maximum === null || !numeric.test(minimum) || !numeric.test(maximum)
+      || !Number.isFinite(Number(minimum)) || !Number.isFinite(Number(maximum))
+      || Number(minimum) > Number(maximum)) return null;
+    return `${minimum}–${maximum}${unit ? ` ${unit}` : ""}`;
+  };
+  return fields.flatMap(({ label, keys, unit }) => {
+    const key = keys.find((candidate) => Object.hasOwn(properties, candidate));
+    if (key === undefined) return [];
+    const value = displayValue(properties[key], unit);
+    return value === null ? [] : [{ label, value }];
+  });
+}
+
+const RESEARCHED_FACT_GROUPS = [
+  ["crystal_system", "Crystal system"], ["hardness", "Hardness"], ["color", "Color"],
+  ["streak", "Streak"], ["luster", "Luster"], ["density", "Density"],
+  ["cleavage", "Cleavage"], ["fracture", "Fracture"], ["transparency", "Transparency"],
+  ["crystal_habit", "Crystal habit"], ["tenacity", "Tenacity"], ["appearance", "Appearance"],
+];
+
+// These are explicit questionnaire and released legacy aliases, not keyword
+// matching. A future question containing "density" is not automatically a fact.
+const RESEARCHED_FACT_QUESTIONS = new Map([
+  ["crystal_system", "Crystal system", ["crystallography.crystal_system", "structure.crystal_system", "crystal_system"]],
+  ["hardness", "Mohs hardness", ["physical.hardness_mohs", "physical.mohs_hardness", "hardness_mohs", "mohs_hardness"]],
+  ["hardness", "Vickers hardness", ["physical.hardness_vickers", "physical.vickers_hardness", "hardness_vickers", "vickers_hardness"]],
+  ["hardness", "Microhardness", ["physical.microhardness"]],
+  ["hardness", "Hardness", ["physical.hardness", "phys.hardness", "hardness"]],
+  ["hardness", "Estimated hardness", ["mechanical.hardness_estimate", "physical.hardness_estimated"]],
+  ["color", "Color", ["physical.color", "physical.colour", "appearance.colour", "phys.color", "color", "colour"]],
+  ["streak", "Streak", ["physical.streak", "streak"]],
+  ["luster", "Luster", ["physical.luster", "physical.lustre", "luster", "lustre"]],
+  ["density", "Density (g/cm³)", ["physical.density_g_cm3", "density_g_cm3"]],
+  ["density", "Measured density (g/cm³)", ["physical.density_measured_g_cm3", "density_measured_g_cm3"]],
+  ["density", "Calculated density (g/cm³)", ["physical.density_calculated_g_cm3", "density_calculated_g_cm3"]],
+  ["density", "Measured density", ["physical.density_measured", "density_measured"]],
+  ["density", "Calculated density", ["physical.density_calculated", "density_calculated"]],
+  ["density", "Calculated density (empirical)", ["density.calculated_empirical", "physical.density_calculated_emp"]],
+  ["density", "Calculated density (structure)", ["density.calculated_structure"]],
+  ["density", "Density (refined proxy)", ["physical.density_refined_proxy"]],
+  ["density", "Density", ["physical.density", "phys.density", "density"]],
+  ["density", "Specific gravity", ["physical.specific_gravity", "specific_gravity"]],
+  ["cleavage", "Cleavage", ["physical.cleavage", "cleavage"]],
+  ["fracture", "Fracture", ["physical.fracture", "fracture"]],
+  ["transparency", "Transparency", ["physical.transparency", "transparency"]],
+  ["crystal_habit", "Crystal habit", ["physical.crystal_habit", "crystal_habit"]],
+  ["tenacity", "Tenacity", ["physical.tenacity", "tenacity"]],
+  ["appearance", "Color, streak and luster", ["physical.color_streak_lustre"]],
+].flatMap(([key, label, aliases]) => aliases.map((alias) => [alias, { key, label }])));
+
+const COMPOUND_APPEARANCE_FIELDS = new Map([
+  ["color", "color"], ["colour", "color"], ["streak", "streak"],
+  ["luster", "luster"], ["lustre", "luster"], ["cleavage", "cleavage"],
+  ["fracture", "fracture"], ["transparency", "transparency"],
+  ["crystal_habit", "crystal_habit"], ["tenacity", "tenacity"],
+]);
+const COMPOUND_CRYSTAL_SYSTEM_QUESTIONS = new Set([
+  "symmetry", "crystallography.space_group", "crystallography.unit_cell",
+  "crystallography.single_crystal_cell", "crystallography.serpierite_1968_symmetry_cell",
+  "crystallography.structure_references",
+]);
+
+// This consumes the already published profile returned by
+// publishedResearchProfile. General properties remain visibly separate from
+// source-scoped reports. A report retains its entire value and observation;
+// conflicting measurements, model qualifications and units are never resolved
+// by this presentation selector. Deposited models and description prose are not
+// substitutes for explicit researched property observations.
+export function researchedMineralFacts(properties, research) {
+  const groups = new Map(RESEARCHED_FACT_GROUPS.map(([key, label]) => [key, { key, label, general: [], reports: [] }]));
+  const generalKeys = new Map([
+    ["Crystal system", "crystal_system"], ["Mohs hardness", "hardness"], ["Color", "color"],
+    ["Streak", "streak"], ["Luster", "luster"], ["Density", "density"], ["Cleavage", "cleavage"],
+    ["Fracture", "fracture"], ["Transparency", "transparency"],
+  ]);
+  if (isPublicResearchItem(properties)) {
+    for (const fact of compactMineralFacts(properties)) groups.get(generalKeys.get(fact.label)).general.push(fact);
+  }
+  const hasValue = (value) => {
+    if (typeof value === "string") return value.trim().length > 0;
+    if (typeof value === "number") return Number.isFinite(value);
+    if (typeof value === "boolean") return true;
+    if (Array.isArray(value)) return value.some(hasValue);
+    return isRecord(value) && Object.values(value).some(hasValue);
+  };
+  const addReport = (observation, key, label, value = observation.value, sourcePath = ["value"], related = {}) => {
+    if (!hasValue(value)) return;
+    const nestedContext = OBSERVATION_CONTEXT_FIELDS.filter(([field]) => Object.hasOwn(related, field))
+      .map(([field, fieldLabel]) => ({
+        label: ["subject_scope", "source_scope"].includes(field) ? fieldLabel : `Source record ${fieldLabel.toLowerCase()}`,
+        value: related[field],
+      }));
+    const nestedQualifications = OBSERVATION_QUALIFICATION_FIELDS.filter(([field]) => Object.hasOwn(related, field))
+      .map(([field, fieldLabel]) => ({ label: fieldLabel, value: related[field] }));
+    const metadataFields = new Set([...OBSERVATION_CONTEXT_FIELDS, ...OBSERVATION_QUALIFICATION_FIELDS].map(([field]) => field));
+    const otherRelated = Object.fromEntries(Object.entries(related).filter(([field]) => !metadataFields.has(field)));
+    groups.get(key).reports.push({
+      ...observation, label, value, sourcePath,
+      // Scope and qualifications from the parent value must remain visible
+      // when callers disclose the unrelated numerical/unknown sibling fields.
+      context: [...observation.context, ...nestedContext, ...(Object.keys(otherRelated).length ? [{ label: "Related reported fields", value: otherRelated }] : [])],
+      qualifications: [...observation.qualifications, ...nestedQualifications],
+    });
+  };
+  const observations = isPublicResearchItem(research) && Array.isArray(research.observations) ? research.observations : [];
+  for (const raw of observations) {
+    const observation = normalizeMineralObservation(raw);
+    if (!observation?.hasValue) continue;
+    const questionKey = observation.questionKey.toLowerCase();
+    const appearance = ["physical_appearance", "physical.color_streak_lustre"].includes(questionKey);
+    if (appearance && isRecord(observation.value)) {
+      const fields = Object.entries(observation.value);
+      const related = Object.fromEntries(fields.filter(([field]) => !COMPOUND_APPEARANCE_FIELDS.has(field)));
+      for (const [field, value] of fields) {
+        const key = COMPOUND_APPEARANCE_FIELDS.get(field);
+        if (key) addReport(observation, key, groups.get(key).label, value, ["value", field], related);
+      }
+      // An unrecognized compound appearance shape stays in the full article.
+      continue;
+    }
+    if (COMPOUND_CRYSTAL_SYSTEM_QUESTIONS.has(questionKey) && isRecord(observation.value)) {
+      // Some released crystallography records explicitly name the system next
+      // to a cell or space group. Select only that named field, never infer it
+      // from cell dimensions or space-group identifiers. Keep all siblings.
+      const fields = Object.entries(observation.value);
+      const related = Object.fromEntries(fields.filter(([field]) => !["system", "crystal_system"].includes(field)));
+      for (const [field, value] of fields) {
+        if (["system", "crystal_system"].includes(field)) addReport(observation, "crystal_system", "Crystal system", value, ["value", field], related);
+      }
+      continue;
+    }
+    const definition = RESEARCHED_FACT_QUESTIONS.get(questionKey);
+    if (!definition) continue;
+    const explicitLabel = [raw.question_label, raw.display_label, raw.label].some((value) => typeof value === "string" && value.trim());
+    const protectedLabel = ["hardness", "density"].includes(definition.key) && definition.label !== groups.get(definition.key).label;
+    const sourceLabel = explicitLabel && protectedLabel && observation.label !== definition.label
+      ? [{ label: "Source property label", value: observation.label }] : [];
+    addReport({ ...observation, context: [...observation.context, ...sourceLabel] }, definition.key,
+      explicitLabel && !protectedLabel ? observation.label : definition.label);
+  }
+  return [...groups.values()].filter(({ general, reports }) => general.length || reports.length);
+}
+
+// The card is an index into the complete observations, not a second report.
+// Only bounded, fully understood values are summarized. Unknown caveats and
+// compound comparisons lead to the original reports instead of being dropped.
+export function summarizeMineralFact(group) {
+  const reports = Array.isArray(group?.reports) ? group.reports : [];
+  const general = Array.isArray(group?.general) ? group.general : [];
+  const pointer = (text = "See full report") => ({ text, qualifiers: [], reports, mode: "report" });
+  const present = (value) => value !== undefined && value !== null && value !== "";
+  const shortText = (value, maximum = 90) => {
+    if (typeof value === "number") return Number.isFinite(value) ? String(value) : null;
+    if (typeof value !== "string") return null;
+    const text = value.trim();
+    return text && text.length <= maximum && !/[\r\n]/u.test(text)
+      && !/^(?:unknown|n\/?a|not (?:reported|available)|null|nan|[+-]?infinity)$/iu.test(text) ? text : null;
+  };
+  const numeric = "[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:\\(\\d+\\))?";
+  const numberOrRange = new RegExp(`^${numeric}(?:\\s*(?:[-–—]|to)\\s*${numeric})?$`, "u");
+  const unitIdentity = (unit) => unit === "g/cm³" ? "g/cm3" : unit;
+  const cellFields = new Set(["a", "b", "c", "alpha", "beta", "gamma", "a_A", "b_A", "c_A", "alpha_deg", "beta_deg", "gamma_deg", "V_A3", "volume", "Z", "space_group", "Hall", "IT_number"]);
+  const makeCandidate = (report) => {
+    let text = shortText(report.value);
+    const qualifiers = [];
+    let analogy = false;
+    // An entire-value adapter for explicit estimates. Never extract the first
+    // number from arbitrary prose or manufacture a measured hardness.
+    if (group.key === "hardness" && typeof report.value === "string") {
+      const match = report.value.match(new RegExp(`^(${numeric}(?:\\s*[–-]\\s*${numeric})?) by analogy with other [\\p{L}-]+-group members$`, "u"));
+      if (match) { text = match[1]; analogy = true; qualifiers.push("estimated by analogy"); }
+    }
+    if (text === null) {
+      const plan = compactStructuredValue(report.value);
+      // Unconsumed members can be qualifiers, competing measurements or units.
+      if (!plan || Object.keys(plan.remaining).length || plan.text.length > 90) return null;
+      if (plan.kind === "list" && ["density", "hardness"].includes(group.key)) return null;
+      text = plan.text;
+    }
+    const label = typeof report.label === "string" ? report.label : "";
+    if (/calculated/iu.test(label)) qualifiers.push("calculated");
+    else if (/estimated/iu.test(label) && !analogy) qualifiers.push("estimated");
+    else if (/measured/iu.test(label)) qualifiers.push("measured");
+    if (/vickers/iu.test(label)) qualifiers.push("Vickers");
+    if (/microhardness/iu.test(label)) qualifiers.push("microhardness");
+    if (/refined proxy/iu.test(label)) qualifiers.push("refined proxy");
+    const inferredUnit = /mohs/iu.test(label) ? "Mohs" : /g\/cm³/iu.test(label) ? "g/cm³" : null;
+    const units = [];
+    for (const field of Array.isArray(report.context) ? report.context : []) {
+      if (!present(field.value)) continue;
+      if (field.label === "Related reported fields") {
+        if (group.key !== "crystal_system" || !isRecord(field.value)
+          || Object.entries(field.value).some(([key, value]) => !cellFields.has(key) || shortText(value, 64) === null)) return null;
+        continue;
+      }
+      if (["Unit", "Units"].includes(field.label)) {
+        const unit = shortText(field.value, 20);
+        if (!unit) return null;
+        units.push(unit);
+        continue;
+      }
+      if (["Applies to", "Source scope"].includes(field.label) && field.value === "species") continue;
+      // Keep even a short source scope verbatim: natural, synthetic, historical
+      // and specimen observations must not become an unqualified species fact.
+      if (["Applies to", "Source scope", "Specimen"].includes(field.label)) {
+        const scope = shortText(field.value, 48);
+        if (!scope) return null;
+        qualifiers.push(scope.replaceAll("_", " "));
+        continue;
+      }
+      // Methods, conditions and unexpected metadata may change interpretation.
+      return null;
+    }
+    for (const field of Array.isArray(report.qualifications) ? report.qualifications : []) {
+      if (!present(field.value)) continue;
+      if (analogy && field.value === "Explicitly NOT measured.") continue;
+      // This qualification explicitly confines a crystallographic report to a
+      // studied crystal; its identity and experiment remain in the article.
+      if (group.key === "crystal_system" && typeof field.value === "string"
+        && /^[^;\n]{1,64} single crystal; room-temperature Mo-Kα measurement\.$/u.test(field.value)) {
+        qualifiers.push("studied crystal");
+        continue;
+      }
+      const qualification = shortText(field.value, 72);
+      if (!qualification) return null;
+      qualifiers.push(qualification.replace(/\.$/u, ""));
+    }
+    if (isRecord(report.extraFields) && Object.keys(report.extraFields).length) return null;
+    const uniqueUnits = [...new Set(units)];
+    if (new Set(uniqueUnits.map(unitIdentity)).size > 1
+      || (inferredUnit && uniqueUnits.length && unitIdentity(uniqueUnits[0]) !== unitIdentity(inferredUnit))) return null;
+    const unit = uniqueUnits[0] || inferredUnit;
+    if (unit && numberOrRange.test(text)) text += ` ${unit}`;
+    else if (unit && !text.endsWith(` ${unit}`)
+      && !(unitIdentity(unit) === "g/cm3" && / g\/cm[3³]$/u.test(text))) return null;
+    const uniqueQualifiers = [...new Set(qualifiers)];
+    if (text.length > 90 || uniqueQualifiers.join("; ").length > 100
+      || text.length + uniqueQualifiers.join("; ").length > 140) return null;
+    return { text, qualifiers: uniqueQualifiers };
+  };
+  const candidates = reports.map(makeCandidate);
+  // Compare complete report shapes, too: identical short values with different
+  // scopes, methods or historical qualifications are not interchangeable.
+  if (reports.length > 1) {
+    const identity = (report) => JSON.stringify([report.value, report.label, report.context, report.qualifications, report.extraFields]);
+    if (new Set(reports.map(identity)).size > 1) return pointer("See source reports");
+  }
+  const generalValues = general.map((item) => {
+    const text = shortText(item.value);
+    return text !== null && item.label === "Mohs hardness" && numberOrRange.test(text) ? `${text} Mohs` : text;
+  });
+  if (generalValues.some((value) => value === null)) return pointer();
+  if (candidates.some((value) => value === null)) return pointer();
+  const candidate = candidates[0] || (generalValues.length ? { text: generalValues[0], qualifiers: [] } : null);
+  if (!candidate) return pointer();
+  if (new Set(generalValues).size > 1 || generalValues.some((value) => value !== candidate.text)) return pointer("See source reports");
+  return { ...candidate, reports, mode: "summary" };
 }
 
 export function codRelationshipLabel(status) {

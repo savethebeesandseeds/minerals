@@ -1,5 +1,29 @@
 # Minerals project instructions
 
+## Cached COD metadata extraction assignments
+
+For the COD metadata extraction phase, read
+`docs/COD_METADATA_EXTRACTION_WORKFLOW.md` and use the prepared shared queue:
+
+```powershell
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh cod-extraction-queue next --worker <stable-unique-session-id> --compact
+```
+
+- Work only on the claimed mineral and token; reuse the same worker ID to resume.
+- This extraction phase uses five independent sessions at medium reasoning
+  effort, each with its own stable worker ID. Keep routine tool output concise.
+- Inspect each cached source revision and its mapped candidate, including prior
+  models, source locators, uncertainties, conditions and origin/status flags.
+- Complete through this queue with the source-check review and
+  `--confirm-reviewed`, then claim the next item. Each completed artifact is
+  durably staged privately; no additional batch save is needed.
+- Extraction checks do not approve species identity, publish data, or complete
+  the full content-research queue below. Do not use `content-save` for these
+  artifacts or write `minerals.db`. Keep deferred sources and gaps explicit.
+- Do not scrape COD, repeat whole-paper research or create per-mineral parsers.
+  Use `cod-extraction-queue status` for progress. Stale claims stay reserved
+  until explicitly reconciled with the previous worker idle.
+
 ## Shared mineral content assignments
 
 For mineral-detail research, read `docs/MINERAL_RECORD_RESEARCH_WORKFLOW.md`

@@ -1,5 +1,10 @@
 # Record-by-record mineral research
 
+The separate [cached COD metadata extraction phase](COD_METADATA_EXTRACTION_WORKFLOW.md)
+uses `cod-extraction-queue`. Its private candidate artifacts and extraction
+checks do not complete a full content first pass in this queue. Follow that
+workflow when dispatched specifically for COD extraction.
+
 **19 October 2026 checkpoint:** the sparse-record first pass is complete:
 1,993 reviewed and saved, with zero pending, active or submitted assignments in
 `broader_sparse`. The separate 4,233 catalogue jobs remain pending for a later

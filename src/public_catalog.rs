@@ -1,4 +1,5 @@
 use std::{
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File, OpenOptions},
     io::{self, ErrorKind, Read, Seek, Write},
     path::{Path, PathBuf},
@@ -67,6 +68,25 @@ pub struct PublicCatalogDatabase {
 /// negotiation. The manifest is the final commit point and is replaced
 /// atomically.
 pub fn export_public_catalog(data_root: &Path, output: &Path) -> Result<PublicCatalogManifest> {
+    export_public_catalog_inner(data_root, output, None)
+}
+
+/// Exports explicitly selected, metadata-checked source models without changing
+/// the private registry or promoting their scientific review status.
+pub fn export_public_catalog_with_research_overlay(
+    data_root: &Path,
+    output: &Path,
+    overlay_path: &Path,
+) -> Result<PublicCatalogManifest> {
+    let overlay = load_research_overlay(overlay_path)?;
+    export_public_catalog_inner(data_root, output, Some(overlay))
+}
+
+fn export_public_catalog_inner(
+    data_root: &Path,
+    output: &Path,
+    mut overlay: Option<BTreeMap<String, ResearchOverlayRecord>>,
+) -> Result<PublicCatalogManifest> {
     let live_database = data_root.join(LIVE_DATABASE_FILE);
     require_regular_non_symlink_file(&live_database, "live registry database")?;
     let canonical_data_root = data_root.canonicalize().with_context(|| {
@@ -147,6 +167,7 @@ pub fn export_public_catalog(data_root: &Path, output: &Path) -> Result<PublicCa
             &generated_at,
             &release_id,
             &offer_cutoff,
+            overlay.as_mut(),
         )?;
         destination_tx
             .commit()
@@ -1153,8 +1174,9 @@ fn copy_public_snapshot(
     generated_at: &str,
     release_id: &str,
     offer_cutoff: &str,
+    overlay: Option<&mut BTreeMap<String, ResearchOverlayRecord>>,
 ) -> Result<u64> {
-    let mineral_count = copy_minerals(source, destination, offer_cutoff)?;
+    let mineral_count = copy_minerals(source, destination, offer_cutoff, overlay)?;
     copy_evidence(source, destination)?;
     copy_offers(source, destination, offer_cutoff)?;
 
@@ -1439,6 +1461,173 @@ fn sanitize_public_value(value: &Value, filter_research_keys: bool) -> Option<Va
     }
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ResearchOverlay {
+    format: String,
+    schema_version: u32,
+    records: Vec<ResearchOverlayRecord>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ResearchOverlayRecord {
+    material_public_id: String,
+    canonical_name: String,
+    structures: Vec<Value>,
+}
+
+fn load_research_overlay(path: &Path) -> Result<BTreeMap<String, ResearchOverlayRecord>> {
+    require_regular_non_symlink_file(path, "research overlay")?;
+    let mut file = File::open(path).context("failed to open research overlay")?;
+    if file.metadata()?.len() > 64 * 1024 * 1024 {
+        bail!("research overlay exceeds 64 MiB");
+    }
+    let mut bytes = Vec::new();
+    Read::by_ref(&mut file)
+        .take(64 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > 64 * 1024 * 1024 {
+        bail!("research overlay exceeds 64 MiB");
+    }
+    let overlay: ResearchOverlay =
+        serde_json::from_slice(&bytes).context("invalid research overlay JSON")?;
+    if overlay.format != "waajacu-cod-public-model-selection-v1" || overlay.schema_version != 1 {
+        bail!("unsupported research overlay format or version");
+    }
+    let mut records = BTreeMap::new();
+    for record in overlay.records {
+        if !record.material_public_id.starts_with("mat_")
+            || record.canonical_name.trim().is_empty()
+            || record.structures.is_empty()
+        {
+            bail!("research overlay requires mineral identity and selected source models");
+        }
+        let mut pairs = BTreeSet::new();
+        for model in &record.structures {
+            validate_overlay_model(model)?;
+            if !pairs.insert((model["cod_id"].as_str(), model["revision"].as_str())) {
+                bail!("research overlay contains duplicate source revisions");
+            }
+        }
+        if records
+            .insert(record.material_public_id.clone(), record)
+            .is_some()
+        {
+            bail!("research overlay contains duplicate mineral identities");
+        }
+    }
+    Ok(records)
+}
+
+fn validate_overlay_model(model: &Value) -> Result<()> {
+    let object = model
+        .as_object()
+        .context("research overlay model must be an object")?;
+    let id = model.get("cod_id").and_then(Value::as_str).unwrap_or("");
+    let revision = model.get("revision").and_then(Value::as_str).unwrap_or("");
+    if id.len() != 7
+        || !id.bytes().all(|c| c.is_ascii_digit())
+        || revision.starts_with('0')
+        || revision.parse::<u64>().ok().is_none_or(|v| v == 0)
+        || !revision.bytes().all(|c| c.is_ascii_digit())
+    {
+        bail!("research overlay requires an exact COD identity and revision");
+    }
+    for (field, expected) in [
+        ("review_status", "unreviewed"),
+        ("data_basis", "saved_cod_metadata"),
+        ("validation_state", "metadata_extraction_checked"),
+        ("license_spdx", "CC0-1.0"),
+    ] {
+        if model.get(field).and_then(Value::as_str) != Some(expected) {
+            bail!("research overlay model has invalid {field}");
+        }
+    }
+    let expected_url = format!("https://www.crystallography.net/cod/{id}.cif@{revision}");
+    let locator = model
+        .get("metadata_source_locator")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if model.get("needs_review") != Some(&Value::Bool(true))
+        || model.get("source_url").and_then(Value::as_str) != Some(expected_url.as_str())
+        || model
+            .get("source_title")
+            .and_then(Value::as_str)
+            .is_none_or(|s| s.trim().is_empty())
+        || !locator.starts_with("#/")
+        || locator.contains('\\')
+        || locator.contains("://")
+        || locator.chars().any(char::is_control)
+        || locator
+            .split('~')
+            .skip(1)
+            .any(|part| !part.starts_with('0') && !part.starts_with('1'))
+        || model
+            .get("primary_assignment")
+            .is_some_and(|v| v != &Value::Bool(false))
+    {
+        bail!("research overlay model lacks public source qualification");
+    }
+    // Sanitization must be a no-op: reject private payloads instead of quietly
+    // losing qualifications or leaking arbitrary cached metadata into a release.
+    fn forbidden(value: &Value) -> bool {
+        match value {
+            Value::Object(fields) => fields.iter().any(|(key, value)| {
+                matches!(
+                    key.as_str(),
+                    "raw_row"
+                        | "candidate"
+                        | "metadata_locator"
+                        | "claim_token"
+                        | "worker"
+                        | "packet_sha256"
+                        | "review_note"
+                ) || is_internal_research_key(key)
+                    || forbidden(value)
+            }),
+            Value::Array(values) => values.iter().any(forbidden),
+            _ => false,
+        }
+    }
+    if object.is_empty()
+        || forbidden(model)
+        || sanitize_public_value(model, false).as_ref() != Some(model)
+    {
+        bail!("research overlay model contains non-public payload or source paths");
+    }
+    Ok(())
+}
+
+fn merge_research_overlay(properties: &mut Value, structures: Vec<Value>) -> Result<()> {
+    let properties = properties
+        .as_object_mut()
+        .context("public properties must be an object")?;
+    let research = properties.entry("public_research").or_insert_with(|| {
+        serde_json::json!({
+            "publication_status": "published", "review_status": "reviewed",
+            "observations": [], "structures": [], "cod_records": []
+        })
+    });
+    let research = research
+        .as_object_mut()
+        .context("public research must be an object")?;
+    let existing = research
+        .entry("structures")
+        .or_insert_with(|| Value::Array(Vec::new()))
+        .as_array_mut()
+        .context("public research structures must be an array")?;
+    for model in structures {
+        if !existing.iter().any(|prior| {
+            prior.get("cod_id") == model.get("cod_id")
+                && prior.get("revision") == model.get("revision")
+        }) {
+            existing.push(model);
+        }
+    }
+    Ok(())
+}
+
 fn project_public_properties(raw: &str) -> Result<Value> {
     let properties: Value = serde_json::from_str(raw).context("invalid mineral properties JSON")?;
     if explicitly_private(&properties) {
@@ -1700,6 +1889,7 @@ fn copy_minerals(
     source: &Transaction<'_>,
     destination: &Transaction<'_>,
     offer_cutoff: &str,
+    mut overlay: Option<&mut BTreeMap<String, ResearchOverlayRecord>>,
 ) -> Result<u64> {
     let mut select = source
         .prepare(
@@ -1801,7 +1991,17 @@ fn copy_minerals(
         let canonical_name = row.get::<_, String>(2)?;
         let formula = row.get::<_, String>(3)?;
         let mineral_family = row.get::<_, String>(5)?;
-        let properties = project_public_properties(&row.get::<_, String>(13)?)?;
+        let mut properties = project_public_properties(&row.get::<_, String>(13)?)?;
+        let public_id = row.get::<_, String>(1)?;
+        if let Some(record) = overlay
+            .as_mut()
+            .and_then(|records| records.remove(&public_id))
+        {
+            if record.canonical_name != canonical_name {
+                bail!("research overlay canonical name mismatch for mineral '{slug}'");
+            }
+            merge_research_overlay(&mut properties, record.structures)?;
+        }
         let identifiers: Value = serde_json::from_str(&row.get::<_, String>(12)?)
             .context("invalid mineral identifiers JSON")?;
         let identifiers =
@@ -1864,6 +2064,9 @@ fn copy_minerals(
             ])
             .with_context(|| format!("failed to index public mineral '{slug}'"))?;
         count += 1;
+    }
+    if overlay.is_some_and(|records| !records.is_empty()) {
+        bail!("research overlay contains unknown or non-public mineral identities");
     }
     Ok(count)
 }
@@ -2791,6 +2994,120 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    fn overlay_test_model() -> Value {
+        serde_json::json!({"cod_id": "1234567", "revision": "123",
+            "review_status": "unreviewed", "needs_review": true,
+            "data_basis": "saved_cod_metadata", "validation_state": "metadata_extraction_checked",
+            "source_url": "https://www.crystallography.net/cod/1234567.cif@123",
+            "source_title": "COD metadata selection sentinel", "license_spdx": "CC0-1.0",
+            "metadata_source_locator": "#/7418", "primary_assignment": false,
+            "qualification": "Metadata checked; identity remains unreviewed.",
+            "origin": {"raw_value": "synthetic", "markers": ["synthetic_text"]},
+            "cell": {"a": {"value": 7.8, "source_value": "7.8(2)", "standard_uncertainty": 0.2}}})
+    }
+
+    #[test]
+    fn research_overlay_rejects_private_payloads_and_preserves_existing_models() -> Result<()> {
+        let model = overlay_test_model();
+        validate_overlay_model(&model)?;
+        for (field, value) in [
+            ("raw_row", serde_json::json!({"file": "1234567"})),
+            ("local_path", Value::String("/app/data/private.json".into())),
+            ("review_status", Value::String("reviewed".into())),
+            ("primary_assignment", Value::Bool(true)),
+            (
+                "metadata_source_locator",
+                Value::String("data/pilots/private.json#/1".into()),
+            ),
+            ("private_research", Value::Bool(true)),
+        ] {
+            let mut rejected = model.clone();
+            rejected[field] = value;
+            assert!(
+                validate_overlay_model(&rejected).is_err(),
+                "accepted {field}"
+            );
+        }
+        let old =
+            serde_json::json!({"cod_id": "1234567", "revision": "123", "existing_model": true});
+        let mut properties = serde_json::json!({"public_research": {
+            "publication_status": "published", "review_status": "verified",
+            "structures": [old.clone()], "observations": [{"value": "kept"}]}});
+        let mut second = model.clone();
+        second["revision"] = Value::String("124".into());
+        merge_research_overlay(&mut properties, vec![model, second.clone()])?;
+        assert_eq!(
+            properties["public_research"]["structures"],
+            serde_json::json!([old, second])
+        );
+        assert_eq!(properties["public_research"]["review_status"], "verified");
+        assert_eq!(
+            properties["public_research"]["observations"][0]["value"],
+            "kept"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn research_overlay_export_is_source_scoped_indexed_and_read_only() -> Result<()> {
+        let data_root = TempDir::new()?;
+        let output = TempDir::new()?;
+        let selection = TempDir::new()?;
+        prepare_registry(data_root.path())?;
+        seed_live_registry(data_root.path())?;
+        let path = selection.path().join("selection.json");
+        let mut payload = serde_json::json!({"format": "waajacu-cod-public-model-selection-v1",
+            "schema_version": 1, "records": [{"material_public_id": "mat_public",
+            "canonical_name": "public-quartz", "structures": [overlay_test_model()]}]});
+        fs::write(&path, serde_json::to_vec(&payload)?)?;
+        let live_before = file_snapshot(&data_root.path().join(LIVE_DATABASE_FILE))?;
+        let manifest =
+            export_public_catalog_with_research_overlay(data_root.path(), output.path(), &path)?;
+        assert_eq!(
+            file_snapshot(&data_root.path().join(LIVE_DATABASE_FILE))?,
+            live_before
+        );
+        let public = Connection::open(output.path().join(manifest.database.path))?;
+        let raw: String = public.query_row(
+            "SELECT properties_json FROM minerals WHERE public_id='mat_public'",
+            [],
+            |r| r.get(0),
+        )?;
+        let properties: Value = serde_json::from_str(&raw)?;
+        assert_eq!(
+            properties["public_research"]["structures"][0],
+            overlay_test_model()
+        );
+        assert_eq!(properties["hardness"], 7);
+        let indexed: i64 = public.query_row(
+            "SELECT COUNT(*) FROM mineral_search WHERE mineral_search MATCH 'sentinel'",
+            [],
+            |r| r.get(0),
+        )?;
+        assert_eq!(indexed, 1);
+        payload["records"][0]["canonical_name"] = Value::String("wrong-name".into());
+        fs::write(&path, serde_json::to_vec(&payload)?)?;
+        assert!(export_public_catalog_with_research_overlay(
+            data_root.path(),
+            TempDir::new()?.path(),
+            &path
+        )
+        .is_err());
+        payload["records"][0]["material_public_id"] = Value::String("mat_unknown".into());
+        fs::write(&path, serde_json::to_vec(&payload)?)?;
+        assert!(export_public_catalog_with_research_overlay(
+            data_root.path(),
+            TempDir::new()?.path(),
+            &path
+        )
+        .is_err());
+        payload["records"][0]["structures"] =
+            serde_json::json!([overlay_test_model(), overlay_test_model()]);
+        fs::write(&path, serde_json::to_vec(&payload)?)?;
+        assert!(load_research_overlay(&path).is_err());
+        Ok(())
+    }
 
     #[test]
     fn export_is_sanitized_searchable_integral_and_rerunnable() -> Result<()> {

@@ -109,6 +109,15 @@ Use the existing managed admin container on Windows:
 docker compose exec -T --user 0:0 admin bash tools/container-task.sh public-export
 ```
 
+For the completed COD metadata extraction, prepare the reviewed source-model
+selection with `container-task.sh cod-public-selection`, then supply its printed
+private selection path to `public-export --research-overlay PATH`. The overlay
+is applied only to the freshly built public database. It does not write the
+private registry or upgrade the scientific review status of metadata candidates.
+The selection audit retains the frozen queue, source hashes, review bindings,
+withheld sources and publication qualifications privately. See the
+[extraction workflow](COD_METADATA_EXTRACTION_WORKFLOW.md).
+
 The task builds, exports and validates in a fresh container-local directory.
 It then preserves the exact reviewed release through the existing private
 data bind and prints its host location under the ignored

@@ -4605,10 +4605,28 @@ mod tests {
     }
 
     #[test]
-    fn committed_inputs_prepare_verify_and_detect_tampering() -> Result<()> {
+    fn committed_inputs_preserve_the_frozen_preparation_boundary() -> Result<()> {
         let root = workspace_root()?;
         let temporary = TempDir::new()?;
         let output = temporary.path().join("prepared");
+
+        // The pilot freezes a historical population, while public-catalog is a
+        // rolling website release. A newer release must fail closed rather than
+        // silently becoming the population for an already executed pilot.
+        // MINERALS_TEST_REPO_ROOT can point at the original frozen checkout to
+        // exercise the complete historical prepare/verify path below.
+        let pilot = validate_pilot_contract(&root)?;
+        let catalog: PublicCatalogManifest = serde_json::from_slice(&fs::read(
+            root.join(PUBLIC_CATALOG_PATH).join("catalog-manifest.json"),
+        )?)?;
+        if validate_catalog_binding(&catalog, &pilot).is_err() {
+            assert!(prepare(&root, &output).is_err());
+            assert!(
+                !output.exists(),
+                "rejected catalog must not create a preparation"
+            );
+            return Ok(());
+        }
 
         let prepared = prepare(&root, &output)?;
         assert_eq!(prepared.inputs.public_catalog.mineral_count, 6_226);
@@ -4627,6 +4645,56 @@ mod tests {
         tampered.push(b' ');
         fs::write(output.join(BASELINE_SELECTION_FILE), tampered)?;
         assert!(verify(&root, &output).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn frozen_catalog_manifest_rejects_each_binding_change() -> Result<()> {
+        let root = workspace_root()?;
+        let pilot = validate_pilot_contract(&root)?;
+        let frozen: PublicCatalogManifest = serde_json::from_value(serde_json::json!({
+            "format": PUBLIC_CATALOG_FORMAT,
+            "schema_version": PUBLIC_CATALOG_SCHEMA_VERSION,
+            "generated_at": "2026-09-01T00:00:00.000Z",
+            "release_id": EXPECTED_RELEASE_ID,
+            "mineral_count": EXPECTED_POPULATION_COUNT,
+            "database": {"path": "data/frozen.sqlite3",
+                "sha256": EXPECTED_DATABASE_SHA256, "bytes": EXPECTED_DATABASE_BYTES}
+        }))?;
+        validate_catalog_binding(&frozen, &pilot)?;
+        let mut changed = frozen.clone();
+        changed.release_id = format!("sha256:{}", "0".repeat(64));
+        assert!(validate_catalog_binding(&changed, &pilot).is_err());
+        changed = frozen.clone();
+        changed.database.sha256 = format!("sha256:{}", "0".repeat(64));
+        assert!(validate_catalog_binding(&changed, &pilot).is_err());
+        changed = frozen.clone();
+        changed.mineral_count += 1;
+        assert!(validate_catalog_binding(&changed, &pilot).is_err());
+        changed = frozen;
+        changed.database.bytes += 1;
+        assert!(validate_catalog_binding(&changed, &pilot).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn canonical_preparation_artifact_roundtrips_and_detects_tampering() -> Result<()> {
+        // This fixture is independent of the rolling website catalog. Exercise
+        // the same byte/hash/canonical verification used for prepared artifacts.
+        let temporary = TempDir::new()?;
+        let bytes = canonical_file_bytes(&build_query_plan()?)?;
+        let binding = artifact_binding(QUERY_PLAN_FILE, &bytes);
+        let path = temporary.path().join(QUERY_PLAN_FILE);
+        fs::write(&path, &bytes)?;
+        verify_canonical_file(&path, &bytes, &binding)?;
+        let mut tampered = bytes.clone();
+        tampered.push(b' ');
+        fs::write(&path, &tampered)?;
+        assert!(verify_canonical_file(&path, &bytes, &binding).is_err());
+        fs::write(&path, &bytes)?;
+        let mut tampered_binding = binding;
+        tampered_binding.sha256 = format!("sha256:{}", "0".repeat(64));
+        assert!(verify_canonical_file(&path, &bytes, &tampered_binding).is_err());
         Ok(())
     }
 

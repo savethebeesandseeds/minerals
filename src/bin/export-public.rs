@@ -10,8 +10,8 @@ use std::{
 use anyhow::{bail, Context, Result};
 use getrandom::getrandom;
 use minerals_public_catalog::{
-    copy_public_catalog_source, export_public_catalog, validate_public_catalog_release,
-    PublicCatalogManifest, PUBLIC_CATALOG_MANIFEST_FILE,
+    copy_public_catalog_source, export_public_catalog, export_public_catalog_with_research_overlay,
+    validate_public_catalog_release, PublicCatalogManifest, PUBLIC_CATALOG_MANIFEST_FILE,
 };
 
 const PUBLIC_APP_FILES: &[&str] = &[
@@ -74,7 +74,11 @@ fn run(arguments: Vec<OsString>) -> Result<()> {
             }
             stage_and_promote(&output, |staging| {
                 copy_public_app(&app_root, staging)?;
-                let expected = export_public_catalog(&data_root, staging)?;
+                let expected = if let Some(overlay) = options.research_overlay.as_deref() {
+                    export_public_catalog_with_research_overlay(&data_root, staging, overlay)?
+                } else {
+                    export_public_catalog(&data_root, staging)?
+                };
                 let published = validate_existing_release(staging, &app_root)?;
                 if published != expected {
                     bail!("completed public catalog manifest differs from the exported release");
@@ -235,6 +239,7 @@ fn safe_catalog_relative_path(value: &str) -> Result<PathBuf> {
 #[derive(Debug, PartialEq, Eq)]
 struct Options {
     app_root: PathBuf,
+    research_overlay: Option<PathBuf>,
     mode: Mode,
 }
 
@@ -259,6 +264,7 @@ impl Options {
         let mut app_root = None;
         let mut validate_release = None;
         let mut assemble_catalog = None;
+        let mut research_overlay = None;
         let mut list_app_files = false;
         let mut arguments = arguments.into_iter();
         while let Some(argument) = arguments.next() {
@@ -278,6 +284,7 @@ impl Options {
                 "--app-root" => &mut app_root,
                 "--validate-release" => &mut validate_release,
                 "--assemble-catalog" => &mut assemble_catalog,
+                "--research-overlay" => &mut research_overlay,
                 _ if name.starts_with('-') => bail!("unknown option '{name}'"),
                 _ => bail!("unexpected positional argument '{name}'"),
             };
@@ -323,8 +330,12 @@ impl Options {
                 output: output.context("missing required --output PATH")?,
             }
         };
+        if research_overlay.is_some() && !matches!(mode, Mode::Export { .. }) {
+            bail!("--research-overlay requires --data-root export mode");
+        }
         Ok(Some(Self {
             app_root: app_root.unwrap_or_else(|| PathBuf::from("public-app")),
+            research_overlay,
             mode,
         }))
     }
@@ -887,6 +898,7 @@ fn print_help() {
          export-public --validate-release PATH [--app-root PATH]\n  \
          export-public --list-app-files\n\n\
          Options:\n  --data-root PATH  Directory containing the live minerals.db\n  \
+         --research-overlay PATH\n                    Explicit public model selection for data-root export only\n  \
          --output PATH     New static release directory; must not already exist\n  \
          --assemble-catalog SOURCE\n                    Assemble a full release from a catalog-only source\n  \
          --validate-release PATH\n                    Validate an existing static release without changing it\n  \
@@ -905,6 +917,39 @@ mod tests {
     use tempfile::TempDir;
 
     use super::*;
+
+    #[test]
+    fn research_overlay_is_only_accepted_for_registry_export() -> Result<()> {
+        let options = Options::parse(vec![
+            "--data-root".into(),
+            "data".into(),
+            "--output".into(),
+            "release".into(),
+            "--research-overlay".into(),
+            "selection.json".into(),
+        ])?
+        .unwrap();
+        assert_eq!(
+            options.research_overlay,
+            Some(PathBuf::from("selection.json"))
+        );
+        for mode in ["--assemble-catalog", "--validate-release"] {
+            assert!(Options::parse(vec![
+                mode.into(),
+                "source".into(),
+                "--research-overlay".into(),
+                "selection.json".into()
+            ])
+            .is_err());
+        }
+        assert!(Options::parse(vec![
+            "--list-app-files".into(),
+            "--research-overlay".into(),
+            "selection.json".into()
+        ])
+        .is_err());
+        Ok(())
+    }
 
     #[test]
     fn options_require_roots_and_default_the_app_root() -> Result<()> {
@@ -941,6 +986,7 @@ mod tests {
             options,
             Options {
                 app_root: PathBuf::from("app"),
+                research_overlay: None,
                 mode: Mode::Validate {
                     release: PathBuf::from("release"),
                 },
@@ -978,6 +1024,7 @@ mod tests {
             options,
             Options {
                 app_root: PathBuf::from("app"),
+                research_overlay: None,
                 mode: Mode::Assemble {
                     source: PathBuf::from("catalog-source"),
                     output: PathBuf::from("release"),
@@ -1012,6 +1059,7 @@ mod tests {
             Options::parse(vec!["--list-app-files".into()])?.unwrap(),
             Options {
                 app_root: PathBuf::from("public-app"),
+                research_overlay: None,
                 mode: Mode::ListAppFiles,
             }
         );

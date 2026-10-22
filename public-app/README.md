@@ -237,6 +237,59 @@ Navigation remains client-side in the selected mode, and back/forward events rer
 
 Theme and UI-language choices are browser-local preferences. They do not alter the immutable catalog database.
 
+## Mineral article layout
+
+Mineral pages use a compact reference layout: an introduction, section contents,
+a formula and identity infobox, source-scoped observation rows, and numbered
+references. The infobox is a short summary of explicit record properties and
+released research. Safe short values retain citations and essential qualifiers;
+complex or differing reports use a brief pointer instead of selecting one value.
+Each researched summary links to its complete original observation in the main
+article, revealing later collection pages before scrolling and focusing it.
+Full values, specimen details, conditions, qualifications and conflicting
+measurements remain in the article. Unknown properties are omitted. Attribution
+and licenses stay in the numbered reference disclosures.
+
+Missing content does not generate narrative placeholders or generic explanatory
+paragraphs. Overview and its contents link appear only when a description exists.
+Source-specific qualifications and relationship statuses remain attached to the
+actual record content.
+
+Contents and citation controls scroll and focus their targets without changing
+the hash route. Long observation collections, model lists and references load
+progressively. Side panels stay visible while scrolling only when the layout has
+a side column and the panel fits vertically; expanding a panel or resizing the
+viewport recalculates this behavior.
+
+The article uses shared observation adapters for current and legacy question
+keys, explicit scope and measurement context. Small scalar lists, numeric ranges
+and measurement objects have compact displays; remaining fields retain their
+labels, and unfamiliar shapes fall back to the generic structured view. The
+adapters do not parse prose as JSON or turn specimen observations into universal
+mineral properties. The infobox selector uses explicit question aliases and known
+compound fields, preserving unfamiliar sibling fields as report context. It does
+not infer properties from descriptions or deposited crystal models. Unpublished
+research is excluded before normalization.
+
+Reference titles have a two-line preview with expandable full titles, credits,
+license scopes and original claim data. Revision-specific COD work links can
+unify a matching catalog wrapper and deposited model; different revisions and
+dated documents remain separate. Direct DOI resolver aliases may share a
+reference, but paper titles and DOI fields on specimen models do not establish
+source identity. Every original link and claim remains in the source details.
+Source-publication licenses and attached-content licenses are labelled
+separately. Publication metadata is expandable; offers appear when active
+published offers exist. Narrow layouts retain the same record data.
+
+The 22 October COD selection adds checked metadata as source-scoped crystal
+models. The first six models are shown directly with compact cell measurements,
+reported symmetry, conditions, origin and numbered citations. Further models
+load progressively; full provenance and all additional fields remain available
+in each model's disclosure. Explicit source cautions remain beside the values.
+These models do not supply species-wide infobox facts or replace earlier
+curated models. Synthetic, related and uncertain associations retain their
+classifications.
+
 ## Optional map integration
 
 This checkout and its exporter bundle the finalized map package under `map/`.

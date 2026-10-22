@@ -76,6 +76,39 @@ contracts() {
 }
 
 case "${1:-}" in
+  cod-public-selection)
+    shift
+    run_private python3 -B tools/prepare-cod-public-selection.py "$@"
+    ;;
+  cod-public-selection-test)
+    (( $# == 1 )) || fail 'cod-public-selection-test takes no arguments'
+    run_private python3 -B -m unittest tools/test_prepare_cod_public_selection.py
+    ;;
+  public-format)
+    (( $# == 1 )) || fail 'public-format takes no arguments'
+    task_format_folder=$(mktemp -d /tmp/minerals-public-format.XXXXXXXX)
+    chown 10001:10001 "$task_format_folder"
+    run_builder python3 -B - "$task_format_folder" <<'PY'
+from pathlib import Path
+import subprocess, sys
+folder = Path(sys.argv[1])
+for relative in ('src/public_catalog.rs', 'src/bin/export-public.rs', 'src/cod_pilot.rs'):
+    target = folder / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open('wb') as output:
+        subprocess.run(['rustfmt', '--edition', '2021', '--emit', 'stdout'],
+                       input=Path(relative).read_bytes(), stdout=output, check=True)
+print(folder)
+PY
+    ;;
+  cod-extraction-queue)
+    shift
+    run_private python3 -B tools/cod-extraction-queue.py "$@"
+    ;;
+  cod-extraction-queue-test)
+    (( $# == 1 )) || fail 'cod-extraction-queue-test takes no arguments'
+    run_private python3 -B -m unittest tools/test_cod_extraction_queue.py tools/test_cod_metadata_candidates.py
+    ;;
   content-queue)
     shift
     run_private python3 -B tools/mineral-content-queue.py "$@"
@@ -126,6 +159,7 @@ case "${1:-}" in
     (( $# == 1 )) || fail 'validate takes no arguments'
     contracts
     run_builder python3 -B -m unittest tools/test_check_public_boundary.py
+    run_private python3 -B -m unittest tools/test_cod_extraction_queue.py tools/test_cod_metadata_candidates.py tools/test_prepare_cod_public_selection.py
     run_builder node --test tools/test_validate_public_catalog_sidecars.mjs
     open_cache
     run_builder cargo fmt --all -- --check
@@ -143,7 +177,12 @@ case "${1:-}" in
     printf 'Container validation passed. Reviewed release: %s\n' "$task_release_parent/release"
     ;;
   public-export)
-    (( $# == 1 )) || fail 'public-export takes no arguments'
+    task_export_extra=()
+    if (( $# == 3 )) && [[ "$2" == --research-overlay ]]; then
+      task_export_extra=(--research-overlay "$3")
+    else
+      (( $# == 1 )) || fail 'public-export accepts only --research-overlay PRIVATE_SELECTION_JSON'
+    fi
     open_cache
     run_builder cargo build --locked --release -p minerals-public-catalog --bin export-public
     chmod 0555 "$TASK_TARGET/release/export-public"
@@ -151,7 +190,7 @@ case "${1:-}" in
     task_public_parent=$(mktemp -d /tmp/minerals-public-export.XXXXXXXX)
     chown "$task_private_uid:$task_private_gid" "$task_public_parent"
     run_private "$TASK_TARGET/release/export-public" --data-root /app/data \
-      --output "$task_public_parent/release" --app-root public-app
+      --output "$task_public_parent/release" --app-root public-app "${task_export_extra[@]}"
     run_private "$TASK_TARGET/release/export-public" --validate-release "$task_public_parent/release" \
       --app-root public-app
     task_public_archive="/app/data/backups/public-exports/${task_public_parent##*/}"
@@ -212,5 +251,5 @@ case "${1:-}" in
         --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT"
     fi
     ;;
-  *) fail 'expected content-queue, content-queue-test, image-queue, image-queue-test, contracts, validate, public-export, public-assemble, record-research, pilot-test, pilot-match, pilot-verify-matching, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
+  *) fail 'expected cod-extraction-queue, cod-extraction-queue-test, cod-public-selection, cod-public-selection-test, content-queue, content-queue-test, image-queue, image-queue-test, contracts, validate, public-export, public-assemble, public-format, record-research, pilot-test, pilot-match, pilot-verify-matching, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
 esac

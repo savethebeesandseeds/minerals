@@ -1,15 +1,19 @@
 import {
   codRelationshipLabel,
-  groupEvidenceBySource,
+  compactStructuredValue,
+  groupMineralObservations,
   isOfferActiveAt,
   normalizeSearchParams,
   parseRoute,
   publishedResearchProfile,
+  researchedMineralFacts,
+  summarizeMineralFact,
+  sourceModelSummary,
   routeHref,
   validateManifest,
   validateWorkerRequest,
   validateWorkerResponse,
-} from "./app-core.mjs?v=404876beba54ab9ce98d46377ad555a86f60213472fcdca426e0b6739da3c03b";
+} from "./app-core.mjs?v=9e264770c30560be5d06c168521b3d2c83107e88c167a27736aed90a744a1718";
 import { registerMineralsWebMcp } from "./webmcp.mjs";
 
 const CATALOG_WORKER_REVISION = "c2542afda6bbade538ec5c4e7b3cbdd668f5ffef215439b113408f7a1f814d80";
@@ -154,6 +158,7 @@ function formatNumber(value) {
 }
 
 function qualityPercent(value) {
+  if (value === null || value === undefined || (typeof value === "string" && !value.trim())) return null;
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(0, Math.min(100, Math.round(number * 100))) : null;
 }
@@ -610,29 +615,38 @@ function lazyDetails(label, render) {
   return details;
 }
 
-function progressiveCollection(items, render, { tag = "div", className = "", pageSize = 20 } = {}) {
+function progressiveCollection(items, render, { tag = "div", className = "", pageSize = 20, registerReveal = null } = {}) {
   const list = element(tag, { className });
   const wrapper = element("div", {}, [list]);
   let shown = 0;
   const more = element("button", { className: "pager-link", attrs: { type: "button" } });
-  const appendNext = () => {
-    const end = Math.min(shown + pageSize, items.length);
+  const appendUntil = (count) => {
+    const end = Math.min(count, items.length);
     for (; shown < end; shown += 1) list.append(render(items[shown], shown));
     const remaining = items.length - shown;
     more.textContent = `Show ${Math.min(pageSize, remaining)} more (${formatNumber(remaining)} remaining)`;
     if (remaining === 0) more.remove();
   };
+  const appendNext = () => appendUntil(shown + pageSize);
+  registerReveal?.((index) => appendUntil(Math.max(shown, Math.ceil((index + 1) / pageSize) * pageSize)));
   more.addEventListener("click", appendNext);
   wrapper.append(more);
   appendNext();
   return wrapper;
 }
 
-function structuredData(value, depth = 0) {
+function structuredData(value, depth = 0, allowCompact = true) {
   if (value === null || typeof value !== "object") return element("span", { text: value === null ? "—" : String(value) });
   if (depth > 4) {
     const size = Array.isArray(value) ? value.length : Object.keys(value).length;
-    return lazyDetails(`Expand ${formatNumber(size)} ${Array.isArray(value) ? "items" : "fields"}`, () => structuredData(value));
+    return lazyDetails(`Expand ${formatNumber(size)} ${Array.isArray(value) ? "items" : "fields"}`, () => structuredData(value, 0, allowCompact));
+  }
+  const compact = allowCompact ? compactStructuredValue(value) : null;
+  if (compact) {
+    return element("div", { className: "structured-value" }, [
+      element("span", { className: "structured-value-summary", text: compact.text }),
+      Object.keys(compact.remaining).length ? structuredData(compact.remaining, depth + 1, false) : null,
+    ]);
   }
   if (Array.isArray(value)) {
     return progressiveCollection(value, (item) => element("li", {}, structuredData(item, depth + 1)), { tag: "ul", className: "structured-list" });
@@ -644,16 +658,9 @@ function fact(label, value) {
   return element("div", { className: "record-fact" }, [element("dt", { text: label }), element("dd", { text: value ?? "—" })]);
 }
 
-function jsonPanel(title, raw) {
-  const data = parsedJson(raw);
-  if (data === null || (Array.isArray(data) && data.length === 0) || (typeof data === "object" && !Array.isArray(data) && Object.keys(data).length === 0)) return null;
-  return element("section", { className: "record-panel" }, [paragraph("STRUCTURED DATA", "panel-index"), element("h2", { text: title }), structuredData(data)]);
-}
-
 function researchSource(item) {
   const source = element("div", { className: "research-source" });
   if (item.source_url) source.append(externalLink(item.source_url, "SOURCE ↗"));
-  else source.append(paragraph("Source link not supplied", "muted"));
   if (item.locator) source.append(paragraph(item.locator, "muted"));
   const attribution = [item.source_title, item.publisher, item.license_spdx].filter(Boolean);
   if (attribution.length) source.append(paragraph(attribution.join(" · "), "muted"));
@@ -666,7 +673,7 @@ function researchSource(item) {
   if (item.attribution && typeof item.attribution === "object") {
     source.append(lazyDetails("Source credits and reuse", () => structuredData(item.attribution)));
   }
-  return source;
+  return source.childNodes.length ? source : null;
 }
 
 function researchQualification(item) {
@@ -674,86 +681,32 @@ function researchQualification(item) {
   return notes.map((value) => typeof value === "string" ? paragraph(value, "notice") : element("div", { className: "notice" }, structuredData(value)));
 }
 
-function researchObservation(item) {
-  const key = String(item.question_key || "Observation").split(".").at(-1);
-  const context = [item.subject_scope ? `Applies to: ${humanLabel(item.subject_scope)}` : null, item.unit ? `Unit: ${item.unit}` : null].filter(Boolean);
-  return element("article", { className: "research-item" }, [
-    element("h3", { text: humanLabel(key) }),
-    context.length ? paragraph(context.join(" · "), "muted") : null,
-    structuredData(item.value),
-    researchSource(item),
-    ...researchQualification(item),
-    item.source_access || item.review_status || item.evidence_level ? lazyDetails("Source access and review", () => structuredData(Object.fromEntries(Object.entries({ source_access: item.source_access, review_status: item.review_status, evidence_level: item.evidence_level, production_kind: item.production_kind }).filter(([, value]) => value !== undefined)))) : null,
-  ].filter(Boolean));
-}
-
-function researchObservationsPanel(items) {
-  if (!items.length) return null;
-  const labels = { physical: "Physical properties", optical: "Optical properties", chemistry: "Chemistry", crystallography: "Crystallography", geology: "Occurrence and formation", history: "History", editorial: "Qualifications and remaining gaps" };
-  const groups = new Map();
-  for (const item of items) {
-    const group = String(item.question_key || "observations").split(".")[0];
-    if (!groups.has(group)) groups.set(group, []);
-    groups.get(group).push(item);
-  }
-  return element("section", { className: "record-panel research-panel" }, [
-    paragraph("PUBLISHED RESEARCH", "panel-index"), element("h2", { text: "Research observations" }),
-    paragraph("Measurements and interpretations retain their specimen, conditions and source qualifications.", "muted"),
-    ...[...groups].map(([key, observations]) => element("section", { className: "research-group" }, [
-      element("h3", { text: `${labels[key] || humanLabel(key)} (${formatNumber(observations.length)})` }),
-      progressiveCollection(observations, researchObservation, { pageSize: 12 }),
-    ])),
-  ]);
-}
-
 function codReference(item) {
   return element("article", { className: "research-item" }, [
     element("h3", { text: `COD ${item.cod_id}${item.revision ? ` · revision ${item.revision}` : ""}` }),
-    paragraph(codRelationshipLabel(item.status), "muted"),
+    item.status ? paragraph(codRelationshipLabel(item.status), "muted") : null,
     item.relationship ? paragraph(humanLabel(item.relationship)) : null,
-    item.primary_assignment === true ? paragraph("Primary COD association for this record. Specimen and phase qualifications still apply.", "notice") : null,
+    item.primary_assignment === true ? paragraph("Primary COD association", "notice") : null,
     researchSource(item), ...researchQualification(item),
   ].filter(Boolean));
 }
 
-function crystalModel(item) {
-  const excluded = new Set(["cod_id", "revision", "source_url", "source_formula", "qualifiers", "qualification", "scientific_note", "locator", "status", "relationship", "primary_assignment"]);
-  const model = Object.fromEntries(Object.entries(item).filter(([key]) => !excluded.has(key)));
-  const origin = item.sample_origin ?? item.origin ?? item.specimen_origin ?? item.conditions?.sample_origin ?? item.conditions?.origin;
-  return element("article", { className: "research-item" }, [
-    element("h3", { text: `COD ${item.cod_id}${item.revision ? ` · revision ${item.revision}` : ""}` }),
-    paragraph(codRelationshipLabel(item.status), "muted"),
-    item.relationship ? paragraph(humanLabel(item.relationship)) : null,
-    typeof origin === "string" ? paragraph(`Specimen origin: ${humanLabel(origin)}`, "notice")
-      : origin ? element("div", { className: "notice" }, [paragraph("Specimen origin"), structuredData(origin)])
-        : paragraph("Specimen origin: unreported in this model.", "notice"),
-    item.primary_assignment === true ? paragraph("Primary COD association for this record. Specimen and phase qualifications still apply.", "notice") : null,
-    paragraph(`Source model formula: ${typeof item.source_formula === "string" ? item.source_formula : "see source formula below"}`, "muted"),
-    item.source_formula && typeof item.source_formula !== "string" ? structuredData(item.source_formula) : null,
-    paragraph("This model describes the deposited specimen and experimental conditions; its measurements are not universal mineral properties.", "muted"),
-    item.validation_state ? paragraph(`Validation: ${humanLabel(item.validation_state)}`, "notice") : null,
-    item.data_basis ? paragraph(`Data basis: ${humanLabel(item.data_basis)}`, "muted") : null,
-    item.pinned_CIF_review !== undefined ? element("div", {}, [paragraph("Pinned CIF review", "panel-index"), structuredData(item.pinned_CIF_review)]) : null,
-    structuredData(Object.fromEntries(Object.entries(model).filter(([key]) => ["cell", "symmetry", "conditions", "specimen", "origin", "sample_origin"].includes(key)))),
-    researchSource(item), ...researchQualification(item),
-    Object.keys(model).some((key) => !["cell", "symmetry", "conditions", "specimen", "origin", "sample_origin"].includes(key))
-      ? lazyDetails("More model measurements and source details", () => structuredData(model)) : null,
+function crystalModel(item, references) {
+  const summary = sourceModelSummary(item);
+  const associations = Array.isArray(item.source_associations) ? item.source_associations : [item];
+  const relationshipNotes = [...new Set(associations.flatMap((association) => [
+    association.status ? codRelationshipLabel(association.status) : null,
+    association.relationship ? humanLabel(association.relationship) : null,
+  ]).filter(Boolean))];
+  return element("article", { className: "research-item source-model" }, [
+    element("h3", {}, [element("span", { text: `Source model · COD ${item.cod_id}${item.revision ? ` · revision ${item.revision}` : ""}` }), references?.citation(item)].filter(Boolean)),
+    relationshipNotes.length ? paragraph(relationshipNotes.join(" · "), "muted") : null,
+    element("dl", { className: "source-model-facts" }, summary.rows.map(({ label, value }) => fact(label, value))),
+    summary.cell.length ? element("dl", { className: "source-model-cell", attrs: { "aria-label": "Deposited unit cell" } }, summary.cell.map(({ label, value }) => fact(label, value))) : null,
+    ...summary.qualification.filter((note) => !(relationshipNotes.length && note === "Deposited source model; relationship to this mineral retains the source classifications."))
+      .map((note) => typeof note === "string" ? paragraph(note, "notice") : element("div", { className: "notice" }, structuredData(note))),
+    lazyDetails("Model measurements and source provenance", () => structuredData(summary.record)),
   ].filter(Boolean));
-}
-
-function researchPanels(research) {
-  if (!research) return [];
-  const panels = [researchObservationsPanel(research.observations)];
-  if (research.cod_records.length) panels.push(element("section", { className: "record-panel research-panel" }, [
-    paragraph("SOURCE RELATIONSHIPS", "panel-index"), element("h2", { text: "COD references" }),
-    paragraph("A shared name provides a lead. Assessed phase relationships, counterparts and uncertain models are labelled separately.", "muted"),
-    progressiveCollection(research.cod_records, codReference, { pageSize: 12 }),
-  ]));
-  if (research.structures.length) panels.push(element("section", { className: "record-panel research-panel" }, [
-    paragraph("DEPOSITED CRYSTALLOGRAPHY", "panel-index"), element("h2", { text: "Crystal models" }),
-    progressiveCollection(research.structures, crystalModel, { pageSize: 6 }),
-  ]));
-  return panels.filter(Boolean);
 }
 
 function evidenceCard(item, index) {
@@ -765,7 +718,7 @@ function evidenceCard(item, index) {
       item.license_spdx ? statusChip(item.license_spdx) : null,
     ].filter(Boolean)),
     element("h3", { text: title }),
-    paragraph([item.publisher, item.attribution_party].filter(Boolean).join(" · ") || "Published source", "muted"),
+    item.publisher || item.attribution_party ? paragraph([item.publisher, item.attribution_party].filter(Boolean).join(" · "), "muted") : null,
   ]);
   const url = item.canonical_url || item.work_url;
   if (url) card.append(externalLink(url, "OPEN SOURCE ↗"));
@@ -774,23 +727,6 @@ function evidenceCard(item, index) {
   card.append(lazyDetails("Source provenance", () => structuredData({ confidence: item.confidence, retrieved_at: item.retrieved_at, content_hash: item.content_hash, license_url: item.license_url, work_title: item.work_title, derived_output_license_spdx: item.derived_output_license_spdx })));
   for (const notice of [item.changes_notice, item.no_endorsement_notice].filter(Boolean)) card.append(paragraph(notice, "notice"));
   return card;
-}
-
-function evidenceSourceCard(items, index) {
-  if (items.length === 1) return evidenceCard(items[0], index);
-  const first = items[0];
-  const reviewStatuses = [...new Set(items.map((item) => item.review_status).filter(Boolean))];
-  return element("article", { className: "evidence-card" }, [
-    paragraph(`${formatNumber(items.length)} attached claims`, "panel-index"),
-    element("div", { className: "evidence-meta" }, [
-      ...reviewStatuses.map((status) => statusChip(status, status === "verified" ? "verified" : "")),
-      first.license_spdx ? statusChip(first.license_spdx) : null,
-    ].filter(Boolean)),
-    element("h3", { text: first.title || first.work_title || `Source ${index + 1}` }),
-    paragraph([first.publisher, first.attribution_party].filter(Boolean).join(" · ") || "Published source", "muted"),
-    externalLink(first.canonical_url || first.work_url, "OPEN SOURCE ↗"),
-    lazyDetails(`Read all ${formatNumber(items.length)} claims and their provenance`, () => progressiveCollection(items, evidenceCard, { pageSize: 12 })),
-  ]);
 }
 
 function priceText(item) {
@@ -818,6 +754,174 @@ function offerCard(item) {
   return card;
 }
 
+function articleJump(target, label, className = "article-jump", beforeJump = null) {
+  const button = element("button", { text: label, className, attrs: { type: "button", "aria-controls": target } });
+  button.addEventListener("click", () => {
+    beforeJump?.();
+    const section = document.getElementById(target);
+    if (!section) return;
+    section.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
+    section.focus({ preventScroll: true });
+  });
+  return button;
+}
+
+function articleReferences(research, evidence) {
+  const entries = [];
+  const descriptionItems = [];
+  const byUrl = new Map();
+  const sourceFor = (item) => {
+    const urls = [...new Set([item.source_url, item.canonical_url, item.work_url].map(safeHttpUrl).filter(Boolean))];
+    const url = urls[0] || null;
+    const codHosts = new Set(["crystallography.net", "www.crystallography.net"]);
+    const pinnedCod = (candidate) => {
+      if (!candidate) return null;
+      const parsed = new URL(candidate);
+      return codHosts.has(parsed.hostname) && !parsed.search && !parsed.hash ? parsed.pathname.match(/^\/cod\/(\d{7})\.cif@(\d+)$/) : null;
+    };
+    const pinned = pinnedCod(url);
+    if (pinned) return { url, urls, key: `cod:${pinned[1]}@${pinned[2]}` };
+    if (url) {
+      const parsed = new URL(url);
+      const page = codHosts.has(parsed.hostname) && !parsed.search && !parsed.hash ? parsed.pathname.match(/^\/cod\/(\d{7})\.html$/) : null;
+      const work = pinnedCod(safeHttpUrl(item.work_url));
+      if (page && work && page[1] === work[1]) return { url, urls, key: `cod:${work[1]}@${work[2]}` };
+      if (["doi.org", "dx.doi.org"].includes(parsed.hostname) && !parsed.search && !parsed.hash) {
+        try {
+          const doi = decodeURIComponent(parsed.pathname.slice(1));
+          if (/^10\.\d{4,9}\/\S+$/i.test(doi)) return { url, urls, key: `doi:${doi.toLowerCase()}` };
+        } catch { /* Unrecognized encodings retain their exact source URL. */ }
+      }
+    }
+    return { url, urls, key: url || item };
+  };
+  const add = (item, kind = "research") => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const { url, urls, key } = sourceFor(item);
+    const title = [item.source_title, item.title, item.work_title].find((value) => typeof value === "string" && value.trim());
+    let entry = byUrl.get(key);
+    if (!entry) {
+      entry = { number: entries.length + 1, url, urls: [], items: [], title: title || "Published source" };
+      entries.push(entry);
+      byUrl.set(key, entry);
+    }
+    if (entry.title === "Published source" && title) entry.title = title;
+    for (const candidate of urls) if (!entry.urls.includes(candidate)) entry.urls.push(candidate);
+    if (!entry.items.some((saved) => saved.item === item)) entry.items.push({ item, kind });
+    return entry;
+  };
+  const description = research?.description;
+  for (const url of description?.source_urls || []) {
+    const metadata = Array.isArray(description.references) ? description.references.find((item) => item?.source_url === url) : null;
+    const item = { ...description, ...metadata, source_url: url, license_spdx: metadata?.license_spdx || description.license_spdx, license_scope: description.license_scope ?? metadata?.license_scope };
+    descriptionItems.push(item);
+    add(item);
+  }
+  for (const item of [...(research?.observations || []), ...(research?.cod_records || []), ...(research?.structures || [])]) add(item);
+  for (const item of evidence) add(item, "evidence");
+  const citation = (item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const entry = byUrl.get(sourceFor(item).key);
+    if (!entry) return null;
+    const button = articleJump(`mineral-reference-${entry.number}`, `[${entry.number}]`, "article-citation", () => references.reveal?.(entry.number));
+    button.setAttribute("aria-label", `Go to reference ${entry.number}: ${entry.title}`);
+    return button;
+  };
+  const references = { entries, citation, descriptionItems, reveal: null };
+  return references;
+}
+
+function referenceCollection(references) {
+  const list = element("ol", { className: "article-references" });
+  const wrapper = element("div", {}, [list]);
+  const more = element("button", { className: "pager-link", attrs: { type: "button" } });
+  let shown = 0;
+  const appendUntil = (count) => {
+    const end = Math.min(count, references.entries.length);
+    for (; shown < end; shown += 1) list.append(referenceEntry(references.entries[shown]));
+    const remaining = references.entries.length - shown;
+    more.textContent = `Show ${Math.min(20, remaining)} more references (${formatNumber(remaining)} remaining)`;
+    if (!remaining) more.remove();
+  };
+  references.reveal = (number) => appendUntil(Math.max(shown, Math.ceil(number / 20) * 20));
+  more.addEventListener("click", () => appendUntil(shown + 20));
+  wrapper.append(more);
+  appendUntil(20);
+  return wrapper;
+}
+
+function observationContent(observation) {
+  const hasDisplayValue = ({ value }) => value !== null && value !== undefined
+    && (typeof value !== "string" || value.trim())
+    && (typeof value !== "object" || Object.keys(value).length);
+  const context = observation.context.filter(hasDisplayValue);
+  const inlineContext = context.filter(({ value }) => typeof value !== "object");
+  const structuredContext = context.filter(({ value }) => typeof value === "object");
+  const scopeLabels = new Set(["Applies to", "Source scope", "Production kind"]);
+  return [
+      observation.hasValue ? structuredData(observation.value) : element("span", { text: "—" }),
+      inlineContext.length ? paragraph(inlineContext.map(({ label, value }) => `${label}: ${scopeLabels.has(label) ? String(value).replaceAll("_", " ") : String(value)}`).join(" · "), "observation-context") : null,
+      ...structuredContext.map(({ label, value }) => element("div", { className: "observation-context" }, [paragraph(label), structuredData(value)])),
+      ...observation.qualifications.filter(hasDisplayValue).map(({ value }) => typeof value === "string" ? paragraph(value, "notice") : element("div", { className: "notice" }, structuredData(value))),
+      Object.keys(observation.extraFields).length ? lazyDetails("Additional reported fields", () => structuredData(observation.extraFields)) : null,
+  ];
+}
+
+function compactObservation(observation, references, id) {
+  return element("div", { id, className: "article-observation", attrs: { tabindex: "-1" } }, [
+    element("dt", {}, [element("span", { text: observation.label }), references.citation(observation.raw)]),
+    element("dd", {}, observationContent(observation)),
+  ]);
+}
+
+function infoboxProperty(group, references, reportTargets) {
+  const summary = summarizeMineralFact(group);
+  const targets = summary.reports.map(({ raw }) => reportTargets.get(raw)).filter(Boolean);
+  const target = targets[0]?.id || (group.general.length ? "mineral-properties" : null);
+  const value = target ? articleJump(target, summary.text, "infobox-summary-link", () => {
+    for (const entry of targets) entry.reveal();
+  }) : element("span", { text: summary.text });
+  if (target) value.setAttribute("aria-label", `Read full ${group.label.toLowerCase()} ${summary.reports.length > 1 ? "reports" : "report"}: ${summary.text}`);
+  const citations = new Map();
+  for (const { raw } of summary.reports) {
+    const citation = references.citation(raw);
+    if (citation) citations.set(citation.getAttribute("aria-controls"), citation);
+  }
+  return element("div", { className: "record-fact infobox-property" }, [
+    element("dt", { text: group.label }),
+    element("dd", { className: "infobox-property-value" }, [
+      value,
+      summary.qualifiers.length ? element("span", { className: "infobox-summary-qualifiers", text: ` (${summary.qualifiers.join("; ")})` }) : null,
+      ...citations.values(),
+    ]),
+  ]);
+}
+
+function referenceEntry(entry) {
+  const first = entry.items[0].item;
+  const isText = (value) => typeof value === "string" && value.trim();
+  const credits = [...new Set(entry.items.flatMap(({ item }) => [item.publisher, item.attribution_party]).filter(isText))];
+  const sourceLicenses = [...new Set(entry.items.map(({ item }) => item.source_license_spdx).filter(isText))];
+  const contentLicenses = [...new Set(entry.items.map(({ item }) => item.license_spdx).filter(isText))];
+  const titleLink = externalLink(entry.url, entry.title, "reference-title");
+  titleLink.setAttribute("title", entry.title);
+  return element("li", { id: `mineral-reference-${entry.number}`, className: "article-reference", attrs: { tabindex: "-1" } }, [
+    element("div", { className: "reference-summary" }, [
+      titleLink,
+      lazyDetails("Details", () => element("div", { className: "reference-provenance" }, [
+        paragraph(entry.title, "reference-full-title"),
+        credits.length ? paragraph(credits.join(" · "), "reference-credits") : null,
+        sourceLicenses.length ? paragraph(`Source license: ${sourceLicenses.join(" · ")}`, "reference-credits") : null,
+        contentLicenses.length ? paragraph(`Attached content license: ${contentLicenses.join(" · ")}`, "reference-credits") : null,
+        isText(first.locator) ? paragraph(first.locator, "reference-credits") : null,
+        element("div", { className: "reference-links" }, entry.urls.map((url, index) => externalLink(url, `Source link ${index + 1} ↗`))),
+        paragraph(`${formatNumber(entry.items.length)} supporting ${entry.items.length === 1 ? "entry" : "entries"}`, "reference-credits"),
+        progressiveCollection(entry.items, ({ item, kind }, index) => kind === "evidence" ? evidenceCard(item, index) : structuredData(item), { pageSize: 8 }),
+      ])),
+    ]),
+  ]);
+}
+
 async function renderMineral(route, signal) {
   const [mineral, evidenceResult, offerResult] = await Promise.all([
     catalog().detail(route.slug, signal), catalog().evidence(route.slug, signal), catalog().offers(route.slug, signal),
@@ -825,80 +929,84 @@ async function renderMineral(route, signal) {
   if (!mineral) return renderNotFound("That mineral is not part of this public release.");
   const offers = offerResult.items.filter((item) => isOfferActiveAt(item.expires_at));
   const quality = qualityPercent(mineral.data_quality_score);
-  const publishedProfile = publishedResearchProfile(mineral.properties_json);
-  const isQuartz = mineral.slug === "quartz" || mineral.canonical_name.toLocaleLowerCase("en") === "quartz";
-  const visual = isQuartz
-    ? image("./assets/atlas-quartz-v2.png", "Quartz crystal cluster with crystallographic field annotations", "record-quartz", "1589", "989", "eager")
-    : element("div", { className: "record-seal", attrs: { "aria-hidden": "true" } }, [
-      element("span", { text: mineral.canonical_name.slice(0, 1).toUpperCase() }),
-      element("bdi", { text: mineral.formula || "◇" }),
+  const { properties, research } = publishedResearchProfile(mineral.properties_json);
+  const references = articleReferences(research, evidenceResult.items);
+  const researchedFacts = researchedMineralFacts(properties, research);
+  const reportTargets = new Map();
+  const sections = [];
+  const addSection = (id, title, children) => {
+    const headingId = `mineral-${id}`;
+    const node = element("section", { className: "article-section", attrs: { "aria-labelledby": headingId } }, [
+      element("h2", { id: headingId, text: title, attrs: { tabindex: "-1" } }), ...children.filter(Boolean),
     ]);
-  const hero = element("header", { className: "record-hero", attrs: { "aria-labelledby": "record-title" } }, [
-    routeLink("/minerals", `← ${t("catalog").toUpperCase()}`, "record-back"),
-    element("div", { className: "record-title" }, [
-      paragraph(`MINERAL RECORD / ${mineral.public_id}`, "kicker kicker-gold"),
-      element("h1", { id: "record-title", text: mineral.canonical_name }),
-      element("div", { className: "record-status" }, [
-        mineral.mineral_family ? statusChip(mineral.mineral_family) : null,
-        mineral.nomenclature_status ? statusChip(mineral.nomenclature_status) : null,
-        statusChip(mineral.verification_status || "published", "verified"),
-      ].filter(Boolean)),
-      paragraph(mineral.description || "No public description is available.", "record-description"),
-      publishedProfile.research?.description?.source_urls?.length ? element("div", { className: "research-source" }, [
-        paragraph("Description sources", "muted"),
-        ...publishedProfile.research.description.source_urls.map((url, index) => {
-          const references = publishedProfile.research.description.references;
-          const reference = Array.isArray(references) ? references.find((item) => item && item.source_url === url) : null;
-          return element("div", {}, [
-            externalLink(url, `${reference?.source_title || `Source ${index + 1}`} ↗`),
-            reference ? paragraph([...new Set([reference.attribution_party, reference.publisher].filter(Boolean))].join(" · "), "muted") : null,
-          ].filter(Boolean));
-        }),
-        publishedProfile.research.description.license_spdx ? paragraph(`Description license: ${publishedProfile.research.description.license_spdx}`, "muted") : null,
-        publishedProfile.research.description.license_scope ? paragraph(publishedProfile.research.description.license_scope, "muted") : null,
-      ]) : null,
-      element("div", { className: "record-formula" }, [element("span", { text: "FORMULA" }), element("bdi", { text: mineral.formula || "—" })]),
-    ]),
-    element("div", { className: "record-visual" }, [visual]),
-  ]);
-  const trust = element("dl", { className: "record-trust", attrs: { "aria-label": "Record overview" } }, [
-    fact("EVIDENCE", formatNumber(evidenceResult.items.length)),
-    fact("ACTIVE OFFERS", formatNumber(offers.length)),
-    fact("DATA QUALITY", quality === null ? "—" : `${quality}%`),
-    fact("LICENSE", mineral.license_spdx || "—"),
-  ]);
-  const profileFacts = element("dl", { className: "record-facts" }, [
-    fact("Public ID", mineral.public_id), fact("CAS number", mineral.cas_number), fact("Mineral family", mineral.mineral_family),
-    fact("Discovery country", mineral.discovery_country), fact("Source kind", humanLabel(mineral.source_kind)), fact("Source status", humanLabel(mineral.source_status)),
-    fact("Nomenclature", humanLabel(mineral.nomenclature_status)), fact("License", mineral.license_spdx),
-  ]);
-  const profile = element("section", { className: "record-panel profile-panel" }, [paragraph("01 / MINERAL DETAILS", "panel-index"), element("h2", { text: t("details") }), profileFacts]);
-  const dataPanels = [
-    ...researchPanels(publishedProfile.research),
-    jsonPanel("Identifiers", mineral.identifiers_json),
-    jsonPanel("Properties", JSON.stringify(publishedProfile.properties)),
-    jsonPanel("Safety", mineral.safety_json),
-  ].filter(Boolean);
-  if (mineral.first_reference || mineral.second_reference) {
-    dataPanels.push(element("section", { className: "record-panel" }, [
-      paragraph("PUBLISHED REFERENCES", "panel-index"), element("h2", { text: "References" }),
-      element("ol", { className: "reference-list" }, [mineral.first_reference, mineral.second_reference].filter(Boolean).map((reference) => element("li", { text: reference }))),
-    ]));
+    sections.push({ id: headingId, title, node });
+  };
+  if (Object.keys(properties).length) addSection("properties", "Properties", [structuredData(properties)]);
+  for (const { key, label, observations } of groupMineralObservations(research?.observations)) {
+    let reveal = () => {};
+    for (const [index, observation] of observations.entries()) {
+      reportTargets.set(observation.raw, { id: `mineral-report-${key}-${index + 1}`, reveal: () => reveal(index) });
+    }
+    addSection(`observations-${key}`, label, [
+      progressiveCollection(observations, (item) => compactObservation(item, references, reportTargets.get(item.raw).id), {
+        tag: "dl", className: "article-observations", pageSize: 12, registerReveal: (callback) => { reveal = callback; },
+      }),
+    ]);
   }
-  const evidence = element("section", { className: "record-disclosure", attrs: { "aria-labelledby": "record-evidence-title" } }, [
-    sectionHeading("02 / SOURCES AND CLAIMS", [t("evidence"), "attached to the record."], "Licenses, attribution, review status, and claim data remain visible beside the mineral they support."),
-    evidenceResult.items.length ? progressiveCollection(groupEvidenceBySource(evidenceResult.items), evidenceSourceCard, { className: "evidence-list", pageSize: 12 }) : paragraph("No public evidence records are attached to this release.", "empty-results"),
+  if (research?.structures.length || research?.cod_records.length) {
+    const disclosures = [];
+    if (research.structures.length) disclosures.push(progressiveCollection(research.structures, (item) => crystalModel(item, references), { pageSize: 6 }));
+    if (research.cod_records.length) disclosures.push(lazyDetails(`COD source relationships (${formatNumber(research.cod_records.length)})`, () => progressiveCollection(research.cod_records, codReference, { pageSize: 12 })));
+    addSection("models", research.structures.length ? "Crystal models" : "Crystallographic sources", disclosures);
+  }
+  const safety = parsedJson(mineral.safety_json);
+  if (safety && Object.keys(safety).length) addSection("safety", "Safety", [structuredData(safety)]);
+  const identifiers = parsedJson(mineral.identifiers_json);
+  if (identifiers && Object.keys(identifiers).length) addSection("identifiers", "Identifiers", [structuredData(identifiers)]);
+  if (references.entries.length || mineral.first_reference || mineral.second_reference) addSection("references", "References", [
+    references.entries.length ? referenceCollection(references) : null,
+    mineral.first_reference || mineral.second_reference ? lazyDetails("Registry bibliography", () => element("ul", { className: "reference-list" }, [mineral.first_reference, mineral.second_reference].filter(Boolean).map((reference) => element("li", { text: reference })))) : null,
   ]);
-  const offersSection = element("section", { className: "offers-section", attrs: { "aria-labelledby": "record-offers-title" } }, [
-    element("header", { className: "offers-heading" }, [paragraph("03 / PUBLIC MARKET", "kicker kicker-gold"), element("h2", { id: "record-offers-title", text: t("offers") }), paragraph("Only active, published offers are shown. Provider pages remain the authoritative source.")]),
-    offers.length ? element("div", { className: "offer-grid" }, offers.map(offerCard)) : paragraph("No unexpired public offers are available.", "empty-offers"),
+  if (offers.length) addSection("offers", `Published offers (${formatNumber(offers.length)})`, [element("div", { className: "offer-grid" }, offers.map(offerCard))]);
+  const description = [mineral.description, research?.description?.text].find((value) => typeof value === "string" && value.trim());
+  const introduction = description ? element("section", { className: "article-introduction", attrs: { "aria-labelledby": "mineral-overview" } }, [
+    element("h2", { id: "mineral-overview", className: "visually-hidden", text: "Overview", attrs: { tabindex: "-1" } }),
+    paragraph(description, "article-lead"),
+    research?.description?.source_urls.length ? element("div", { className: "description-citations" }, [element("span", { text: "Description sources" }), ...references.descriptionItems.map(references.citation)]) : null,
+  ]) : null;
+  const infobox = element("aside", { className: "mineral-infobox", attrs: { "aria-label": `${mineral.canonical_name} facts` } }, [
+    element("h2", { text: mineral.canonical_name }),
+    mineral.formula?.trim() ? element("div", { className: "infobox-formula" }, [element("span", { text: "Chemical formula" }), element("bdi", { text: mineral.formula })]) : null,
+    element("dl", { className: "infobox-facts" }, [
+      ...[["Mineral family", mineral.mineral_family], ["Nomenclature", mineral.nomenclature_status ? humanLabel(mineral.nomenclature_status) : null], ["Discovery country", mineral.discovery_country], ["CAS number", mineral.cas_number]].filter(([, value]) => value !== undefined && value !== null && value !== "").map(([label, value]) => fact(label, value)),
+    ]),
+    researchedFacts.length ? element("section", { className: "infobox-properties", attrs: { "aria-label": "Property summary" } }, [
+      element("h3", { text: "Property summary" }),
+      element("dl", { className: "infobox-facts" }, researchedFacts.map((group) => infoboxProperty(group, references, reportTargets))),
+    ]) : null,
+    lazyDetails("Record and publication details", () => element("dl", { className: "infobox-facts" }, [
+      ...[["Public ID", mineral.public_id], ["Review status", mineral.verification_status ? humanLabel(mineral.verification_status) : null], ["Source kind", mineral.source_kind ? humanLabel(mineral.source_kind) : null], ["Source status", mineral.source_status ? humanLabel(mineral.source_status) : null], ["License", mineral.license_spdx], ["Data quality", quality === null ? null : `${quality}%`], ["Evidence entries", formatNumber(evidenceResult.items.length)], ["Active offers", formatNumber(offers.length)]].filter(([, value]) => value !== undefined && value !== null && value !== "").map(([label, value]) => fact(label, value)),
+    ])),
   ]);
-  const view = element("article", { className: "record-view" }, [
-    hero,
-    trust,
-    element("div", { className: "record-layout" }, [profile, element("div", { className: "record-data-stack" }, dataPanels)]),
-    evidence,
-    offersSection,
+  const contents = introduction || sections.length ? element("nav", { className: "mineral-contents", attrs: { "aria-label": "Mineral contents" } }, [
+    element("h2", { text: "Contents" }),
+    introduction ? articleJump("mineral-overview", "Overview") : null,
+    ...sections.map(({ id, title }) => articleJump(id, title)),
+  ]) : null;
+  const view = element("article", { className: "record-view mineral-document" }, [
+    element("div", { className: "mineral-toolbar" }, [routeLink("/minerals", `← ${t("catalog")}`, "mineral-back"), searchForm(normalizeSearchParams({}))]),
+    element("header", { className: "mineral-heading", attrs: { "aria-labelledby": "record-title" } }, [
+      paragraph("MINERAL ATLAS", "article-eyebrow"),
+      element("h1", { id: "record-title", text: mineral.canonical_name }),
+      element("div", { className: "article-subtitle" }, [
+        mineral.mineral_family ? element("span", { text: mineral.mineral_family }) : null,
+        mineral.nomenclature_status ? element("span", { text: humanLabel(mineral.nomenclature_status) }) : null,
+        element("span", { text: `${formatNumber(references.entries.length)} reference${references.entries.length === 1 ? "" : "s"}` }),
+      ]),
+    ]),
+    contents,
+    element("div", { className: "mineral-article-body" }, [introduction, ...sections.map(({ node }) => node)]),
+    infobox,
   ]);
   return { node: view, title: `${mineral.canonical_name} · Waajacu’s Minerals` };
 }
@@ -1032,10 +1140,31 @@ function navigate(destination) {
 
 function finishRoute(node, title, { focus = true } = {}) {
   main.replaceChildren(node);
+  if (node.matches?.(".mineral-document")) observeArticlePanels(node, routeController?.signal);
   document.title = title;
   updateManifestBindings();
   if (focus && hasRendered) main.focus({ preventScroll: true });
   hasRendered = true;
+}
+
+function observeArticlePanels(article, signal) {
+  const panels = [
+    { node: article.querySelector(".mineral-infobox"), query: "(min-width: 761px)" },
+    { node: article.querySelector(".mineral-contents"), query: "(min-width: 1151px)" },
+  ].filter(({ node }) => node);
+  const update = () => {
+    if (signal?.aborted || !article.isConnected) return;
+    const inset = parseFloat(getComputedStyle(document.documentElement).fontSize) * 1.2;
+    const availableHeight = document.documentElement.clientHeight - (2 * inset);
+    for (const { node, query } of panels) {
+      node.toggleAttribute("data-sticky", matchMedia(query).matches && node.getBoundingClientRect().height <= availableHeight);
+    }
+  };
+  const observer = typeof ResizeObserver === "function" ? new ResizeObserver(update) : null;
+  for (const { node } of panels) observer?.observe(node);
+  addEventListener("resize", update, { passive: true, signal });
+  signal?.addEventListener("abort", () => observer?.disconnect(), { once: true });
+  requestAnimationFrame(update);
 }
 
 async function renderCurrentRoute({ focus = true } = {}) {

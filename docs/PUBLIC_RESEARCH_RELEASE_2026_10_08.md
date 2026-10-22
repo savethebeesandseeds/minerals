@@ -177,3 +177,49 @@ Raw database: `248,094,720` bytes,
 `sha256:947ef895b9ad7650224b477359bd619a27c0140ea35711f775aa0bc1efd736b6`.
 Its byte-equivalent Brotli and gzip representations are respectively
 `16,081,105` and `23,701,929` bytes.
+
+## COD metadata and compact mineral pages — 22 October 2026
+
+The completed extraction checked 16,134 mineral/source associations across
+4,235 mineral records, representing 14,489 distinct revision-pinned COD entries.
+The public selection adds the checked, reusable metadata as source models.
+Previously published descriptions, observations, COD relationships and models
+are preserved. The export applies an explicit selection to a fresh public
+database; the private registry is not modified.
+
+Each new model retains its reported formula, symmetry, cell dimensions,
+uncertainties, experimental conditions when supplied, source locator and
+bibliographic attribution. [COD's data are distributed under CC0](https://www.crystallography.net/cod/my_depositions.php); citations
+credit the original authors and link to the pinned source revision. No article
+files, raw archives or atomic coordinate tables are included. Metadata checking
+does not establish species identity: new models retain `unreviewed` and
+`needs_review` scientific status. Explicitly private association interpretations
+remain private. Known source errors are withheld, and source inconsistencies,
+synthetic or calculated context and unresolved pressure units retain their
+qualifications.
+
+Mineral pages now use a compact article layout with short cited facts in the
+infobox and full property reports in the article. COD models expose compact
+source-specific measurements directly, with additional models and full
+provenance available progressively. The renderer does not promote COD specimen
+measurements into species-wide infobox facts. Generic missing-content notices
+and workflow explanations have been removed from the reading interface.
+
+The frozen queue, source/review hash bindings, publication qualification audit,
+withheld-source decisions and exact export are retained privately. Publication
+does not mark the separate full content-research queue complete.
+
+The verified snapshot contains 16,117 reported crystal models across 4,232
+minerals: all 2,614 existing models plus 13,503 additions on 4,026 mineral
+pages. Seventeen known problematic source entries are withheld from the
+additions, and 793 added models carry explicit source cautions. All 6,226
+identities, 1,993 cited descriptions, 10,209 source observations, 16,131 COD
+references and 33,671 evidence associations are preserved. Independent
+comparison confirms the private registry's file hash is unchanged.
+
+Manifest generation: `2026-10-22T16:38:39.594Z`.
+Release identity: `sha256:7f0f79ec604a62198dd0bd075995377dfe92116e8cee2a0ccd7d052030f85d3d`.
+Raw database: `349,593,600` bytes,
+`sha256:ddc3ebb008bb49bd76c19e7396f4a851731eff610d9c932d30f793ab6b292024`.
+Its byte-equivalent Brotli and gzip representations are respectively
+`24,533,721` and `35,467,464` bytes.
