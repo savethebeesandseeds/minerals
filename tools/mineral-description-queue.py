@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover - container and Linux tests have fcntl
 ROOT = Path('/workspace')
 DATA = Path('/app/data')
 STATES = ('pending', 'in_progress', 'complete', 'failed')
-GROUPS = ('missing', 'thin', 'retain')
+GROUPS = ('missing', 'thin', 'retain', 'rewrite')
 GROUP_RANK = {name: index for index, name in enumerate(GROUPS)}
 SCOPE_PREFIXES = (
     'physical.color', 'physical.crystal_habit', 'physical.hardness_mohs',
@@ -95,13 +95,26 @@ def value_text(value):
         return ''
     if isinstance(value, (int, float)):
         return str(value)
-    if isinstance(value, dict):
-        for key in ('value', 'text', 'name', 'system', 'crystal_system', 'reported'):
-            if isinstance(value.get(key), str) and value[key].strip():
-                return value[key].strip()
-        return encoded(value)
     if isinstance(value, list):
-        return encoded(value)
+        parts = []
+        for item in value:
+            text = value_text(item)
+            if text and not text.startswith('{'):
+                parts.append(text)
+        return ', '.join(parts)
+    if isinstance(value, dict):
+        locality = value.get('reported_locality')
+        if isinstance(locality, str) and locality.strip():
+            return locality.strip()
+        reported = value.get('reported')
+        if isinstance(reported, (list, str)):
+            text = value_text(reported)
+            if text:
+                return text
+        for key in ('type_material', 'habit', 'value', 'text', 'name', 'system', 'crystal_system'):
+            if isinstance(value.get(key), str) and value.get(key).strip():
+                return value[key].strip()
+        return ''
     return ''
 
 
@@ -597,6 +610,19 @@ class DescriptionQueue:
         require(saved_text == text or (record['action'] == 'retain' and previous and saved_text == previous.get('text')),
                 'Saved research description did not match the review')
 
+    def reopen_for_rewrite(self, public_id):
+        require(isinstance(public_id, str) and public_id.startswith('mat_'), 'Rewrite needs a material public id')
+        with self.transaction():
+            row = self.db.execute('SELECT * FROM jobs WHERE public_id=?', (public_id,)).fetchone()
+            require(row is not None, 'Mineral is not in the description queue')
+            require(row['status'] in ('complete', 'pending'), 'Only a finished or waiting description can be reopened')
+            self.db.execute(
+                "UPDATE jobs SET status='pending', priority_group='rewrite', worker=NULL, token=NULL, "
+                'claimed_at=NULL, lease_until=NULL, error=NULL WHERE public_id=?',
+                (public_id,))
+            self.event(row, 'reopen', 'rewrite')
+        return {'result': 'reopened', 'public_id': public_id, 'priority_group': 'rewrite'}
+
     def complete(self, worker, token, review_file):
         path = self.private_file(review_file)
         record, raw = read_json(path)
@@ -615,6 +641,9 @@ class DescriptionQueue:
                     require(material['canonical_name'] == row['canonical_name'], 'Live mineral name changed')
                     known = self.known_facts(material, properties, facts, evidence)
                     known['public_id_check'] = row['public_id']
+                    if row['priority_group'] == 'rewrite':
+                        known['action'] = 'compose'
+                        known['priority_group'] = 'rewrite'
                     require(known['priority_group'] == row['priority_group'], 'Record priority changed; reconcile the claim')
                     self.validate_review(record, known)
                     cod_before = properties.get('public_research', {}).get('cod_records') if isinstance(
@@ -653,10 +682,11 @@ class DescriptionQueue:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('next', 'status', 'complete'))
+    parser.add_argument('command', choices=('next', 'status', 'complete', 'reopen'))
     parser.add_argument('--worker')
     parser.add_argument('--token')
     parser.add_argument('--review-file')
+    parser.add_argument('--public-id')
     parser.add_argument('--priority-group', choices=GROUPS)
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--data', type=Path, default=DATA)
@@ -669,6 +699,9 @@ def main():
         elif args.command == 'next':
             require(args.worker, 'next requires --worker')
             result = queue.next(args.worker, args.priority_group)
+        elif args.command == 'reopen':
+            require(args.public_id, 'reopen requires --public-id')
+            result = queue.reopen_for_rewrite(args.public_id)
         else:
             require(args.worker and args.token and args.review_file, 'complete requires --worker, --token and --review-file')
             result = queue.complete(args.worker, args.token, args.review_file)
