@@ -1,5 +1,21 @@
 # Minerals project instructions
 
+## Record descriptions from stored facts
+
+For the description phase, read `docs/MINERAL_DESCRIPTION_QUEUE_V1.md` and claim
+one mineral at a time:
+
+```powershell
+docker compose exec -T --user 0:0 admin bash tools/container-task.sh description-queue next --worker <stable-unique-session-id>
+```
+
+- Work only on the claimed mineral and token. Reuse the same worker ID to resume.
+- Write a short specimen header from the packet: color, crystal sharpness or habit, and where it is found. Do not search, open papers, add sources, or inventory the stored fields.
+- `missing` and `thin` jobs are composed. `retain` copies the existing cited text.
+- Complete with `description-queue complete` and the review file from the packet.
+- Do not use `content-queue` or `content-save` for this work, and do not write
+  `minerals.db` directly. Use `description-queue status` for progress.
+
 ## Cached COD metadata extraction assignments
 
 For the COD metadata extraction phase, read

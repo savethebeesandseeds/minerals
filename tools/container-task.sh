@@ -129,6 +129,14 @@ PY
     (( $# == 1 )) || fail 'content-save-test takes no arguments'
     run_private python3 -B -m unittest tools/test_mineral_content_save.py
     ;;
+  description-queue)
+    shift
+    run_private python3 -B tools/mineral-description-queue.py "$@"
+    ;;
+  description-queue-test)
+    (( $# == 1 )) || fail 'description-queue-test takes no arguments'
+    run_private python3 -B -m unittest tools/test_mineral_description_queue.py
+    ;;
   image-queue)
     shift
     run_private python3 -B tools/mineral-image-queue.py "$@"
@@ -251,5 +259,5 @@ PY
         --prepared "$TASK_PREPARED" --pilot-root "$TASK_PILOT"
     fi
     ;;
-  *) fail 'expected cod-extraction-queue, cod-extraction-queue-test, cod-public-selection, cod-public-selection-test, content-queue, content-queue-test, image-queue, image-queue-test, contracts, validate, public-export, public-assemble, public-format, record-research, pilot-test, pilot-match, pilot-verify-matching, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
+  *) fail 'expected cod-extraction-queue, cod-extraction-queue-test, cod-public-selection, cod-public-selection-test, content-queue, content-queue-test, description-queue, description-queue-test, image-queue, image-queue-test, contracts, validate, public-export, public-assemble, public-format, record-research, pilot-test, pilot-match, pilot-verify-matching, pilot-verify, pilot-fetch, or pilot-recover-transport' ;;
 esac
