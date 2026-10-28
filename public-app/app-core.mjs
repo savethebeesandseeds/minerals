@@ -433,7 +433,10 @@ export function formatFormula(formula) {
       const followsAtom = /[A-Za-z)\]☐]/u.test(previous) || last?.kind === "sup";
       const range = !number.includes(".") && last?.kind === "base" && last.text.endsWith("-")
         && before?.kind === "sub";
-      if (!number.includes(".") && (next === "+" || next === "-")) {
+      // A hyphen between two counts is a site range (Ca1-2), not a charge.
+      // A charge sign is + always, or - when the next character is not a digit.
+      const rangeHyphen = next === "-" && digit(source[end + 1] ?? "");
+      if (!number.includes(".") && (next === "+" || (next === "-" && !rangeHyphen))) {
         push("sup", `${translatedDigits(number, SUPERSCRIPT_DIGITS)}${next === "+" ? "⁺" : "⁻"}`);
         index = end + 1;
         continue;

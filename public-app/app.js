@@ -15,7 +15,7 @@ import {
   validateManifest,
   validateWorkerRequest,
   validateWorkerResponse,
-} from "./app-core.mjs?v=baa78f329bc1bb47685f5a62de6d53ea767b7ce9950bf0b0f25ef62c37f5f2aa";
+} from "./app-core.mjs?v=851025edbabcca64d9ac1dcea16accb583220d32673de88c12471003b302db91";
 import { registerMineralsWebMcp } from "./webmcp.mjs";
 
 const CATALOG_WORKER_REVISION = "c2542afda6bbade538ec5c4e7b3cbdd668f5ffef215439b113408f7a1f814d80";
