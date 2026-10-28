@@ -1355,7 +1355,8 @@ button { color: inherit; }
 .mineral-infobox > h2 { margin: 0 0 0.7rem; text-align: center; font: 600 1.05rem/1.4 var(--serif); overflow-wrap: anywhere; }
 .infobox-formula { display: grid; gap: 0.2rem; margin: 0 -1rem 0.7rem; padding: 0.7rem 1rem; border-block: 1px solid #d4dbcc; text-align: center; background: #e7ecdf; }
 .infobox-formula span { color: #5b6c57; font-size: 0.68rem; }
-.infobox-formula bdi { font: 1.3rem/1.4 var(--serif); overflow-wrap: anywhere; }
+.infobox-formula .chemical-formula { font: 1.3rem/1.4 var(--serif); overflow-wrap: anywhere; }
+.chemical-formula sub, .chemical-formula sup { font-size: 0.62em; line-height: 0; }
 .infobox-facts { margin: 0; }
 .infobox-facts .record-fact { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 0.75rem; padding: 0.45rem 0; border-bottom: 1px solid #d9dfd2; }
 .infobox-facts .record-fact:last-child { border-bottom: 0; }

@@ -5,6 +5,8 @@ import {
   isOfferActiveAt,
   normalizeSearchParams,
   parseRoute,
+  formatFormula,
+  plainCrystalSystem,
   publishedResearchProfile,
   researchedMineralFacts,
   summarizeMineralFact,
@@ -13,7 +15,7 @@ import {
   validateManifest,
   validateWorkerRequest,
   validateWorkerResponse,
-} from "./app-core.mjs?v=9e264770c30560be5d06c168521b3d2c83107e88c167a27736aed90a744a1718";
+} from "./app-core.mjs?v=baa78f329bc1bb47685f5a62de6d53ea767b7ce9950bf0b0f25ef62c37f5f2aa";
 import { registerMineralsWebMcp } from "./webmcp.mjs";
 
 const CATALOG_WORKER_REVISION = "c2542afda6bbade538ec5c4e7b3cbdd668f5ffef215439b113408f7a1f814d80";
@@ -160,7 +162,18 @@ function formatNumber(value) {
 function qualityPercent(value) {
   if (value === null || value === undefined || (typeof value === "string" && !value.trim())) return null;
   const number = Number(value);
-  return Number.isFinite(number) ? Math.max(0, Math.min(100, Math.round(number * 100))) : null;
+  if (!Number.isFinite(number) || number <= 0) return null;
+  return Math.max(0, Math.min(100, Math.round(number * 100)));
+}
+
+function formulaText(formula, className = "chemical-formula") {
+  const node = element("bdi", { className });
+  for (const part of formatFormula(formula)) {
+    if (part.kind === "sub") node.append(element("sub", { text: part.text }));
+    else if (part.kind === "sup") node.append(element("sup", { text: part.text }));
+    else node.append(document.createTextNode(part.text));
+  }
+  return node;
 }
 
 function applyLocale() {
@@ -531,7 +544,7 @@ function mineralCard(mineral) {
     ]),
     element("span", { className: "result-science" }, [
       element("small", { text: mineral.mineral_family || "UNCLASSIFIED" }),
-      element("bdi", { className: "result-formula", text: mineral.formula || "—" }),
+      mineral.formula ? formulaText(mineral.formula, "result-formula chemical-formula") : element("bdi", { className: "result-formula chemical-formula", text: "—" }),
     ]),
     element("span", { className: "result-trust" }, [
       statusChip(mineral.verification_status || "published", "verified"),
@@ -932,6 +945,8 @@ async function renderMineral(route, signal) {
   const { properties, research } = publishedResearchProfile(mineral.properties_json);
   const references = articleReferences(research, evidenceResult.items);
   const researchedFacts = researchedMineralFacts(properties, research);
+  const crystalSystem = plainCrystalSystem(researchedFacts);
+  const summaryFacts = crystalSystem ? researchedFacts.filter((group) => group.key !== "crystal_system") : researchedFacts;
   const reportTargets = new Map();
   const sections = [];
   const addSection = (id, title, children) => {
@@ -975,14 +990,13 @@ async function renderMineral(route, signal) {
     research?.description?.source_urls.length ? element("div", { className: "description-citations" }, [element("span", { text: "Description sources" }), ...references.descriptionItems.map(references.citation)]) : null,
   ]) : null;
   const infobox = element("aside", { className: "mineral-infobox", attrs: { "aria-label": `${mineral.canonical_name} facts` } }, [
-    element("h2", { text: mineral.canonical_name }),
-    mineral.formula?.trim() ? element("div", { className: "infobox-formula" }, [element("span", { text: "Chemical formula" }), element("bdi", { text: mineral.formula })]) : null,
+    mineral.formula?.trim() ? element("div", { className: "infobox-formula" }, [element("span", { text: "Chemical formula" }), formulaText(mineral.formula)]) : null,
     element("dl", { className: "infobox-facts" }, [
-      ...[["Mineral family", mineral.mineral_family], ["Nomenclature", mineral.nomenclature_status ? humanLabel(mineral.nomenclature_status) : null], ["Discovery country", mineral.discovery_country], ["CAS number", mineral.cas_number]].filter(([, value]) => value !== undefined && value !== null && value !== "").map(([label, value]) => fact(label, value)),
+      ...[["Crystal system", crystalSystem], ["Mineral family", mineral.mineral_family], ["Nomenclature", mineral.nomenclature_status ? humanLabel(mineral.nomenclature_status) : null], ["Discovery country", mineral.discovery_country], ["CAS number", mineral.cas_number]].filter(([, value]) => value !== undefined && value !== null && value !== "").map(([label, value]) => fact(label, value)),
     ]),
-    researchedFacts.length ? element("section", { className: "infobox-properties", attrs: { "aria-label": "Property summary" } }, [
+    summaryFacts.length ? element("section", { className: "infobox-properties", attrs: { "aria-label": "Property summary" } }, [
       element("h3", { text: "Property summary" }),
-      element("dl", { className: "infobox-facts" }, researchedFacts.map((group) => infoboxProperty(group, references, reportTargets))),
+      element("dl", { className: "infobox-facts" }, summaryFacts.map((group) => infoboxProperty(group, references, reportTargets))),
     ]) : null,
     lazyDetails("Record and publication details", () => element("dl", { className: "infobox-facts" }, [
       ...[["Public ID", mineral.public_id], ["Review status", mineral.verification_status ? humanLabel(mineral.verification_status) : null], ["Source kind", mineral.source_kind ? humanLabel(mineral.source_kind) : null], ["Source status", mineral.source_status ? humanLabel(mineral.source_status) : null], ["License", mineral.license_spdx], ["Data quality", quality === null ? null : `${quality}%`], ["Evidence entries", formatNumber(evidenceResult.items.length)], ["Active offers", formatNumber(offers.length)]].filter(([, value]) => value !== undefined && value !== null && value !== "").map(([label, value]) => fact(label, value)),

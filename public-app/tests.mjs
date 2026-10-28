@@ -14,6 +14,8 @@ import {
   CATALOG_SCHEMA_VERSION,
   MAX_QUERY_LENGTH,
   codRelationshipLabel,
+  formatFormula,
+  plainCrystalSystem,
   compactMineralFacts,
   compactStructuredValue,
   groupEvidenceBySource,
@@ -42,6 +44,19 @@ import {
 
 const DIGEST = "0123456789abcdef".repeat(4);
 const RELEASE_DIGEST = "fedcba9876543210".repeat(4);
+
+test("formulas are typeset without changing coefficients or qualified crystal systems", () => {
+  const text = (formula) => formatFormula(formula).map((part) => part.kind === "base" ? part.text : part.kind === "sub" ? `[${part.text}]` : `{${part.text}}`).join("");
+  assert.equal(text("NaPb2(CO3)2(OH)"), "NaPb[₂](CO[₃])[₂](OH)");
+  assert.equal(text("K(UO2)(AsO4)·3H2O"), "K(UO[₂])(AsO[₄])·3H[₂]O");
+  assert.equal(text("Sn2+21O6(OH)14Cl16"), "Sn{²⁺}[₂₁]O[₆](OH)[₁₄]Cl[₁₆]");
+  assert.equal(text("(Fe,Mg)9Al4Cl18(OH)12·14H2O (?)"), "(Fe,Mg)[₉]Al[₄]Cl[₁₈](OH)[₁₂]·14H[₂]O (?)");
+  assert.equal(text("Ca1-2(Ti,Zr,Nb)5O12"), "Ca[₁]-[₂](Ti,Zr,Nb)[₅]O[₁₂]");
+  const plain = plainCrystalSystem([{ key: "crystal_system", general: [], reports: [{ value: "Monoclinic." }, { value: "monoclinic" }] }]);
+  assert.equal(plain, "Monoclinic");
+  assert.equal(plainCrystalSystem([{ key: "crystal_system", general: [], reports: [{ value: "Monoclinic, strongly pseudo-orthorhombic" }] }]), null);
+  assert.equal(plainCrystalSystem([{ key: "crystal_system", general: [], reports: [{ value: "Monoclinic" }, { value: "Triclinic" }] }]), null);
+});
 
 test("source models retain raw measurements, uncertainty conflicts and synthetic relationship context", () => {
   const model = {

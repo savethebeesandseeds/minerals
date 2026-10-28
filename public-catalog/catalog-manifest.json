@@ -1,12 +1,12 @@
 {
   "format": "waajacu-public-catalog-v1",
   "schema_version": 1,
-  "generated_at": "2026-10-22T16:38:39.594Z",
-  "release_id": "sha256:7f0f79ec604a62198dd0bd075995377dfe92116e8cee2a0ccd7d052030f85d3d",
+  "generated_at": "2026-10-28T11:25:58.459Z",
+  "release_id": "sha256:fe21b23feabff7af65f2dee4b4be3fb939b694336ee037a4137dc323782c220a",
   "mineral_count": 6226,
   "database": {
-    "path": "data/catalog-ddc3ebb008bb49bd76c19e7396f4a851731eff610d9c932d30f793ab6b292024.sqlite3",
-    "sha256": "sha256:ddc3ebb008bb49bd76c19e7396f4a851731eff610d9c932d30f793ab6b292024",
-    "bytes": 349593600
+    "path": "data/catalog-a09adc9093089cf57cb17db6f21aba0110357f039b7c0399b873884a2d0bcfdb.sqlite3",
+    "sha256": "sha256:a09adc9093089cf57cb17db6f21aba0110357f039b7c0399b873884a2d0bcfdb",
+    "bytes": 256344064
   }
 }

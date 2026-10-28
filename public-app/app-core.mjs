@@ -390,6 +390,96 @@ export function compactMineralFacts(properties) {
   });
 }
 
+const SUBSCRIPT_DIGITS = "₀₁₂₃₄₅₆₇₈₉";
+const SUPERSCRIPT_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+const PLAIN_CRYSTAL_SYSTEMS = new Map([
+  ["triclinic", "Triclinic"], ["monoclinic", "Monoclinic"], ["orthorhombic", "Orthorhombic"],
+  ["tetragonal", "Tetragonal"], ["trigonal", "Trigonal"], ["hexagonal", "Hexagonal"],
+  ["cubic", "Cubic"], ["rhombohedral", "Trigonal"], ["isometric", "Cubic"],
+]);
+
+function translatedDigits(text, alphabet) {
+  return [...text].map((character) => alphabet[character] ?? character).join("");
+}
+
+// Display-only mineral formula typography. Counts become subscripts and
+// charges become superscripts. Coefficients, decimals, and uncertainty marks
+// stay on the baseline. The stored formula is not rewritten.
+export function formatFormula(formula) {
+  const source = typeof formula === "string" ? formula : "";
+  const parts = [];
+  const push = (kind, text) => {
+    if (!text) return;
+    const last = parts.at(-1);
+    if (last?.kind === kind) last.text += text;
+    else parts.push({ kind, text });
+  };
+  const digit = (character) => character >= "0" && character <= "9";
+  let index = 0;
+  while (index < source.length) {
+    const character = source[index];
+    if (digit(character)) {
+      let end = index;
+      while (end < source.length && digit(source[end])) end += 1;
+      if (source[end] === "." && digit(source[end + 1] ?? "")) {
+        end += 2;
+        while (end < source.length && digit(source[end])) end += 1;
+      }
+      const number = source.slice(index, end);
+      const next = source[end] ?? "";
+      const previous = source[index - 1] ?? "";
+      const last = parts.at(-1);
+      const before = parts.at(-2);
+      const followsAtom = /[A-Za-z)\]☐]/u.test(previous) || last?.kind === "sup";
+      const range = !number.includes(".") && last?.kind === "base" && last.text.endsWith("-")
+        && before?.kind === "sub";
+      if (!number.includes(".") && (next === "+" || next === "-")) {
+        push("sup", `${translatedDigits(number, SUPERSCRIPT_DIGITS)}${next === "+" ? "⁺" : "⁻"}`);
+        index = end + 1;
+        continue;
+      }
+      if (!number.includes(".") && (followsAtom || range)) {
+        push("sub", translatedDigits(number, SUBSCRIPT_DIGITS));
+        index = end;
+        continue;
+      }
+      push("base", number);
+      index = end;
+      continue;
+    }
+    if ((character === "+" || character === "-") && /[A-Za-z)\]☐]/u.test(source[index - 1] ?? "")) {
+      push("sup", character === "+" ? "⁺" : "⁻");
+      index += 1;
+      continue;
+    }
+    push("base", character);
+    index += 1;
+  }
+  return parts;
+}
+
+export function plainCrystalSystemName(value) {
+  if (typeof value !== "string") return null;
+  let key = value.trim().replace(/\s+/gu, " ");
+  if (key.endsWith(".")) key = key.slice(0, -1).trim();
+  return PLAIN_CRYSTAL_SYSTEMS.get(key.toLowerCase()) ?? null;
+}
+
+// One species-level system can sit in the facts box. A qualified sentence or
+// two different plain systems stay with the full reports.
+export function plainCrystalSystem(facts) {
+  const group = (Array.isArray(facts) ? facts : []).find((item) => item?.key === "crystal_system");
+  if (!group) return null;
+  const names = [];
+  for (const item of [...(group.general ?? []), ...(group.reports ?? [])]) {
+    const name = plainCrystalSystemName(typeof item.value === "string" ? item.value : item.value?.crystal_system ?? item.value?.system);
+    if (!name) return null;
+    names.push(name);
+  }
+  if (!names.length || new Set(names).size !== 1) return null;
+  return names[0];
+}
+
 const RESEARCHED_FACT_GROUPS = [
   ["crystal_system", "Crystal system"], ["hardness", "Hardness"], ["color", "Color"],
   ["streak", "Streak"], ["luster", "Luster"], ["density", "Density"],
