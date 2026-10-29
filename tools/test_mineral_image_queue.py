@@ -258,6 +258,24 @@ class QueueTests(unittest.TestCase):
         self.assertEqual(updated.db.execute("SELECT count(*) FROM events WHERE action='catalog_refreshed'")
                          .fetchone()[0], 1)
 
+    def test_formula_spacing_updates_without_resetting_image_work(self):
+        queue = self.queue()
+        job = queue.next('session-a')
+        self.save(job['public_id'])
+        queue.complete('session-a', job['claim_token'])
+        source = self.root / 'public-catalog/catalog.sqlite3'
+        with sqlite3.connect(source) as db:
+            db.execute("UPDATE minerals SET formula='Si O2', description='New cited summary'")
+        self.release()
+        updated = self.queue()
+        stored = updated.db.execute('SELECT formula,status,context FROM jobs WHERE public_id=?',
+                                    (job['public_id'],)).fetchone()
+        self.assertEqual(stored['formula'], 'Si O2')
+        self.assertEqual(stored['status'], 'complete')
+        self.assertEqual(json.loads(stored['context'])['description'], 'New cited summary')
+        self.assertEqual(updated.status()['release_id'], 'fixture-release-2')
+        self.assertEqual(updated.status()['counts']['complete'], 1)
+
     def test_changed_population_or_identity_requires_review_without_mutation(self):
         queue = self.queue()
         job = queue.next('session-a')

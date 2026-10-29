@@ -182,3 +182,75 @@ class DescriptionQueueTests(unittest.TestCase):
         self.assertEqual(properties['public_research']['description']['text'], text)
         self.assertEqual(properties['research_draft_descriptions'][0]['text'], 'Short.')
         self.assertEqual(properties['research_draft_descriptions'][0]['publication_status'], 'private')
+
+    def test_parse_stored_fields_copies_reviewed_claims_only(self):
+        queue = self.queue()
+        packet = queue.next('writer')
+        text = (
+            'Beta forms blue crystals, the holotype a clear blue. '
+            'It was described from Chile.'
+        )
+        path = Path(packet['review_file'])
+        path.write_text(json.dumps({
+            'material_public_id': packet['public_id'],
+            'canonical_name': packet['canonical_name'],
+            'action': 'compose',
+            'text': text,
+            'source_urls': ['https://example.test/color'],
+            'parse_stored_fields': True,
+            'observations': [{'question_key': 'physical.color', 'value': 'invented purple'}],
+        }), encoding='utf-8')
+        queue.complete('writer', packet['claim_token'], path)
+        with sqlite3.connect(self.registry) as database:
+            raw = database.execute(
+                'SELECT properties_json FROM materials WHERE public_id=?', ('mat_beta',)).fetchone()[0]
+        observations = json.loads(raw)['public_research']['observations']
+        self.assertEqual(observations, [{
+            'question_key': 'physical.color',
+            'value': 'blue',
+            'review_status': 'reviewed',
+            'publication_status': 'published',
+            'evidence_level': 'reviewed_catalog_claim',
+            'qualification': 'holotype',
+        }])
+        self.assertEqual(json.loads(raw)['public_research']['cod_records'][0]['raw_cif'], 'SHOULD_NOT_LEAK')
+
+    def test_parsed_fields_keep_nested_measurements_and_skip_private_bundles(self):
+        observations = module.field_observations([
+            {'review_status': 'reviewed', 'claim_scope': 'physical.color',
+             'claim_json': json.dumps({'value': {'colors': ['yellow', 'greenish yellow'],
+                                                  'context': 'Skaggs Springs crystalline fraction'}})},
+            {'review_status': 'reviewed', 'claim_scope': 'physical.hardness_mohs',
+             'claim_json': json.dumps({'value': {'bound': 'less_than', 'unit': 'Mohs', 'value': 2}})},
+            {'review_status': 'reviewed', 'claim_scope': 'crystallography.crystal_system',
+             'claim_json': json.dumps({'value': {'reported_system': 'orthorhombic',
+                                                  'basis': 'powder patterns'}})},
+            {'review_status': 'reviewed', 'claim_scope': 'crystallography.unit_cell',
+             'claim_json': json.dumps({'value': {'a': '7.474(1)', 'b': '4.980(1)', 'c': '65.85(3)',
+                                                  'crystal_system': 'orthorhombic', 'method': 'Powder'}})},
+            {'review_status': 'reviewed', 'claim_scope': 'crystallography.unit_cell',
+             'claim_json': json.dumps({'value': {'reported_observations': [
+                 {'private_research': True, 'a': '1'}]}})},
+            {'review_status': 'reviewed', 'claim_scope': 'physical.streak',
+             'claim_json': json.dumps({'value': 'red', 'qualification': 'full PDF request returned404'})},
+            {'review_status': 'unreviewed', 'claim_scope': 'physical.color',
+             'claim_json': json.dumps({'value': 'secret'})},
+            {'review_status': 'reviewed', 'claim_scope': 'properties.cod_record_link',
+             'claim_json': json.dumps({'value': {'cod_id': '9'}})},
+        ])
+        by_key = {}
+        for item in observations:
+            by_key.setdefault(item['question_key'], []).append(item)
+        self.assertEqual(by_key['physical.color'][0]['value'], 'yellow, greenish yellow')
+        self.assertEqual(by_key['physical.color'][0]['qualification'], 'Skaggs Springs crystalline fraction')
+        self.assertEqual(by_key['physical.hardness_mohs'][0]['value'], 'less than 2 Mohs')
+        self.assertEqual(by_key['crystallography.crystal_system'][0]['value'], 'Orthorhombic')
+        self.assertEqual(by_key['crystallography.crystal_system'][0]['qualification'], 'powder patterns')
+        cell = by_key['crystallography.unit_cell'][0]['value']
+        self.assertEqual(cell['a'], '7.474(1)')
+        self.assertNotIn('crystal_system', cell)
+        self.assertNotIn('secret', json.dumps(observations))
+        self.assertNotIn('cod_id', json.dumps(observations))
+        self.assertEqual(len(by_key['crystallography.unit_cell']), 1)
+        self.assertNotIn('qualification', by_key['physical.streak'][0])
+        self.assertEqual(by_key['physical.streak'][0]['value'], 'red')

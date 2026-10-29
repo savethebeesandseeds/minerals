@@ -646,15 +646,25 @@ class ContentQueueTests(unittest.TestCase):
         self.assertEqual(job['record_context']['material']['properties_json']
                          ['publication_observations'][0]['claim_id'], 'older-partial-note')
 
-    def test_catalog_release_change_refuses_migration_without_resetting_claims(self):
+    def test_catalog_release_change_keeps_claims_when_the_mineral_set_matches(self):
         queue = self.queue()
         job = queue.next('session-a')
         self.manifest['release_id'] = 'fixture-release-2'
         self.write_json(self.manifest_path, self.manifest)
-        with self.assertRaisesRegex(ValueError, 'Catalog release changed'):
-            ContentQueue(self.root, self.data)
+        adopted = ContentQueue(self.root, self.data)
+        self.addCleanup(adopted.close)
+        self.assertEqual(adopted.db.execute(
+            "SELECT value FROM metadata WHERE key='release_id'").fetchone()[0], 'fixture-release-2')
         self.assertEqual(queue.next('session-a')['claim_token'], job['claim_token'])
         self.assertEqual(self.state(queue, job['public_id'])['claim_count'], 1)
+        self.manifest['release_id'] = 'fixture-release-3'
+        with sqlite3.connect(self.source) as db:
+            db.execute('DELETE FROM minerals WHERE public_id=?', (self.ids[-1],))
+        self.manifest['mineral_count'] = len(self.ids) - 1
+        self.manifest['database']['sha256'] = 'sha256:' + hashlib.sha256(self.source.read_bytes()).hexdigest()
+        self.write_json(self.manifest_path, self.manifest)
+        with self.assertRaisesRegex(ValueError, 'mineral set differs'):
+            ContentQueue(self.root, self.data)
 
     def test_submission_rejects_invalid_json_outside_paths_and_symlinks(self):
         queue = self.queue()

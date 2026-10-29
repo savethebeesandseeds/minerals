@@ -50,7 +50,11 @@ stored URL still gets a description; its list is empty.
 `complete` checks the token, writes `materials.description`, and sets
 `public_research.description` to that text with `CC-BY-4.0` on the summary
 wording. Cited sources keep their own terms. Existing `public_research`
-publication status, review status, observations, and COD records stay in
-place. The save uses the same private writer lock as content save and a daily
-database checkpoint kept under this queue. It does not rebuild the public
-catalog snapshot.
+publication status, review status, and COD records stay in place. A review
+may set `parse_stored_fields` to true. The queue then copies reviewed color,
+habit, luster, hardness, streak, cleavage, fracture, transparency, specific
+gravity, type locality, crystal system, unit cell, and space group claims
+into `public_research.observations`. It does not add evidence rows, infer a
+crystal system from a cell, or copy unreviewed COD metadata. The save uses
+the same private writer lock as content save and a daily database checkpoint
+kept under this queue. It does not rebuild the public catalog snapshot.

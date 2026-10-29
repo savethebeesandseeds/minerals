@@ -88,6 +88,263 @@ def table_exists(connection, name):
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone() is not None
 
 
+FIELD_SCOPES = (
+    'physical.color', 'physical.crystal_habit', 'physical.luster', 'physical.hardness_mohs',
+    'physical.streak', 'physical.cleavage', 'physical.fracture', 'physical.transparency',
+    'physical.specific_gravity', 'history.type_localities', 'crystallography.crystal_system',
+    'crystallography.unit_cell', 'crystallography.space_group',
+)
+PLAIN_CRYSTAL_SYSTEMS = {
+    'triclinic': 'Triclinic', 'monoclinic': 'Monoclinic', 'orthorhombic': 'Orthorhombic',
+    'tetragonal': 'Tetragonal', 'trigonal': 'Trigonal', 'hexagonal': 'Hexagonal',
+    'cubic': 'Cubic', 'rhombohedral': 'Trigonal', 'isometric': 'Cubic',
+}
+CLAIM_ENVELOPE = {
+    'qualification', 'note', 'source_url', 'source_urls', 'review_status', 'publication_status',
+    'question_key', 'claim_id', 'evidence_level', 'private_research', 'review_batch',
+    'source_scope', 'source_access', 'locator', 'source_title', 'source_locator',
+}
+SYSTEM_SPLIT_KEYS = ('reported_system', 'crystal_system', 'system')
+PRIVATE_PATH = re.compile(
+    r'(?i)(?:/app/|/workspace/|data/pilots/|data/backups/|file:|(?<![a-z])[a-z]:[\\/]|localhost|127\.0\.0\.1)')
+
+
+def clean_phrase(value):
+    return ' '.join(str(value).split()).strip()
+
+
+def private_blob(value):
+    if isinstance(value, dict):
+        if value.get('private_research') is True:
+            return True
+        if value.get('publication_status') in ('private', 'draft', 'rejected', 'withheld', 'withdrawn'):
+            return True
+        return any(private_blob(item) for item in value.values())
+    if isinstance(value, list):
+        return any(private_blob(item) for item in value)
+    if isinstance(value, str) and PRIVATE_PATH.search(value):
+        return True
+    return False
+
+
+def present_field(value):
+    return value is not None and value != '' and value != [] and value != {}
+
+
+def cleaned_fields(value):
+    """Drop empty members. Leave every reported measurement and label in place."""
+    if private_blob(value):
+        return None
+    if isinstance(value, dict):
+        result = {}
+        for key, item in value.items():
+            if not present_field(item):
+                continue
+            if isinstance(item, dict):
+                nested = cleaned_fields(item)
+                if nested:
+                    result[key] = nested
+            elif isinstance(item, list):
+                if private_blob(item):
+                    return None
+                result[key] = item
+            elif isinstance(item, (str, int, float, bool)):
+                result[key] = clean_phrase(item) if isinstance(item, str) else item
+            else:
+                return None
+        return result or None
+    return None
+
+
+def crystal_phrase(value):
+    text = clean_phrase(value).rstrip('.')
+    if not text or text.casefold() in {'unknown', 'n/a', 'na', '?', '-'}:
+        return ''
+    return PLAIN_CRYSTAL_SYSTEMS.get(text.casefold(), clean_phrase(value))
+
+
+def fold_primary(value, primary_keys):
+    """Use one explicit label when the other members fit beside it."""
+    if not isinstance(value, dict):
+        return None
+    primary = ''
+    used = set()
+    for key in primary_keys:
+        item = value.get(key)
+        if isinstance(item, str) and clean_phrase(item):
+            primary = clean_phrase(item)
+            used.add(key)
+            break
+        if isinstance(item, list) and item and all(isinstance(part, str) and clean_phrase(part) for part in item):
+            primary = ', '.join(clean_phrase(part) for part in item)
+            used.add(key)
+            break
+    if not primary:
+        return None
+    rest = []
+    for key, item in value.items():
+        if key in used or not present_field(item):
+            continue
+        if isinstance(item, (str, int, float)) and not isinstance(item, bool):
+            rest.append((key, clean_phrase(item)))
+        else:
+            return None
+    if len(rest) == 1 and rest[0][0] in ('context', 'basis', 'sample', 'occurrence', 'deposit', 'note'):
+        qualification = rest[0][1]
+    else:
+        qualification = '; '.join(key.replace('_', ' ') + ': ' + item for key, item in rest)
+    if len(qualification) > 72:
+        return None
+    return primary, qualification
+
+
+def project_field(scope, value):
+    """Return a public value and qualification copied from a reviewed claim.
+
+    The result is either a short stored reading or the cleaned measurement.
+    Missing members stay missing, and no symmetry is inferred from a cell.
+    """
+    if value is None or private_blob(value) or scope not in FIELD_SCOPES:
+        return None
+    if isinstance(value, str):
+        text = clean_phrase(value)
+        if not text or text.casefold() in {'unknown', 'n/a', 'na', '?', '-'}:
+            return None
+        if scope == 'crystallography.crystal_system':
+            text = crystal_phrase(text)
+        return (text, '') if text else None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return (value, '')
+    if isinstance(value, list):
+        if value and all(isinstance(item, str) and clean_phrase(item) for item in value):
+            return ([clean_phrase(item) for item in value], '')
+        return None
+    if not isinstance(value, dict) or 'reported_observations' in value:
+        return None
+    if scope == 'physical.hardness_mohs' and set(value) <= {'bound', 'unit', 'value'}:
+        amount = value.get('value')
+        bound = value.get('bound')
+        if bound in ('less_than', 'greater_than') and isinstance(amount, (int, float)) and not isinstance(amount, bool):
+            phrase = ('less than ' if bound == 'less_than' else 'greater than ') + str(amount)
+            unit = value.get('unit')
+            if isinstance(unit, str) and clean_phrase(unit):
+                phrase += ' ' + clean_phrase(unit)
+            return (phrase, '')
+    if scope == 'history.type_localities':
+        place = [value.get('deposit'), value.get('reported_locality'), value.get('country')]
+        text = ', '.join(clean_phrase(item) for item in place if isinstance(item, str) and clean_phrase(item))
+        if text and set(value) <= {'deposit', 'reported_locality', 'country', 'name'}:
+            return (text, '')
+    folded = None
+    if scope == 'physical.color':
+        folded = fold_primary(value, ('colors', 'color', 'colour', 'reported'))
+    elif scope == 'physical.crystal_habit':
+        folded = fold_primary(value, ('habit', 'shape', 'aggregate_forms', 'reported'))
+    elif scope == 'physical.luster':
+        folded = fold_primary(value, ('luster', 'lustre', 'reported'))
+    elif scope == 'crystallography.crystal_system':
+        folded = fold_primary(value, ('reported_system', 'crystal_system', 'system'))
+        if folded:
+            phrase = crystal_phrase(folded[0])
+            if phrase:
+                folded = (phrase, folded[1])
+    if folded:
+        return folded
+    cleaned = cleaned_fields(value)
+    if not cleaned:
+        return None
+    if scope in ('crystallography.unit_cell', 'crystallography.space_group'):
+        for key in SYSTEM_SPLIT_KEYS:
+            cleaned.pop(key, None)
+        if not cleaned:
+            return None
+    return (cleaned, '')
+
+
+def public_qualification(text):
+    """Keep a short specimen note. Drop reviewer process memos."""
+    if not isinstance(text, str):
+        return ''
+    text = clean_phrase(text)
+    if not text or len(text) > 72:
+        return ''
+    lowered = text.casefold()
+    for marker in (
+        'pdf', '404', 'ocr', 'not read', 'still needed', 'verification remains',
+        'catalogue', 'catalog', 'request returned', 'full characterization',
+    ):
+        if marker in lowered:
+            return ''
+    return text
+
+
+def field_observations(evidence):
+    """Copy reviewed specimen fields into public observations.
+
+    Unreviewed rows, COD links, and private observation bundles stay out.
+    """
+    observations = []
+    seen = {}
+
+    def add(scope, value, qualification):
+        if not present_field(value):
+            return
+        qualification = public_qualification(qualification)
+        key = (scope, encoded(value))
+        observation = {
+            'question_key': scope,
+            'value': value,
+            'review_status': 'reviewed',
+            'publication_status': 'published',
+            'evidence_level': 'reviewed_catalog_claim',
+        }
+        if qualification:
+            observation['qualification'] = qualification
+        if key in seen:
+            current = observations[seen[key]]
+            if not current.get('qualification') and qualification:
+                observations[seen[key]] = observation
+            return
+        seen[key] = len(observations)
+        observations.append(observation)
+
+    for row in evidence:
+        if row.get('review_status') != 'reviewed':
+            continue
+        scope = row.get('claim_scope') or ''
+        if scope not in FIELD_SCOPES:
+            continue
+        try:
+            claim = json.loads(row.get('claim_json') or '{}')
+        except (TypeError, ValueError):
+            continue
+        if isinstance(claim, str):
+            raw, qualification = claim, ''
+        elif isinstance(claim, dict):
+            if private_blob(claim):
+                continue
+            raw = claim.get('value') if 'value' in claim else {
+                key: item for key, item in claim.items() if key not in CLAIM_ENVELOPE}
+            qualification = claim.get('qualification') if isinstance(claim.get('qualification'), str) else ''
+            if not qualification and isinstance(claim.get('note'), str):
+                qualification = claim['note']
+        else:
+            continue
+        if scope in ('crystallography.unit_cell', 'crystallography.space_group') and isinstance(raw, dict):
+            for key in SYSTEM_SPLIT_KEYS:
+                phrase = crystal_phrase(raw.get(key)) if isinstance(raw.get(key), str) else ''
+                if phrase:
+                    add('crystallography.crystal_system', phrase, '')
+        projected = project_field(scope, raw)
+        if not projected:
+            continue
+        value, folded = projected
+        add(scope, value, qualification or folded)
+    return observations
+
+
 def value_text(value):
     if isinstance(value, str):
         return value.strip()
@@ -111,9 +368,17 @@ def value_text(value):
             text = value_text(reported)
             if text:
                 return text
-        for key in ('type_material', 'habit', 'value', 'text', 'name', 'system', 'crystal_system'):
-            if isinstance(value.get(key), str) and value.get(key).strip():
-                return value[key].strip()
+        for key in ('type_material', 'habit', 'colors', 'color', 'colour', 'reported_system',
+                    'value', 'text', 'name', 'system', 'crystal_system'):
+            item = value.get(key)
+            text = value_text(item)
+            if text and not text.startswith('{'):
+                return text
+        deposit = value.get('deposit')
+        country = value.get('country')
+        place = ', '.join(part.strip() for part in (deposit, country) if isinstance(part, str) and part.strip())
+        if place:
+            return place
         return ''
     return ''
 
@@ -304,7 +569,11 @@ class DescriptionQueue:
                 continue
             if not isinstance(claim, dict):
                 continue
-            text_value = clip(value_text(claim.get('value')))
+            raw_value = claim.get('value') if 'value' in claim else claim
+            projected = project_field(scope, raw_value)
+            text_value = clip(projected[0]) if projected and isinstance(projected[0], str) else ''
+            if not text_value:
+                text_value = clip(value_text(raw_value))
             if not text_value:
                 continue
             claim_urls = sorted(urls_in(claim) | urls_in(row.get('source_work_url')))
@@ -385,21 +654,32 @@ class DescriptionQueue:
             ),
         }
 
-    def next(self, worker, priority_group=None):
+    def next(self, worker, priority_group=None, public_id=None):
         require(isinstance(worker, str) and worker.strip() and len(worker) <= 128
                 and not any(ord(character) < 32 for character in worker),
                 'Provide a stable nonempty worker ID')
         require(priority_group in (None, *GROUPS), 'Unknown priority group')
+        require(public_id is None or (isinstance(public_id, str) and public_id.startswith('mat_')),
+                'public_id must be a material id')
         with self.transaction():
             held = self.db.execute(
                 "SELECT * FROM jobs WHERE worker=? AND status='in_progress'", (worker,)).fetchone()
             if held:
                 require(priority_group is None or held['priority_group'] == priority_group,
                         'Worker holds a different priority group')
+                require(public_id is None or held['public_id'] == public_id,
+                        'Worker holds a different mineral')
                 return self.packet(held)
-            row = self.db.execute(
-                "SELECT * FROM jobs WHERE status='pending' AND (? IS NULL OR priority_group=?) "
-                'ORDER BY ordinal LIMIT 1', (priority_group, priority_group)).fetchone()
+            if public_id:
+                row = self.db.execute(
+                    "SELECT * FROM jobs WHERE public_id=? AND status='pending'", (public_id,)).fetchone()
+                require(row, 'Named mineral is not a pending description job')
+                require(priority_group is None or row['priority_group'] == priority_group,
+                        'Named mineral is in another description group')
+            else:
+                row = self.db.execute(
+                    "SELECT * FROM jobs WHERE status='pending' AND (? IS NULL OR priority_group=?) "
+                    'ORDER BY ordinal LIMIT 1', (priority_group, priority_group)).fetchone()
             if not row:
                 return {'result': 'no_job', 'counts': self.counts()}
             now, token = time.time(), str(uuid.uuid4())
@@ -450,6 +730,9 @@ class DescriptionQueue:
             'is a grandfathered mineral with formula', 'is a questionable mineral with formula',
         ):
             require(phrase not in lowered, 'Description reads as a catalog inventory, not a specimen header')
+        if 'parse_stored_fields' in record:
+            require(record.get('parse_stored_fields') is True,
+                    'parse_stored_fields must be true when it is present')
 
     def checkpoint_directories(self):
         root = self.work / 'database-checkpoints'
@@ -554,7 +837,7 @@ class DescriptionQueue:
             fcntl.flock(descriptor, fcntl.LOCK_UN)
             os.close(descriptor)
 
-    def apply_description(self, connection, material, properties, known, record, now):
+    def apply_description(self, connection, material, properties, known, record, now, evidence):
         text = record['text']
         urls = record['source_urls']
         research = properties.get('public_research')
@@ -571,18 +854,59 @@ class DescriptionQueue:
             if research.get('review_status') not in ('reviewed', 'verified'):
                 research['review_status'] = 'reviewed'
             description = dict(previous or {})
+            kept_notice = previous.get('changes_notice') if previous and previous.get('text') == text else ''
+            if record.get('clear_unknown_country') is True:
+                notice = 'Species appearance for a mineral whose authority country was the placeholder unknown. No discovery country was added.'
+            elif kept_notice:
+                notice = kept_notice
+            elif record.get('parse_stored_fields') is True:
+                notice = 'Catalog summary and public fields use reviewed claims already stored on the record.'
+            else:
+                notice = 'Original catalog summary written from facts already stored on the record.'
             description.update({
                 'text': text,
                 'source_urls': urls,
                 'license_spdx': 'CC-BY-4.0',
                 'license_scope': 'Applies to this catalog summary only. Cited sources keep their own terms.',
                 'production_kind': 'record_summary',
-                'changes_notice': 'Original catalog summary written from facts already stored on the record.',
+                'changes_notice': notice,
                 'no_endorsement_notice': 'A cited source is not endorsing this summary.',
                 'publication_status': research.get('publication_status'),
                 'review_status': research.get('review_status'),
             })
             research['description'] = description
+        if record.get('parse_stored_fields') is True:
+            existing = research.get('observations') if isinstance(research.get('observations'), list) else []
+            require(all(isinstance(item, dict) for item in existing), 'Public observations must be objects')
+            fresh = field_observations(evidence)
+            by_value = {(item['question_key'], encoded(item['value'])): item for item in fresh}
+            for item in existing:
+                replacement = by_value.get((item.get('question_key'), encoded(item.get('value'))))
+                if replacement is None:
+                    continue
+                current = item.get('qualification') or ''
+                revised = replacement.get('qualification') or ''
+                if current != revised and public_qualification(current) != current:
+                    if revised:
+                        item['qualification'] = revised
+                    else:
+                        item.pop('qualification', None)
+            seen = {(item.get('question_key'), encoded(item.get('value'))) for item in existing}
+            added = []
+            for observation in fresh:
+                identity = (observation['question_key'], encoded(observation['value']))
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                added.append(observation)
+            research['observations'] = existing + added
+        if record.get('clear_unknown_country') is True:
+            cleared = connection.execute(
+                """UPDATE mineral_dataset_facts SET fact_value=''
+                   WHERE material_id=? AND fact_key='discovery_country'
+                     AND lower(trim(fact_value))='unknown'""",
+                (material['id'],)).rowcount
+            require(cleared >= 1, 'Unknown discovery country was not cleared')
         if previous_text and previous_text != text:
             drafts = properties.get('research_draft_descriptions')
             if not isinstance(drafts, list):
@@ -648,7 +972,7 @@ class DescriptionQueue:
                     self.validate_review(record, known)
                     cod_before = properties.get('public_research', {}).get('cod_records') if isinstance(
                         properties.get('public_research'), dict) else None
-                    self.apply_description(connection, material, properties, known, record, now)
+                    self.apply_description(connection, material, properties, known, record, now, evidence)
                     cod_after = json.loads(connection.execute(
                         'SELECT properties_json FROM materials WHERE id=?', (material['id'],)).fetchone()[0])
                     cod_saved = cod_after.get('public_research', {}).get('cod_records') if isinstance(
@@ -698,7 +1022,7 @@ def main():
             result = queue.status()
         elif args.command == 'next':
             require(args.worker, 'next requires --worker')
-            result = queue.next(args.worker, args.priority_group)
+            result = queue.next(args.worker, args.priority_group, args.public_id)
         elif args.command == 'reopen':
             require(args.public_id, 'reopen requires --public-id')
             result = queue.reopen_for_rewrite(args.public_id)

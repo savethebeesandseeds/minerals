@@ -71,7 +71,8 @@ All shared state lives in the private `data/images/.image-queue.sqlite3` file.
 Content-only catalog releases automatically refresh the record context after
 verifying the catalog hash and the unchanged mineral IDs, names and formulas.
 Completed images, active and uncertain claims, tokens, failures and queue order
-are preserved. Changes to the mineral population or identity still require
+are preserved. A new release may update descriptions and formula spacing.
+Changes to the mineral population, names, or formula identity still require
 explicit migration review; never reset the queue to get past that check.
 Compressed catalog databases unpack only in container temporary space on initial
 setup or a release change, and are removed afterward. Routine commands against

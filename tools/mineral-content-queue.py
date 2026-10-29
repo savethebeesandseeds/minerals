@@ -174,12 +174,29 @@ class ContentQueue:
         self.db.execute('INSERT INTO events(at_utc,public_id,action,worker,token,detail) VALUES(?,?,?,?,?,?)',
                         (stamp(), row['public_id'], action, row['worker'], row['token'], detail))
 
+    def adopt_same_population(self, previous_release, manifest):
+        """Point the queue at a new catalog release when every mineral id is unchanged."""
+        records = catalog_records(self.root / 'public-catalog', manifest)
+        catalog_ids = {record['public_id'] for record in records}
+        require(len(catalog_ids) == len(records) == manifest['mineral_count'], 'Catalog population mismatch')
+        job_ids = {row[0] for row in self.db.execute('SELECT public_id FROM jobs')}
+        require(catalog_ids == job_ids, 'Catalog release changed and the mineral set differs')
+        with self.minerals() as connection:
+            saved = {row[0] for row in connection.execute('SELECT public_id FROM materials')}
+        require(catalog_ids <= saved, 'Private database is missing catalog minerals')
+        self.db.execute("UPDATE metadata SET value=? WHERE key='release_id'", (manifest['release_id'],))
+        self.db.execute(
+            'INSERT INTO events(at_utc,public_id,action,worker,token,detail) VALUES(?,?,?,?,?,?)',
+            (stamp(), None, 'release_adopted', None, None,
+             previous_release + ' -> ' + manifest['release_id']))
+
     def initialize(self):
         catalog = self.root / 'public-catalog'
         manifest, _ = read_json(catalog / 'catalog-manifest.json')
         prior = self.db.execute("SELECT value FROM metadata WHERE key='release_id'").fetchone()
         if prior:
-            require(prior[0] == manifest['release_id'], 'Catalog release changed; review queue migration')
+            if prior[0] != manifest['release_id']:
+                self.adopt_same_population(prior[0], manifest)
             require(self.db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()[0]
                     == '1', 'Unsupported content queue schema')
             return

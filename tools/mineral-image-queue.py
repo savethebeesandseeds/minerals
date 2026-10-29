@@ -64,6 +64,11 @@ def require(value, message):
         raise ValueError(message)
 
 
+def formula_identity(formula):
+    """Spacing is not a change of mineral identity."""
+    return ''.join(str(formula).split())
+
+
 def stamp(seconds=None):
     return datetime.fromtimestamp(time.time() if seconds is None else seconds,
                                   timezone.utc).isoformat().replace('+00:00', 'Z')
@@ -179,13 +184,13 @@ class ImageQueue:
         records = catalog_records(catalog, manifest)
         if prior:
             # Content-only releases can refresh context without resetting any image work.
-            existing = {r['public_id']: (r['canonical_name'], r['formula']) for r in
+            existing = {r['public_id']: (r['canonical_name'], formula_identity(r['formula'])) for r in
                         self.db.execute('SELECT public_id,canonical_name,formula FROM jobs')}
-            incoming = {r['public_id']: (r['canonical_name'], r['formula']) for r in records}
+            incoming = {r['public_id']: (r['canonical_name'], formula_identity(r['formula'])) for r in records}
             require(existing == incoming,
                     'Catalog mineral IDs, names or formulas changed; review queue migration')
-            self.db.executemany('UPDATE jobs SET context=? WHERE public_id=?',
-                                [(r['context'], r['public_id']) for r in records])
+            self.db.executemany('UPDATE jobs SET context=?,formula=? WHERE public_id=?',
+                                [(r['context'], r['formula'], r['public_id']) for r in records])
             self.db.execute("UPDATE metadata SET value=? WHERE key='release_id'", (manifest['release_id'],))
             self.event({'public_id': None, 'worker': None, 'token': None}, 'catalog_refreshed',
                        json.dumps({'from_release': prior[0], 'to_release': manifest['release_id'],
